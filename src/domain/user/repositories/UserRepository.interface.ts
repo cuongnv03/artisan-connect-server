@@ -1,3 +1,4 @@
+import { UserRole } from './../valueObjects/UserEnums';
 import { User, UserCreationAttributes, UserUpdateAttributes } from '../entities/User';
 import { BaseRepository } from '../../repositories/BaseRepository';
 
@@ -31,6 +32,11 @@ export interface IUserRepository extends BaseRepository<User, string> {
    * Update a user
    */
   updateUser(id: string, data: UserUpdateAttributes): Promise<User>;
+
+  /**
+   * Update user role
+   */
+  updateUserRole(userId: string, role: UserRole): Promise<User>;
 
   /**
    * Soft delete a user

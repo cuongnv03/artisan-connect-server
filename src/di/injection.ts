@@ -5,6 +5,7 @@ import { BcryptService } from '../infrastructure/security/BcryptService';
 import { PrismaClientManager } from '../infrastructure/database/prisma/PrismaClient';
 import { CloudinaryService } from '../infrastructure/storage/CloudinaryService';
 import { EmailService } from '../infrastructure/email/EmailService';
+import { AITemplateService } from '../infrastructure/ai/AITemplateService';
 
 // Prisma client
 const prisma = PrismaClientManager.getClient();
@@ -20,24 +21,33 @@ container.register('cloudinaryService', new CloudinaryService(Config.getCloudina
 // Email service
 container.register('emailService', new EmailService());
 
+// Register AI service
+container.register('aiTemplateService', new AITemplateService());
+
 // Import repositories
 import { UserRepository } from '../infrastructure/database/repositories/UserRepository';
 import { RefreshTokenRepository } from '../infrastructure/database/repositories/RefreshTokenRepository';
 import { PasswordResetRepository } from '../infrastructure/database/repositories/PasswordResetRepository';
 import { EmailVerificationRepository } from '../infrastructure/database/repositories/EmailVerificationRepository';
+import { ArtisanProfileRepository } from '../infrastructure/database/repositories/ArtisanProfileRepository';
+import { UpgradeRequestRepository } from '../infrastructure/database/repositories/UpgradeRequestRepository';
 
 // Register repositories
 container.register('userRepository', new UserRepository(prisma));
 container.register('refreshTokenRepository', new RefreshTokenRepository(prisma));
 container.register('passwordResetRepository', new PasswordResetRepository(prisma));
 container.register('emailVerificationRepository', new EmailVerificationRepository(prisma));
+container.register('artisanProfileRepository', new ArtisanProfileRepository(prisma));
+container.register('upgradeRequestRepository', new UpgradeRequestRepository(prisma));
 
 // Import services
 import { AuthService } from '../application/services/auth/AuthService';
 import { UserService } from '../application/services/user/UserService';
+import { ArtisanProfileService } from '../application/services/artisanProfile/ArtisanProfileService';
 
 // Register services
 container.register('authService', new AuthService());
 container.register('userService', new UserService());
+container.register('artisanProfileService', new ArtisanProfileService());
 
 console.log('Dependency injection initialized');

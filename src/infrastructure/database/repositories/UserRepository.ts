@@ -5,6 +5,7 @@ import {
   UserCreationAttributes,
   UserUpdateAttributes,
 } from '../../../domain/user/entities/User';
+import { UserRole } from './../../../domain/user/valueObjects/UserEnums';
 import { IUserRepository } from '../../../domain/user/repositories/UserRepository.interface';
 import { AppError } from '../../../shared/errors/AppError';
 
@@ -89,6 +90,18 @@ export class UserRepository extends BasePrismaRepository<User, string> implement
     const user = await this.prisma.user.update({
       where: { id },
       data,
+    });
+
+    return this.toDomainEntity(user);
+  }
+
+  /**
+   * Update user role
+   */
+  async updateUserRole(userId: string, role: UserRole): Promise<User> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { role },
     });
 
     return this.toDomainEntity(user);
