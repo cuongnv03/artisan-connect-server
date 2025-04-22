@@ -44,28 +44,30 @@ model User {
   deletedAt      DateTime?
 
   // Relations
-  profile          Profile?
-  artisanProfile   ArtisanProfile?
-  upgradeRequest   ArtisanUpgradeRequest?
-  posts            Post[]
-  products         Product[]
-  followers        Follow[]               @relation("following")
-  following        Follow[]               @relation("follower")
-  likes            Like[]
-  comments         Comment[]
-  cartItems        CartItem[]
-  orders           Order[]                @relation("CustomerOrders")
-  sellerOrders     OrderItem[]            @relation("SellerOrderItems")
-  reviews          Review[]
-  sentMessages     Message[]              @relation("MessageSender")
-  receivedMessages Message[]              @relation("MessageRecipient")
-  quoteRequests    QuoteRequest[]         @relation("CustomerQuotes")
-  artisanQuotes    QuoteRequest[]         @relation("ArtisanQuotes")
-  notifications    Notification[]
-  sessions         Session[]
-  refreshTokens    RefreshToken[]
-  savedPosts       SavedPost[]
-  activities       UserActivity[]
+  profile            Profile?
+  artisanProfile     ArtisanProfile?
+  upgradeRequest     ArtisanUpgradeRequest?
+  posts              Post[]
+  products           Product[]
+  followers          Follow[]               @relation("following")
+  following          Follow[]               @relation("follower")
+  likes              Like[]
+  comments           Comment[]
+  cartItems          CartItem[]
+  orders             Order[]                @relation("CustomerOrders")
+  sellerOrders       OrderItem[]            @relation("SellerOrderItems")
+  reviews            Review[]
+  sentMessages       Message[]              @relation("MessageSender")
+  receivedMessages   Message[]              @relation("MessageRecipient")
+  quoteRequests      QuoteRequest[]         @relation("CustomerQuotes")
+  artisanQuotes      QuoteRequest[]         @relation("ArtisanQuotes")
+  notifications      Notification[]
+  sessions           Session[]
+  refreshTokens      RefreshToken[]
+  savedPosts         SavedPost[]
+  activities         UserActivity[]
+  passwordResets     PasswordReset[]
+  emailVerifications EmailVerification[]
 
   @@index([email])
   @@index([username])
@@ -146,6 +148,32 @@ model RefreshToken {
   @@index([userId])
   @@index([token])
   @@index([expiresAt])
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model EmailVerification {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
 }
 
 //------------- ARTISAN PROFILE MODELS -------------//

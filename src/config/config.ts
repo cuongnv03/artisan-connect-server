@@ -35,6 +35,16 @@ export class Config {
   static CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
   static CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
 
+  // Gmail configuration
+  static EMAIL_HOST = process.env.EMAIL_HOST;
+  static EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '465');
+  static EMAIL_SECURE = process.env.EMAIL_SECURE;
+  static EMAIL_USER = process.env.EMAIL_USER;
+  static EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+  static EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME;
+  static EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS;
+  static CLIENT_URL = process.env.CLIENT_URL;
+
   /**
    * Get JWT configuration
    */
@@ -87,6 +97,21 @@ export class Config {
       cloud_name: this.CLOUDINARY_CLOUD_NAME,
       api_key: this.CLOUDINARY_API_KEY,
       api_secret: this.CLOUDINARY_API_SECRET,
+    };
+  }
+
+  /**
+   * Get email configuration
+   */
+  static getEmailConfig() {
+    return {
+      host: this.EMAIL_HOST,
+      port: this.EMAIL_PORT,
+      secure: this.EMAIL_SECURE,
+      user: this.EMAIL_USER,
+      password: this.EMAIL_PASSWORD,
+      fromName: this.EMAIL_FROM_NAME,
+      fromAddress: this.EMAIL_FROM_ADDRESS,
     };
   }
 }

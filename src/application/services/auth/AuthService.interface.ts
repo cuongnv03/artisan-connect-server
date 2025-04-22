@@ -48,6 +48,11 @@ export interface IAuthService {
   resetPassword(data: ResetPasswordDto): Promise<boolean>;
 
   /**
+   * Send email verification token
+   */
+  sendVerificationEmail(userId: string): Promise<boolean>;
+
+  /**
    * Change user password
    */
   changePassword(userId: string, data: ChangePasswordDto): Promise<boolean>;

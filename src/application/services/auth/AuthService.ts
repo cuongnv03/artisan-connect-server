@@ -7,9 +7,12 @@ import {
   ChangePasswordDto,
   AuthResultDto,
 } from '../../../domain/auth/dto/auth.dto';
-import { User, toSafeUser } from '../../../domain/user/entities/User';
+import { User, toSafeUser, UserUpdateAttributes } from '../../../domain/user/entities/User';
 import { IUserRepository } from '../../../domain/user/repositories/UserRepository.interface';
 import { IRefreshTokenRepository } from '../../../domain/auth/repositories/RefreshTokenRepository.interface';
+import { IPasswordResetRepository } from '../../../domain/auth/repositories/PasswordResetRepository.interface';
+import { IEmailVerificationRepository } from '../../../domain/auth/repositories/EmailVerificationRepository.interface';
+import { EmailService } from '../../../infrastructure/email/EmailService';
 import { BcryptService } from '../../../infrastructure/security/BcryptService';
 import { JwtService } from '../../../infrastructure/security/JwtService';
 import { AppError } from '../../../shared/errors/AppError';
@@ -23,6 +26,9 @@ import container from '../../../di/container';
 export class AuthService implements IAuthService {
   private userRepository: IUserRepository;
   private refreshTokenRepository: IRefreshTokenRepository;
+  private passwordResetRepository: IPasswordResetRepository;
+  private emailVerificationRepository: IEmailVerificationRepository;
+  private emailService: EmailService;
   private bcryptService: BcryptService;
   private jwtService: JwtService;
   private logger = Logger.getInstance();
@@ -31,6 +37,12 @@ export class AuthService implements IAuthService {
     this.userRepository = container.resolve<IUserRepository>('userRepository');
     this.refreshTokenRepository =
       container.resolve<IRefreshTokenRepository>('refreshTokenRepository');
+    this.passwordResetRepository =
+      container.resolve<IPasswordResetRepository>('passwordResetRepository');
+    this.emailVerificationRepository = container.resolve<IEmailVerificationRepository>(
+      'emailVerificationRepository',
+    );
+    this.emailService = container.resolve<EmailService>('emailService');
     this.bcryptService = container.resolve<BcryptService>('bcryptService');
     this.jwtService = container.resolve<JwtService>('jwtService');
   }
@@ -223,9 +235,19 @@ export class AuthService implements IAuthService {
       // Generate reset token
       const resetToken = uuidv4();
 
-      // In a real implementation, store the token with expiration and send email
-      // For demo purposes, we'll just log it
-      this.logger.info(`Password reset token for ${data.email}: ${resetToken}`);
+      // Set expiration (1 hour)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1);
+
+      // Save token to database
+      await this.passwordResetRepository.createToken({
+        userId: user.id,
+        token: resetToken,
+        expiresAt,
+      });
+
+      // Send email
+      await this.emailService.sendPasswordResetEmail(user.email, resetToken);
 
       return true;
     } catch (error) {
@@ -239,19 +261,69 @@ export class AuthService implements IAuthService {
    */
   async resetPassword(data: ResetPasswordDto): Promise<boolean> {
     try {
-      // In a real implementation, validate token and find user
-      // For demo purposes, we'll just log that it would have happened
-      this.logger.info(`Would reset password using token: ${data.token}`);
+      // Find token
+      const tokenEntity = await this.passwordResetRepository.findByToken(data.token);
+      if (!tokenEntity || new Date() > tokenEntity.expiresAt) {
+        return false;
+      }
 
       // Hash new password
       const hashedPassword = await this.bcryptService.hash(data.newPassword);
 
       // Update user password
-      // await this.userRepository.updateUser(userId, { password: hashedPassword });
+      await this.userRepository.updateUser(tokenEntity.userId, {
+        password: hashedPassword,
+      } as unknown as UserUpdateAttributes);
+
+      // Delete used token
+      await this.passwordResetRepository.deleteUserTokens(tokenEntity.userId);
+
+      // Revoke all refresh tokens for this user
+      await this.refreshTokenRepository.revokeAllUserTokens(tokenEntity.userId);
 
       return true;
     } catch (error) {
       this.logger.error(`Reset password error: ${error}`);
+      return false;
+    }
+  }
+
+  /**
+   * Send email verification token
+   */
+  async sendVerificationEmail(userId: string): Promise<boolean> {
+    try {
+      // Find user
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        return false;
+      }
+
+      // If already verified
+      if (user.emailVerified) {
+        return true;
+      }
+
+      // Generate verification token
+      const verificationToken = uuidv4();
+
+      // Set expiration (24 hours)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      // Save token to database
+      await this.emailVerificationRepository.createToken({
+        userId: user.id,
+        token: verificationToken,
+        expiresAt,
+      });
+
+      // Send email
+      await this.emailService.sendVerificationEmail(user.email, verificationToken);
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Send verification email error: ${error}`);
       return false;
     }
   }
@@ -297,9 +369,17 @@ export class AuthService implements IAuthService {
    */
   async verifyEmail(token: string): Promise<boolean> {
     try {
-      // In a real implementation, validate token and find user
-      // For demo purposes, we'll just log that it would have happened
-      this.logger.info(`Would verify email using token: ${token}`);
+      // Find token
+      const tokenEntity = await this.emailVerificationRepository.findByToken(token);
+      if (!tokenEntity || new Date() > tokenEntity.expiresAt) {
+        return false;
+      }
+
+      // Update user email verification status
+      await this.userRepository.updateUser(tokenEntity.userId, { emailVerified: true });
+
+      // Delete used token
+      await this.emailVerificationRepository.deleteToken(token);
 
       return true;
     } catch (error) {
