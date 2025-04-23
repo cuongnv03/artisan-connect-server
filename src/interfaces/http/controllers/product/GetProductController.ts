@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { IProductService } from '../../../../application/services/product/ProductService.interface';
+import { IReviewService } from '../../../../application/services/review/ReviewService.interface';
 import { AppError } from '../../../../shared/errors/AppError';
 import container from '../../../../di/container';
 
@@ -22,7 +23,14 @@ export class GetProductController extends BaseController {
         throw AppError.notFound('Product not found');
       }
 
-      ApiResponse.success(res, product, 'Product retrieved successfully');
+      // Add user's review if authenticated
+      let userReview = null;
+      if (req.user) {
+        const reviewService = container.resolve<IReviewService>('reviewService');
+        userReview = await reviewService.getReviewByUserAndProduct(req.user.id, id);
+      }
+
+      ApiResponse.success(res, { ...product, userReview }, 'Product retrieved successfully');
     } catch (error) {
       next(error);
     }

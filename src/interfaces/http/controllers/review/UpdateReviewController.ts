@@ -1,16 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IOrderService } from '../../../../application/services/order/OrderService.interface';
+import { IReviewService } from '../../../../application/services/review/ReviewService.interface';
 import { AppError } from '../../../../shared/errors/AppError';
 import container from '../../../../di/container';
 
-export class ConvertToOrderController extends BaseController {
-  private orderService: IOrderService;
+export class UpdateReviewController extends BaseController {
+  private reviewService: IReviewService;
 
   constructor() {
     super();
-    this.orderService = container.resolve<IOrderService>('orderService');
+    this.reviewService = container.resolve<IReviewService>('reviewService');
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -18,10 +18,9 @@ export class ConvertToOrderController extends BaseController {
       this.validateAuth(req);
 
       const { id } = req.params;
+      const review = await this.reviewService.updateReview(id, req.user!.id, req.body);
 
-      const order = await this.orderService.convertQuoteToOrder(req.user!.id, id, req.body);
-
-      ApiResponse.success(res, order, 'Quote successfully converted to order');
+      ApiResponse.success(res, review, 'Review updated successfully');
     } catch (error) {
       next(error);
     }

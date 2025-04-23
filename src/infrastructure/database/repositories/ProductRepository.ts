@@ -751,4 +751,81 @@ export class ProductRepository
       return false;
     }
   }
+
+  /**
+   * Decrease product quantity
+   */
+  async decrementStock(productId: string, quantity: number): Promise<void> {
+    try {
+      await this.prisma.product.update({
+        where: { id: productId },
+        data: {
+          quantity: {
+            decrement: quantity,
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error decrementing stock: ${error}`);
+      throw new AppError('Failed to update product stock', 500, 'INVENTORY_UPDATE_FAILED');
+    }
+  }
+
+  /**
+   * Increase product quantity
+   */
+  async incrementStock(productId: string, quantity: number): Promise<void> {
+    try {
+      await this.prisma.product.update({
+        where: { id: productId },
+        data: {
+          quantity: {
+            increment: quantity,
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error incrementing stock: ${error}`);
+      throw new AppError('Failed to update product stock', 500, 'INVENTORY_UPDATE_FAILED');
+    }
+  }
+
+  /**
+   * Validate stock availability for multiple products
+   */
+  async validateStock(items: { productId: string; quantity: number }[]): Promise<{
+    valid: boolean;
+    invalidItems?: { productId: string; requestedQuantity: number; availableQuantity: number }[];
+  }> {
+    try {
+      const invalidItems: {
+        productId: string;
+        requestedQuantity: number;
+        availableQuantity: number;
+      }[] = [];
+
+      for (const item of items) {
+        const product = await this.prisma.product.findUnique({
+          where: { id: item.productId },
+          select: { id: true, quantity: true, status: true },
+        });
+
+        if (!product || product.status !== 'PUBLISHED' || product.quantity < item.quantity) {
+          invalidItems.push({
+            productId: item.productId,
+            requestedQuantity: item.quantity,
+            availableQuantity: product?.quantity || 0,
+          });
+        }
+      }
+
+      return {
+        valid: invalidItems.length === 0,
+        invalidItems: invalidItems.length > 0 ? invalidItems : undefined,
+      };
+    } catch (error) {
+      this.logger.error(`Error validating stock: ${error}`);
+      throw new AppError('Failed to validate stock', 500, 'VALIDATION_FAILED');
+    }
+  }
 }

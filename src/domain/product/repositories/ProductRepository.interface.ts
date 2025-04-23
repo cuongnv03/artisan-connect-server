@@ -49,4 +49,22 @@ export interface IProductRepository extends BaseRepository<Product, string> {
    * Check if product belongs to seller
    */
   isProductOwner(productId: string, sellerId: string): Promise<boolean>;
+
+  /**
+   * Decrease product quantity
+   */
+  decrementStock(productId: string, quantity: number): Promise<void>;
+
+  /**
+   * Increase product quantity
+   */
+  incrementStock(productId: string, quantity: number): Promise<void>;
+
+  /**
+   * Validate stock availability for multiple products
+   */
+  validateStock(items: { productId: string; quantity: number }[]): Promise<{
+    valid: boolean;
+    invalidItems?: { productId: string; requestedQuantity: number; availableQuantity: number }[];
+  }>;
 }

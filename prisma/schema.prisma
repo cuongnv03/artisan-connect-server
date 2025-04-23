@@ -68,6 +68,7 @@ model User {
   activities         UserActivity[]
   passwordResets     PasswordReset[]
   emailVerifications EmailVerification[]
+  ReviewHelpful      ReviewHelpful[]
 
   @@index([email])
   @@index([username])
@@ -488,6 +489,21 @@ model ProductMention {
   @@index([productId])
 }
 
+model ReviewHelpful {
+  id        String   @id @default(uuid())
+  reviewId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, userId])
+  @@index([reviewId])
+  @@index([userId])
+}
+
 model Review {
   id           String   @id @default(uuid())
   userId       String
@@ -501,8 +517,9 @@ model Review {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product      Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  helpfulMarks ReviewHelpful[]
 
   @@unique([userId, productId])
   @@index([productId])

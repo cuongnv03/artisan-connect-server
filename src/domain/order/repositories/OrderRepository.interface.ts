@@ -9,7 +9,7 @@ import {
   UpdateOrderStatusDto,
   UpdateShippingInfoDto,
 } from '../entities/Order';
-import { OrderStatus } from '../valueObjects/OrderEnums';
+import { OrderStatus, PaymentMethod } from '../valueObjects/OrderEnums';
 import { OrderStatusHistory } from '../entities/OrderStatusHistory';
 import { PaginatedResult } from '../../common/PaginatedResult';
 
@@ -25,9 +25,26 @@ export interface IOrderRepository extends BaseRepository<Order, string> {
   findByOrderNumber(orderNumber: string): Promise<OrderWithDetails | null>;
 
   /**
-   * Create order from cart
+   * Prepare order items from cart items
+   * This method is used to create order items from cart items
    */
-  createOrderFromCart(userId: string, data: CreateOrderFromCartDto): Promise<OrderWithDetails>;
+  prepareOrderItemsFromCart(cartItems: any[]): Promise<{ orderItems: any[]; subtotal: number }>;
+
+  /**
+   * Create order with items
+   * This method is used by both createOrderFromCart and createOrderFromQuote
+   */
+  createOrderWithItems(
+    userId: string,
+    data: {
+      orderNumber: string;
+      addressId: string;
+      paymentMethod: PaymentMethod;
+      notes?: string;
+      orderItems: any[];
+      subtotal: number;
+    },
+  ): Promise<OrderWithDetails>;
 
   /**
    * Create order from quote request
@@ -39,8 +56,8 @@ export interface IOrderRepository extends BaseRepository<Order, string> {
    */
   updateOrderStatus(
     id: string,
-    data: UpdateOrderStatusDto,
-    updatedBy?: string,
+    status: OrderStatus,
+    statusHistoryData: { note?: string; createdBy?: string },
   ): Promise<OrderWithDetails>;
 
   /**

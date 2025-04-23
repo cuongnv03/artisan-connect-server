@@ -8,6 +8,7 @@ import {
   QuoteRequestQueryOptions,
 } from '../../../domain/quote/entities/QuoteRequest';
 import { QuoteMessage } from '../../../domain/quote/entities/QuoteMessage';
+import { QuoteStatus } from '../../../domain/quote/valueObjects/QuoteEnums';
 import { PaginatedResult } from '../../../domain/common/PaginatedResult';
 
 export interface IQuoteService {
@@ -68,11 +69,6 @@ export interface IQuoteService {
   ): Promise<QuoteMessage>;
 
   /**
-   * Convert accepted quote to order
-   */
-  convertToOrder(quoteId: string, customerId: string, data: ConvertToOrderDto): Promise<any>; // Return order details
-
-  /**
    * Cancel quote request
    */
   cancelQuoteRequest(quoteId: string, userId: string): Promise<QuoteRequestWithDetails>;
@@ -81,4 +77,9 @@ export interface IQuoteService {
    * Clean up expired quotes
    */
   cleanupExpiredQuotes(): Promise<number>;
+
+  /**
+   * Update quote status
+   */
+  updateQuoteStatus(quoteId: string, status: QuoteStatus): Promise<QuoteRequestWithDetails>;
 }

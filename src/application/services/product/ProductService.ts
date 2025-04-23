@@ -8,6 +8,7 @@ import {
   ProductQueryOptions,
 } from '../../../domain/product/entities/Product';
 import { IProductRepository } from '../../../domain/product/repositories/ProductRepository.interface';
+import { IReviewService } from '../review/ReviewService.interface';
 import { CloudinaryService } from '../../../infrastructure/storage/CloudinaryService';
 import { AppError } from '../../../shared/errors/AppError';
 import { Logger } from '../../../shared/utils/Logger';
@@ -106,7 +107,31 @@ export class ProductService implements IProductService {
    */
   async getProductById(id: string): Promise<ProductWithDetails | null> {
     try {
-      return await this.productRepository.findByIdWithDetails(id);
+      const product = await this.productRepository.findByIdWithDetails(id);
+      if (product) {
+        // Add reviews data if needed
+        const reviewService = container.resolve<IReviewService>('reviewService');
+        try {
+          // Get the top 5 reviews
+          const reviews = await reviewService.getReviews({
+            productId: id,
+            limit: 5,
+            sortBy: 'helpful',
+            sortOrder: 'desc',
+          });
+
+          // Get review statistics
+          const reviewStats = await reviewService.getProductReviewStatistics(id);
+
+          // Add to product
+          (product as any).reviewPreview = reviews.data;
+          (product as any).reviewStatistics = reviewStats;
+        } catch (error) {
+          // Log but don't fail if reviews can't be loaded
+          this.logger.error(`Error loading reviews for product: ${error}`);
+        }
+      }
+      return product;
     } catch (error) {
       this.logger.error(`Error getting product: ${error}`);
       return null;

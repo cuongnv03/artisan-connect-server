@@ -73,15 +73,6 @@ export interface AddQuoteMessageDto {
 }
 
 /**
- * Convert quote to order DTO
- */
-export interface ConvertToOrderDto {
-  shippingAddressId?: string;
-  paymentMethod?: string;
-  notes?: string;
-}
-
-/**
  * Quote request query options
  */
 export interface QuoteRequestQueryOptions {

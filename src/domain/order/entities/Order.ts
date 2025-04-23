@@ -126,3 +126,12 @@ export interface OrderSummary {
     shopName?: string;
   };
 }
+
+/**
+ * Convert quote to order DTO
+ */
+export interface ConvertToOrderDto {
+  shippingAddressId?: string;
+  paymentMethod?: string;
+  notes?: string;
+}

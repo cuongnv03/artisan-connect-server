@@ -5,7 +5,6 @@ import {
   CreateQuoteRequestDto,
   RespondToQuoteDto,
   AddQuoteMessageDto,
-  ConvertToOrderDto,
   QuoteRequestQueryOptions,
 } from '../../../domain/quote/entities/QuoteRequest';
 import { QuoteMessage } from '../../../domain/quote/entities/QuoteMessage';
@@ -13,8 +12,6 @@ import { QuoteStatus } from '../../../domain/quote/valueObjects/QuoteEnums';
 import { IQuoteRepository } from '../../../domain/quote/repositories/QuoteRepository.interface';
 import { IProductRepository } from '../../../domain/product/repositories/ProductRepository.interface';
 import { IUserRepository } from '../../../domain/user/repositories/UserRepository.interface';
-// We'll need to implement the order service later
-// import { IOrderService } from '../order/OrderService.interface';
 import { AppError } from '../../../shared/errors/AppError';
 import { Logger } from '../../../shared/utils/Logger';
 import { PaginatedResult } from '../../../domain/common/PaginatedResult';
@@ -24,14 +21,12 @@ export class QuoteService implements IQuoteService {
   private quoteRepository: IQuoteRepository;
   private productRepository: IProductRepository;
   private userRepository: IUserRepository;
-  // private orderService: IOrderService;
   private logger = Logger.getInstance();
 
   constructor() {
     this.quoteRepository = container.resolve<IQuoteRepository>('quoteRepository');
     this.productRepository = container.resolve<IProductRepository>('productRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
-    // this.orderService = container.resolve<IOrderService>('orderService');
   }
 
   /**
@@ -262,66 +257,6 @@ export class QuoteService implements IQuoteService {
   }
 
   /**
-   * Convert accepted quote to order
-   */
-  async convertToOrder(quoteId: string, customerId: string, data: ConvertToOrderDto): Promise<any> {
-    try {
-      // Get quote with details
-      const quote = await this.quoteRepository.findByIdWithDetails(quoteId);
-
-      if (!quote) {
-        throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
-      }
-
-      // Verify the user is the customer for this quote
-      if (quote.customerId !== customerId) {
-        throw new AppError(
-          'Only the customer can convert this quote to an order',
-          403,
-          'FORBIDDEN',
-        );
-      }
-
-      // Verify quote is in ACCEPTED status
-      if (quote.status !== QuoteStatus.ACCEPTED) {
-        throw new AppError(
-          'Only accepted quotes can be converted to orders',
-          400,
-          'INVALID_QUOTE_STATE',
-        );
-      }
-
-      // Verify final price is set
-      if (!quote.finalPrice) {
-        throw new AppError('No final price has been set for this quote', 400, 'NO_FINAL_PRICE');
-      }
-
-      // TODO: This would be implemented when we have the OrderService
-      /* 
-      // Create order from quote
-      const order = await this.orderService.createOrderFromQuote(
-        quote,
-        data.shippingAddressId,
-        data.paymentMethod,
-        data.notes
-      );
-
-      // Mark quote as COMPLETED
-      await this.quoteRepository.updateQuoteStatus(quoteId, QuoteStatus.COMPLETED);
-
-      return order;
-      */
-
-      // For now, just return a placeholder
-      throw new AppError('Order creation not implemented yet', 501, 'NOT_IMPLEMENTED');
-    } catch (error) {
-      this.logger.error(`Error converting quote to order: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to convert quote to order', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  /**
    * Cancel quote request
    */
   async cancelQuoteRequest(quoteId: string, userId: string): Promise<QuoteRequestWithDetails> {
@@ -365,6 +300,27 @@ export class QuoteService implements IQuoteService {
     } catch (error) {
       this.logger.error(`Error cleaning up expired quotes: ${error}`);
       return 0;
+    }
+  }
+
+  /**
+   * Update quote status
+   */
+  async updateQuoteStatus(quoteId: string, status: QuoteStatus): Promise<QuoteRequestWithDetails> {
+    try {
+      // Get quote with details
+      const quote = await this.quoteRepository.findByIdWithDetails(quoteId);
+
+      if (!quote) {
+        throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
+      }
+
+      // Update quote to the new status
+      return await this.quoteRepository.updateQuoteStatus(quoteId, status);
+    } catch (error) {
+      this.logger.error(`Error updating quote status: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to update quote status', 500, 'SERVICE_ERROR');
     }
   }
 }

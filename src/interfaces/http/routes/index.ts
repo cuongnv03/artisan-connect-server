@@ -7,6 +7,8 @@ import productRoutes from './product.routes';
 import categoryRoutes from './category.routes';
 import quoteRoutes from './quote.routes';
 import orderRoutes from './order.routes';
+import cartRoutes from './cart.routes';
+import reviewRoutes from './review.routes';
 
 export const registerRoutes = (app: Express): void => {
   const apiPrefix = Config.API_PREFIX;
@@ -19,6 +21,8 @@ export const registerRoutes = (app: Express): void => {
   app.use(`${apiPrefix}/categories`, categoryRoutes);
   app.use(`${apiPrefix}/quotes`, quoteRoutes);
   app.use(`${apiPrefix}/orders`, orderRoutes);
+  app.use(`${apiPrefix}/cart`, cartRoutes);
+  app.use(`${apiPrefix}/reviews`, reviewRoutes);
 
   // Add more routes here as they are implemented
 };

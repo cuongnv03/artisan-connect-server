@@ -7,6 +7,7 @@ import {
   CreateOrderFromQuoteDto,
   UpdateOrderStatusDto,
   UpdateShippingInfoDto,
+  ConvertToOrderDto,
 } from '../../../domain/order/entities/Order';
 import { OrderStatusHistory } from '../../../domain/order/entities/OrderStatusHistory';
 import { PaginatedResult } from '../../../domain/common/PaginatedResult';
@@ -21,6 +22,15 @@ export interface IOrderService {
    * Create order from quote request
    */
   createOrderFromQuote(userId: string, data: CreateOrderFromQuoteDto): Promise<OrderWithDetails>;
+
+  /**
+   * Convert accepted quote to order
+   */
+  convertQuoteToOrder(
+    userId: string,
+    quoteId: string,
+    data: ConvertToOrderDto,
+  ): Promise<OrderWithDetails>;
 
   /**
    * Get order by ID

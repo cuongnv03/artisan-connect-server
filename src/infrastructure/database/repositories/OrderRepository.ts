@@ -146,162 +146,128 @@ export class OrderRepository
   }
 
   /**
-   * Create order from cart
+   * Prepare order items from cart items
+   * This method is used to create order items from cart items
    */
-  async createOrderFromCart(
+  async prepareOrderItemsFromCart(
+    cartItems: any[],
+  ): Promise<{ orderItems: any[]; subtotal: number }> {
+    let subtotal = 0;
+
+    // Create product snapshots and calculate subtotal
+    const orderItems = cartItems.map((item) => {
+      const price = item.product.discountPrice || item.product.price;
+      const itemTotal = price * item.quantity;
+      subtotal += itemTotal;
+
+      return {
+        productId: item.productId,
+        sellerId: item.product.sellerId,
+        quantity: item.quantity,
+        price,
+        productData: {
+          id: item.product.id,
+          name: item.product.name,
+          description: item.product.description,
+          images: item.product.images,
+          attributes: item.product.attributes,
+          isCustomizable: item.product.isCustomizable,
+        },
+      };
+    });
+
+    return { orderItems, subtotal };
+  }
+
+  /**
+   * Create order with items
+   * This method is used by both createOrderFromCart and createOrderFromQuote
+   */
+  async createOrderWithItems(
     userId: string,
-    data: CreateOrderFromCartDto,
+    data: {
+      orderNumber: string;
+      addressId: string;
+      paymentMethod: PaymentMethod;
+      notes?: string;
+      orderItems: any[];
+      subtotal: number;
+    },
   ): Promise<OrderWithDetails> {
-    try {
-      // Get cart items for the user
-      const cartItems = await this.prisma.cartItem.findMany({
-        where: { userId },
+    const { orderNumber, addressId, paymentMethod, notes, orderItems, subtotal } = data;
+
+    // Apply shipping costs, tax, etc.
+    const shippingCost = 0; // This could be calculated based on address, weight, etc.
+    const tax = subtotal * 0.1; // 10% tax for example, could be calculated differently
+    const discount = 0; // Apply coupon/discounts here
+    const totalAmount = subtotal + shippingCost + tax - discount;
+
+    // Create order in a transaction
+    const order = await this.prisma.$transaction(async (tx) => {
+      // Create order
+      const newOrder = await tx.order.create({
+        data: {
+          orderNumber,
+          userId,
+          addressId,
+          status: OrderStatus.PENDING,
+          totalAmount,
+          subtotal,
+          tax,
+          shippingCost,
+          discount,
+          paymentMethod,
+          paymentStatus: PaymentStatus.PENDING,
+          notes,
+          // Create initial status history
+          statusHistory: {
+            create: {
+              status: OrderStatus.PENDING,
+              note: 'Order created',
+              createdBy: userId,
+            },
+          },
+          // Create order items
+          items: {
+            create: orderItems,
+          },
+        },
         include: {
-          product: {
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          shippingAddress: true,
+          items: {
             include: {
               seller: {
                 select: {
                   id: true,
                   firstName: true,
                   lastName: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (cartItems.length === 0) {
-        throw new AppError('Cart is empty', 400, 'CART_EMPTY');
-      }
-
-      // Verify shipping address
-      const address = await this.prisma.address.findFirst({
-        where: {
-          id: data.addressId,
-          profile: {
-            userId,
-          },
-        },
-      });
-
-      if (!address) {
-        throw new AppError('Shipping address not found', 404, 'ADDRESS_NOT_FOUND');
-      }
-
-      // Calculate order totals
-      let subtotal = 0;
-
-      // Create product snapshots and calculate subtotal
-      const orderItems = cartItems.map((item) => {
-        const price = item.product.discountPrice || item.product.price;
-        const itemTotal = price * item.quantity;
-        subtotal += itemTotal;
-
-        return {
-          productId: item.productId,
-          sellerId: item.product.sellerId,
-          quantity: item.quantity,
-          price,
-          productData: {
-            id: item.product.id,
-            name: item.product.name,
-            description: item.product.description,
-            images: item.product.images,
-            attributes: item.product.attributes,
-            isCustomizable: item.product.isCustomizable,
-          },
-        };
-      });
-
-      // Apply shipping costs, tax, etc.
-      const shippingCost = 0; // This could be calculated based on address, weight, etc.
-      const tax = subtotal * 0.1; // 10% tax for example, could be calculated differently
-      const discount = 0; // Apply coupon/discounts here
-      const totalAmount = subtotal + shippingCost + tax - discount;
-
-      // Generate unique order number
-      const orderNumber = await this.generateOrderNumber();
-
-      // Create order and order items in a transaction
-      const order = await this.prisma.$transaction(async (tx) => {
-        // Create order
-        const newOrder = await tx.order.create({
-          data: {
-            orderNumber,
-            userId,
-            addressId: data.addressId,
-            status: OrderStatus.PENDING,
-            totalAmount,
-            subtotal,
-            tax,
-            shippingCost,
-            discount,
-            paymentMethod: data.paymentMethod,
-            paymentStatus: PaymentStatus.PENDING,
-            notes: data.notes,
-            // Create initial status history
-            statusHistory: {
-              create: {
-                status: OrderStatus.PENDING,
-                note: 'Order created',
-                createdBy: userId,
-              },
-            },
-            // Create order items
-            items: {
-              create: orderItems,
-            },
-          },
-          include: {
-            customer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            shippingAddress: true,
-            items: {
-              include: {
-                seller: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    artisanProfile: {
-                      select: {
-                        shopName: true,
-                      },
+                  artisanProfile: {
+                    select: {
+                      shopName: true,
                     },
                   },
                 },
               },
             },
-            statusHistory: true,
           },
-        });
-
-        // Clear cart after successful order creation
-        await tx.cartItem.deleteMany({
-          where: { userId },
-        });
-
-        return newOrder;
+          statusHistory: true,
+        },
       });
 
-      return order as unknown as OrderWithDetails;
-    } catch (error) {
-      this.logger.error(`Error creating order from cart: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to create order', 500, 'ORDER_CREATION_FAILED');
-    }
+      return newOrder;
+    });
+
+    return order as unknown as OrderWithDetails;
   }
 
-  /**
-   * Create order from quote request
-   */
   async createOrderFromQuote(
     userId: string,
     data: CreateOrderFromQuoteDto,
@@ -354,106 +320,45 @@ export class OrderRepository
 
       // Calculate order totals
       const subtotal = quoteRequest.finalPrice;
-      const shippingCost = 0; // This could be calculated based on address, weight, etc.
-      const tax = subtotal * 0.1; // 10% tax for example, could be calculated differently
-      const discount = 0; // No discounts for quote-based orders
-      const totalAmount = subtotal + shippingCost + tax - discount;
+
+      // Prepare order item
+      const orderItems = [
+        {
+          productId: quoteRequest.productId,
+          sellerId: quoteRequest.product.sellerId,
+          quantity: 1, // Quotes are for single items
+          price: quoteRequest.finalPrice,
+          productData: {
+            id: quoteRequest.product.id,
+            name: quoteRequest.product.name,
+            description: quoteRequest.product.description,
+            images: quoteRequest.product.images,
+            attributes: quoteRequest.product.attributes,
+            isCustomizable: true,
+            customSpecifications: quoteRequest.specifications,
+          },
+        },
+      ];
 
       // Generate unique order number
       const orderNumber = await this.generateOrderNumber();
 
-      // Create order in transaction
-      const order = await this.prisma.$transaction(async (tx) => {
-        // Create order
-        const newOrder = await tx.order.create({
-          data: {
-            orderNumber,
-            userId,
-            addressId: data.addressId,
-            status: OrderStatus.PENDING,
-            totalAmount,
-            subtotal,
-            tax,
-            shippingCost,
-            discount,
-            paymentMethod: data.paymentMethod,
-            paymentStatus: PaymentStatus.PENDING,
-            notes: data.notes,
-            quoteRequestId: quoteRequest.id,
-            // Create initial status history
-            statusHistory: {
-              create: {
-                status: OrderStatus.PENDING,
-                note: 'Order created from quote request',
-                createdBy: userId,
-              },
-            },
-            // Create order item
-            items: {
-              create: {
-                productId: quoteRequest.productId,
-                sellerId: quoteRequest.product.sellerId,
-                quantity: 1, // Quotes are for single items
-                price: quoteRequest.finalPrice,
-                productData: {
-                  id: quoteRequest.product.id,
-                  name: quoteRequest.product.name,
-                  description: quoteRequest.product.description,
-                  images: quoteRequest.product.images,
-                  attributes: quoteRequest.product.attributes,
-                  isCustomizable: true,
-                  customSpecifications: quoteRequest.specifications,
-                },
-              },
-            },
-          },
-          include: {
-            customer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            shippingAddress: true,
-            items: {
-              include: {
-                seller: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    artisanProfile: {
-                      select: {
-                        shopName: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            statusHistory: true,
-            quoteRequest: {
-              select: {
-                id: true,
-                finalPrice: true,
-                specifications: true,
-              },
-            },
-          },
-        });
-
-        // Update quote request to COMPLETED status
-        await tx.quoteRequest.update({
-          where: { id: quoteRequest.id },
-          data: { status: 'COMPLETED' },
-        });
-
-        return newOrder;
+      const order = await this.createOrderWithItems(userId, {
+        orderNumber,
+        addressId: data.addressId,
+        paymentMethod: data.paymentMethod,
+        notes: data.notes,
+        orderItems,
+        subtotal,
       });
 
-      return order as unknown as OrderWithDetails;
+      // Update quote request to COMPLETED status trong transaction khác
+      await this.prisma.quoteRequest.update({
+        where: { id: quoteRequest.id },
+        data: { status: 'COMPLETED' },
+      });
+
+      return order;
     } catch (error) {
       this.logger.error(`Error creating order from quote: ${error}`);
       if (error instanceof AppError) throw error;
@@ -462,35 +367,27 @@ export class OrderRepository
   }
 
   /**
-   * Update order status
+   * Cập nhật trạng thái đơn hàng
    */
   async updateOrderStatus(
     id: string,
-    data: UpdateOrderStatusDto,
-    updatedBy?: string,
+    status: OrderStatus,
+    statusHistoryData: { note?: string; createdBy?: string },
   ): Promise<OrderWithDetails> {
     try {
-      // Get current order status
-      const order = await this.prisma.order.findUnique({
-        where: { id },
-      });
+      const { note, createdBy } = statusHistoryData;
 
-      if (!order) {
-        throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
-      }
-
-      // Validate status transition
-      this.validateStatusTransition(order.status as OrderStatus, data.status);
-
-      // Update order and create status history in transaction
+      // Cập nhật đơn hàng và tạo lịch sử trạng thái
       const updatedOrder = await this.prisma.$transaction(async (tx) => {
-        // Update order status
+        // Cập nhật trạng thái đơn hàng
         const updated = await tx.order.update({
           where: { id },
           data: {
-            status: data.status,
-            // Update related fields based on status
-            ...(data.status === OrderStatus.CANCELLED && { paymentStatus: PaymentStatus.REFUNDED }),
+            status,
+            // Cập nhật trạng thái thanh toán nếu cần
+            ...(status === OrderStatus.CANCELLED && {
+              paymentStatus: PaymentStatus.REFUNDED,
+            }),
           },
           include: {
             customer: {
@@ -533,13 +430,13 @@ export class OrderRepository
           },
         });
 
-        // Create status history entry
+        // Tạo mục lịch sử trạng thái
         await tx.orderStatusHistory.create({
           data: {
             orderId: id,
-            status: data.status,
-            note: data.note,
-            createdBy: updatedBy,
+            status,
+            note: note || `Order status changed to ${status}`,
+            createdBy,
           },
         });
 
@@ -878,14 +775,106 @@ export class OrderRepository
    */
   async cancelOrder(id: string, note?: string, cancelledBy?: string): Promise<OrderWithDetails> {
     try {
-      return await this.updateOrderStatus(
-        id,
-        {
-          status: OrderStatus.CANCELLED,
-          note: note || 'Order cancelled',
-        },
-        cancelledBy,
-      );
+      // Get order to check if it can be cancelled
+      const order = await this.findByIdWithDetails(id);
+      if (!order) {
+        throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
+      }
+
+      // Only pending or paid orders can be cancelled
+      if (
+        order.status !== OrderStatus.PENDING &&
+        order.status !== OrderStatus.PAID &&
+        order.status !== OrderStatus.PROCESSING
+      ) {
+        throw new AppError(
+          `Orders in ${order.status} status cannot be cancelled`,
+          400,
+          'INVALID_ORDER_STATE',
+        );
+      }
+
+      // Process cancellation in a transaction
+      const cancelledOrder = await this.prisma.$transaction(async (tx) => {
+        // Get order items before updating
+        const orderItems = await tx.orderItem.findMany({
+          where: { orderId: id },
+        });
+
+        // Update order status
+        const updated = await tx.order.update({
+          where: { id },
+          data: {
+            status: OrderStatus.CANCELLED,
+            paymentStatus: PaymentStatus.REFUNDED, // Assume refund process happens elsewhere
+          },
+          include: {
+            customer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+            shippingAddress: true,
+            items: {
+              include: {
+                seller: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    artisanProfile: {
+                      select: {
+                        shopName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            statusHistory: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+            },
+            quoteRequest: {
+              select: {
+                id: true,
+                finalPrice: true,
+                specifications: true,
+              },
+            },
+          },
+        });
+
+        // Create status history entry
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: id,
+            status: OrderStatus.CANCELLED,
+            note: note || 'Order cancelled',
+            createdBy: cancelledBy,
+          },
+        });
+
+        // Restore product quantities
+        for (const item of orderItems) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              quantity: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+
+        return updated;
+      });
+
+      return cancelledOrder as unknown as OrderWithDetails;
     } catch (error) {
       this.logger.error(`Error cancelling order: ${error}`);
       if (error instanceof AppError) throw error;
