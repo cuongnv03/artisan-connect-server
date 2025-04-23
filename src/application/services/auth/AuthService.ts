@@ -12,6 +12,7 @@ import { IUserRepository } from '../../../domain/user/repositories/UserRepositor
 import { IRefreshTokenRepository } from '../../../domain/auth/repositories/RefreshTokenRepository.interface';
 import { IPasswordResetRepository } from '../../../domain/auth/repositories/PasswordResetRepository.interface';
 import { IEmailVerificationRepository } from '../../../domain/auth/repositories/EmailVerificationRepository.interface';
+import { INotificationService } from '../../../application/services/notification/NotificationService.interface';
 import { EmailService } from '../../../infrastructure/email/EmailService';
 import { BcryptService } from '../../../infrastructure/security/BcryptService';
 import { JwtService } from '../../../infrastructure/security/JwtService';
@@ -28,6 +29,7 @@ export class AuthService implements IAuthService {
   private refreshTokenRepository: IRefreshTokenRepository;
   private passwordResetRepository: IPasswordResetRepository;
   private emailVerificationRepository: IEmailVerificationRepository;
+  private notificationService: INotificationService;
   private emailService: EmailService;
   private bcryptService: BcryptService;
   private jwtService: JwtService;
@@ -42,6 +44,7 @@ export class AuthService implements IAuthService {
     this.emailVerificationRepository = container.resolve<IEmailVerificationRepository>(
       'emailVerificationRepository',
     );
+    this.notificationService = container.resolve<INotificationService>('notificationService');
     this.emailService = container.resolve<EmailService>('emailService');
     this.bcryptService = container.resolve<BcryptService>('bcryptService');
     this.jwtService = container.resolve<JwtService>('jwtService');
@@ -81,6 +84,14 @@ export class AuthService implements IAuthService {
       lastName: data.lastName,
       role: (data.role as any) || 'CUSTOMER',
     });
+
+    // Initialize default notification preferences
+    try {
+      await this.notificationService.initializeUserPreferences(user.id);
+    } catch (error) {
+      this.logger.error(`Failed to initialize notification preferences: ${error}`);
+      // Continue even if this fails
+    }
 
     // Return user without password
     return toSafeUser(user);

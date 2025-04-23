@@ -31,6 +31,12 @@ import { PasswordResetRepository } from '../infrastructure/database/repositories
 import { EmailVerificationRepository } from '../infrastructure/database/repositories/EmailVerificationRepository';
 import { ArtisanProfileRepository } from '../infrastructure/database/repositories/ArtisanProfileRepository';
 import { UpgradeRequestRepository } from '../infrastructure/database/repositories/UpgradeRequestRepository';
+import { FollowRepository } from '../infrastructure/database/repositories/FollowRepository';
+import { PostRepository } from '../infrastructure/database/repositories/PostRepository';
+import { LikeRepository } from '../infrastructure/database/repositories/LikeRepository';
+import { CommentRepository } from '../infrastructure/database/repositories/CommentRepository';
+import { NotificationRepository } from './../infrastructure/database/repositories/NotificationRepository';
+import { NotificationPreferenceRepository } from '../infrastructure/database/repositories/NotificationPreferenceRepository';
 import { ProductRepository } from '../infrastructure/database/repositories/ProductRepository';
 import { CategoryRepository } from '../infrastructure/database/repositories/CategoryRepository';
 import { QuoteRepository } from '../infrastructure/database/repositories/QuoteRepository';
@@ -45,6 +51,15 @@ container.register('passwordResetRepository', new PasswordResetRepository(prisma
 container.register('emailVerificationRepository', new EmailVerificationRepository(prisma));
 container.register('artisanProfileRepository', new ArtisanProfileRepository(prisma));
 container.register('upgradeRequestRepository', new UpgradeRequestRepository(prisma));
+container.register('followRepository', new FollowRepository(prisma));
+container.register('postRepository', new PostRepository(prisma));
+container.register('likeRepository', new LikeRepository(prisma));
+container.register('commentRepository', new CommentRepository(prisma));
+container.register('notificationRepository', new NotificationRepository(prisma));
+container.register(
+  'notificationPreferenceRepository',
+  new NotificationPreferenceRepository(prisma),
+);
 container.register('productRepository', new ProductRepository(prisma));
 container.register('categoryRepository', new CategoryRepository(prisma));
 container.register('cartRepository', new CartRepository(prisma));
@@ -56,6 +71,11 @@ container.register('reviewRepository', new ReviewRepository(prisma));
 import { AuthService } from '../application/services/auth/AuthService';
 import { UserService } from '../application/services/user/UserService';
 import { ArtisanProfileService } from '../application/services/artisanProfile/ArtisanProfileService';
+import { FollowService } from '../application/services/social/FollowService';
+import { PostService } from '../application/services/content/PostService';
+import { LikeService } from '../application/services/social/LikeService';
+import { CommentService } from '../application/services/social/CommentService';
+import { NotificationService } from '../application/services/notification/NotificationService';
 import { ProductService } from '../application/services/product/ProductService';
 import { CategoryService } from '../application/services/product/CategoryService';
 import { QuoteService } from '../application/services/quote/QuoteService';
@@ -67,6 +87,11 @@ import { ReviewService } from '../application/services/review/ReviewService';
 container.register('authService', new AuthService());
 container.register('userService', new UserService());
 container.register('artisanProfileService', new ArtisanProfileService());
+container.register('followService', new FollowService());
+container.register('postService', new PostService());
+container.register('likeService', new LikeService());
+container.register('commentService', new CommentService());
+container.register('notificationService', new NotificationService());
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
 container.register('cartService', new CartService());

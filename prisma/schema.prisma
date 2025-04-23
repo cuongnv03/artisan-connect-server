@@ -44,31 +44,32 @@ model User {
   deletedAt      DateTime?
 
   // Relations
-  profile            Profile?
-  artisanProfile     ArtisanProfile?
-  upgradeRequest     ArtisanUpgradeRequest?
-  posts              Post[]
-  products           Product[]
-  followers          Follow[]               @relation("following")
-  following          Follow[]               @relation("follower")
-  likes              Like[]
-  comments           Comment[]
-  cartItems          CartItem[]
-  orders             Order[]                @relation("CustomerOrders")
-  sellerOrders       OrderItem[]            @relation("SellerOrderItems")
-  reviews            Review[]
-  sentMessages       Message[]              @relation("MessageSender")
-  receivedMessages   Message[]              @relation("MessageRecipient")
-  quoteRequests      QuoteRequest[]         @relation("CustomerQuotes")
-  artisanQuotes      QuoteRequest[]         @relation("ArtisanQuotes")
-  notifications      Notification[]
-  sessions           Session[]
-  refreshTokens      RefreshToken[]
-  savedPosts         SavedPost[]
-  activities         UserActivity[]
-  passwordResets     PasswordReset[]
-  emailVerifications EmailVerification[]
-  ReviewHelpful      ReviewHelpful[]
+  profile                Profile?
+  artisanProfile         ArtisanProfile?
+  upgradeRequest         ArtisanUpgradeRequest?
+  posts                  Post[]
+  products               Product[]
+  followers              Follow[]                 @relation("following")
+  following              Follow[]                 @relation("follower")
+  likes                  Like[]
+  comments               Comment[]
+  cartItems              CartItem[]
+  orders                 Order[]                  @relation("CustomerOrders")
+  sellerOrders           OrderItem[]              @relation("SellerOrderItems")
+  reviews                Review[]
+  sentMessages           Message[]                @relation("MessageSender")
+  receivedMessages       Message[]                @relation("MessageRecipient")
+  quoteRequests          QuoteRequest[]           @relation("CustomerQuotes")
+  artisanQuotes          QuoteRequest[]           @relation("ArtisanQuotes")
+  notifications          Notification[]
+  sessions               Session[]
+  refreshTokens          RefreshToken[]
+  savedPosts             SavedPost[]
+  activities             UserActivity[]
+  passwordResets         PasswordReset[]
+  emailVerifications     EmailVerification[]
+  ReviewHelpful          ReviewHelpful[]
+  NotificationPreference NotificationPreference[]
 
   @@index([email])
   @@index([username])
@@ -727,6 +728,23 @@ model Notification {
   @@index([type])
   @@index([isRead])
   @@index([createdAt])
+}
+
+model NotificationPreference {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  enabled   Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Composite unique constraint
+  @@unique([userId, type])
+  @@index([userId])
+  @@index([type])
 }
 
 //------------- ANALYTICS MODELS -------------//

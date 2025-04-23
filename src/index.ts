@@ -2,6 +2,7 @@ import app from './app';
 import { Config } from './config/config';
 import { Logger } from './shared/utils/Logger';
 import { PrismaClientManager } from './infrastructure/database/prisma/PrismaClient';
+import { Scheduler } from './interfaces/schedules/Scheduler';
 import './di/injection'; // Load dependency injection
 
 const logger = Logger.getInstance();
@@ -10,6 +11,9 @@ const { port, env } = Config.getServerConfig();
 // Start the server
 const server = app.listen(Number(port), '0.0.0.0', () => {
   logger.info(`Server running in ${env} mode on port ${port}`);
+
+  // Start scheduler
+  Scheduler.getInstance().start();
 });
 
 // Handle uncaught exceptions
@@ -30,6 +34,9 @@ process.on('unhandledRejection', (reason, promise) => {
 // Graceful shutdown
 const shutdown = async (code: number) => {
   logger.info('Shutting down server...');
+
+  // Stop scheduler
+  Scheduler.getInstance().stop();
 
   // Close server
   server.close(() => {
