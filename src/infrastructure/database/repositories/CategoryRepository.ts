@@ -284,11 +284,16 @@ export class CategoryRepository
 
       // Build tree structure from flat list
       const rootCategories = allCategories.filter((c) => !c.parentId);
-      const categoryMap = new Map(allCategories.map((c) => [c.id, { ...c, children: [] }]));
+      const categoryMap = new Map();
+
+      // Initialize with empty children arrays
+      allCategories.forEach((c) => {
+        categoryMap.set(c.id, { ...c, children: [] });
+      });
 
       // Populate children
       allCategories.forEach((category) => {
-        if (category.parentId && categoryMap.has(category.parentId)) {
+        if (category.parentId) {
           const parent = categoryMap.get(category.parentId);
           if (parent && parent.children) {
             parent.children.push(categoryMap.get(category.id));
@@ -296,7 +301,10 @@ export class CategoryRepository
         }
       });
 
-      return rootCategories.map((c) => categoryMap.get(c.id)) as unknown as CategoryWithChildren[];
+      // Return root categories with their nested children
+      return rootCategories.map(
+        (c) => categoryMap.get(c.id) || c,
+      ) as unknown as CategoryWithChildren[];
     } catch (error) {
       this.logger.error(`Error getting category tree: ${error}`);
       throw new AppError('Failed to get category tree', 500, 'DATABASE_ERROR');
@@ -330,7 +338,7 @@ export class CategoryRepository
         where: {
           categories: {
             some: {
-              id: {
+              categoryId: {
                 in: allCategoryIds,
               },
             },
@@ -348,7 +356,7 @@ export class CategoryRepository
         where: {
           categories: {
             some: {
-              id: {
+              categoryId: {
                 in: allCategoryIds,
               },
             },
@@ -382,16 +390,19 @@ export class CategoryRepository
         take: limit,
       });
 
-      return {
+      // Create custom result with category info
+      const result: PaginatedResult<any> = {
         data: products,
         meta: {
           total,
           page,
           limit,
           totalPages,
-          category,
+          categoryInfo: category,
         },
       };
+
+      return result;
     } catch (error) {
       this.logger.error(`Error getting products by category: ${error}`);
       if (error instanceof AppError) throw error;

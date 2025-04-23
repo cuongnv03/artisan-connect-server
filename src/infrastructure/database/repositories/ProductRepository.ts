@@ -1,4 +1,4 @@
-import { PrismaClient, Product as PrismaProduct, Prisma } from '@prisma/client';
+import { PrismaClient, Product as PrismaProduct, Prisma, ProductStatus } from '@prisma/client';
 import { BasePrismaRepository } from './BasePrismaRepository';
 import { IProductRepository } from '../../../domain/product/repositories/ProductRepository.interface';
 import {
@@ -44,8 +44,12 @@ export class ProductRepository
         },
         categories: {
           select: {
-            id: true,
-            name: true,
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
         priceHistory: {
@@ -62,7 +66,13 @@ export class ProductRepository
       },
     });
 
-    return product as unknown as ProductWithDetails;
+    // Transform the data to match the expected format
+    return product
+      ? ({
+          ...product,
+          categories: product.categories.map((c) => c.category),
+        } as unknown as ProductWithDetails)
+      : null;
   }
 
   /**
@@ -99,15 +109,20 @@ export class ProductRepository
             status: data.status,
             images: data.images,
             tags: data.tags || [],
-            attributes: data.attributes,
+            attributes: data.attributes as any,
             isCustomizable: data.isCustomizable,
             sku: data.sku,
             weight: data.weight,
             dimensions: data.dimensions as any,
+            // Fix for categories connection
             categories:
               data.categories && data.categories.length > 0
                 ? {
-                    connect: data.categories.map((id) => ({ id })),
+                    create: data.categories.map((categoryId) => ({
+                      category: {
+                        connect: { id: categoryId },
+                      },
+                    })),
                   }
                 : undefined,
           },
@@ -126,8 +141,12 @@ export class ProductRepository
             },
             categories: {
               select: {
-                id: true,
-                name: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
             _count: {
@@ -156,6 +175,7 @@ export class ProductRepository
 
         return {
           ...newProduct,
+          categories: newProduct.categories.map((c) => c.category),
           priceHistory,
         };
       });
@@ -209,6 +229,13 @@ export class ProductRepository
       let updateTransaction;
       if (data.price !== undefined && data.price !== Number(product.price)) {
         updateTransaction = this.prisma.$transaction(async (tx) => {
+          // Delete existing category connections if updating categories
+          if (data.categories) {
+            await tx.categoryProduct.deleteMany({
+              where: { productId: id },
+            });
+          }
+
           // Update product
           const updatedProduct = await tx.product.update({
             where: { id },
@@ -221,15 +248,19 @@ export class ProductRepository
               status: data.status,
               images: data.images,
               tags: data.tags,
-              attributes: data.attributes,
+              attributes: data.attributes as any,
               isCustomizable: data.isCustomizable,
               sku: data.sku,
               weight: data.weight,
               dimensions: data.dimensions as any,
+              // Fix for categories connection
               categories: data.categories
                 ? {
-                    set: [], // Remove existing connections
-                    connect: data.categories.map((id) => ({ id })), // Create new connections
+                    create: data.categories.map((categoryId) => ({
+                      category: {
+                        connect: { id: categoryId },
+                      },
+                    })),
                   }
                 : undefined,
             },
@@ -248,8 +279,12 @@ export class ProductRepository
               },
               categories: {
                 select: {
-                  id: true,
-                  name: true,
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
                 },
               },
               _count: {
@@ -264,7 +299,7 @@ export class ProductRepository
           await tx.priceHistory.create({
             data: {
               productId: id,
-              price: data.price,
+              price: data.price !== undefined ? data.price : product.price,
               changeNote: 'Price updated during product edit',
               changedBy: sellerId,
             },
@@ -278,12 +313,20 @@ export class ProductRepository
 
           return {
             ...updatedProduct,
+            categories: updatedProduct.categories.map((c) => c.category),
             priceHistory,
           };
         });
       } else {
         // Regular update without price change
         updateTransaction = this.prisma.$transaction(async (tx) => {
+          // Delete existing category connections if updating categories
+          if (data.categories) {
+            await tx.categoryProduct.deleteMany({
+              where: { productId: id },
+            });
+          }
+
           const updatedProduct = await tx.product.update({
             where: { id },
             data: {
@@ -294,15 +337,19 @@ export class ProductRepository
               status: data.status,
               images: data.images,
               tags: data.tags,
-              attributes: data.attributes,
+              attributes: data.attributes as any,
               isCustomizable: data.isCustomizable,
               sku: data.sku,
               weight: data.weight,
               dimensions: data.dimensions as any,
+              // Fix for categories connection
               categories: data.categories
                 ? {
-                    set: [], // Remove existing connections
-                    connect: data.categories.map((id) => ({ id })), // Create new connections
+                    create: data.categories.map((categoryId) => ({
+                      category: {
+                        connect: { id: categoryId },
+                      },
+                    })),
                   }
                 : undefined,
             },
@@ -321,8 +368,12 @@ export class ProductRepository
               },
               categories: {
                 select: {
-                  id: true,
-                  name: true,
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
                 },
               },
               _count: {
@@ -341,6 +392,7 @@ export class ProductRepository
 
           return {
             ...updatedProduct,
+            categories: updatedProduct.categories.map((c) => c.category),
             priceHistory,
           };
         });
@@ -399,8 +451,12 @@ export class ProductRepository
             },
             categories: {
               select: {
-                id: true,
-                name: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
             _count: {
@@ -415,7 +471,7 @@ export class ProductRepository
         await tx.priceHistory.create({
           data: {
             productId: id,
-            price: data.price,
+            price: data.price !== undefined ? data.price : product.price,
             changeNote: data.changeNote || 'Price updated',
             changedBy: sellerId,
           },
@@ -429,6 +485,7 @@ export class ProductRepository
 
         return {
           ...updatedProduct,
+          categories: updatedProduct.categories.map((c) => c.category),
           priceHistory,
         };
       });
@@ -463,7 +520,7 @@ export class ProductRepository
       await this.prisma.product.update({
         where: { id },
         data: {
-          status: 'DELETED',
+          status: 'DELETED' as ProductStatus,
           deletedAt: new Date(),
         },
       });
@@ -505,7 +562,7 @@ export class ProductRepository
       if (categoryId) {
         where.categories = {
           some: {
-            id: categoryId,
+            categoryId,
           },
         };
       }
@@ -548,7 +605,7 @@ export class ProductRepository
       }
 
       // Exclude deleted products unless explicitly requested
-      if (!status || !status.includes('DELETED')) {
+      if (!status || !status.includes('DELETED' as any)) {
         where.deletedAt = null;
       }
 
@@ -580,8 +637,12 @@ export class ProductRepository
           },
           categories: {
             select: {
-              id: true,
-              name: true,
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
           _count: {
@@ -595,8 +656,14 @@ export class ProductRepository
         take: limit,
       });
 
+      // Transform data to match expected format
+      const transformedProducts = products.map((product) => ({
+        ...product,
+        categories: product.categories.map((c) => c.category),
+      }));
+
       return {
-        data: products as unknown as Product[],
+        data: transformedProducts as unknown as Product[],
         meta: {
           total,
           page,
