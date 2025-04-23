@@ -31,6 +31,8 @@ import { PasswordResetRepository } from '../infrastructure/database/repositories
 import { EmailVerificationRepository } from '../infrastructure/database/repositories/EmailVerificationRepository';
 import { ArtisanProfileRepository } from '../infrastructure/database/repositories/ArtisanProfileRepository';
 import { UpgradeRequestRepository } from '../infrastructure/database/repositories/UpgradeRequestRepository';
+import { ProductRepository } from '../infrastructure/database/repositories/ProductRepository';
+import { CategoryRepository } from '../infrastructure/database/repositories/CategoryRepository';
 
 // Register repositories
 container.register('userRepository', new UserRepository(prisma));
@@ -39,15 +41,21 @@ container.register('passwordResetRepository', new PasswordResetRepository(prisma
 container.register('emailVerificationRepository', new EmailVerificationRepository(prisma));
 container.register('artisanProfileRepository', new ArtisanProfileRepository(prisma));
 container.register('upgradeRequestRepository', new UpgradeRequestRepository(prisma));
+container.register('productRepository', new ProductRepository(prisma));
+container.register('categoryRepository', new CategoryRepository(prisma));
 
 // Import services
 import { AuthService } from '../application/services/auth/AuthService';
 import { UserService } from '../application/services/user/UserService';
 import { ArtisanProfileService } from '../application/services/artisanProfile/ArtisanProfileService';
+import { ProductService } from '../application/services/product/ProductService';
+import { CategoryService } from '../application/services/product/CategoryService';
 
 // Register services
 container.register('authService', new AuthService());
 container.register('userService', new UserService());
 container.register('artisanProfileService', new ArtisanProfileService());
+container.register('productService', new ProductService());
+container.register('categoryService', new CategoryService());
 
 console.log('Dependency injection initialized');

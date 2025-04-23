@@ -3,6 +3,8 @@ import { Config } from '../../../config/config';
 import authRoutes from './auth.routes';
 import userRoutes from './user.routes';
 import artisanProfileRoutes from './artisanProfile.routes';
+import productRoutes from './product.routes';
+import categoryRoutes from './category.routes';
 
 export const registerRoutes = (app: Express): void => {
   const apiPrefix = Config.API_PREFIX;
@@ -11,6 +13,8 @@ export const registerRoutes = (app: Express): void => {
   app.use(`${apiPrefix}/auth`, authRoutes);
   app.use(`${apiPrefix}/users`, userRoutes);
   app.use(`${apiPrefix}/artisan-profiles`, artisanProfileRoutes);
+  app.use(`${apiPrefix}/products`, productRoutes);
+  app.use(`${apiPrefix}/categories`, categoryRoutes);
 
   // Add more routes here as they are implemented
 };
