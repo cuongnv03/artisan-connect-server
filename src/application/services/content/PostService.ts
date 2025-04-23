@@ -6,7 +6,7 @@ import {
   UpdatePostDto,
   PostStatus,
   PostQueryOptions,
-  PostPaginationResult
+  PostPaginationResult,
 } from '../../../domain/content/entities/Post';
 import { IPostRepository } from '../../../domain/content/repositories/PostRepository.interface';
 import { IProductRepository } from '../../../domain/product/repositories/ProductRepository.interface';
@@ -60,7 +60,7 @@ export class PostService implements IPostService {
 
       // If post is published immediately, send notifications to followers
       if (data.publishNow && data.status === PostStatus.PUBLISHED) {
-        this.notifyFollowers(userId, post.id, post.title).catch(err => {
+        this.notifyFollowers(userId, post.id, post.title).catch((err) => {
           this.logger.error(`Failed to notify followers: ${err}`);
         });
       }
@@ -103,7 +103,7 @@ export class PostService implements IPostService {
 
       // If post was draft and is now published, notify followers
       if (post.status === PostStatus.DRAFT && data.status === PostStatus.PUBLISHED) {
-        this.notifyFollowers(userId, id, updatedPost.title).catch(err => {
+        this.notifyFollowers(userId, id, updatedPost.title).catch((err) => {
           this.logger.error(`Failed to notify followers: ${err}`);
         });
       }
@@ -161,7 +161,7 @@ export class PostService implements IPostService {
       const post = await this.postRepository.publishPost(id, userId);
 
       // Notify followers
-      this.notifyFollowers(userId, id, post.title).catch(err => {
+      this.notifyFollowers(userId, id, post.title).catch((err) => {
         this.logger.error(`Failed to notify followers: ${err}`);
       });
 
@@ -194,7 +194,7 @@ export class PostService implements IPostService {
       if (options.followedOnly && requestUserId) {
         return this.getFollowedPosts(requestUserId, options);
       }
-      
+
       return await this.postRepository.getPosts(options, requestUserId);
     } catch (error) {
       this.logger.error(`Error getting posts: ${error}`);
@@ -206,7 +206,10 @@ export class PostService implements IPostService {
   /**
    * Get posts from users that the current user follows
    */
-  async getFollowedPosts(userId: string, options: Omit<PostQueryOptions, 'followedOnly'> = {}): Promise<PostPaginationResult> {
+  async getFollowedPosts(
+    userId: string,
+    options: Omit<PostQueryOptions, 'followedOnly'> = {},
+  ): Promise<PostPaginationResult> {
     try {
       return await this.postRepository.getFollowedPosts(userId, options);
     } catch (error) {
@@ -219,13 +222,16 @@ export class PostService implements IPostService {
   /**
    * Get my posts as a creator (with drafts, etc.)
    */
-  async getMyPosts(userId: string, options: Omit<PostQueryOptions, 'userId'> = {}): Promise<PostPaginationResult> {
+  async getMyPosts(
+    userId: string,
+    options: Omit<PostQueryOptions, 'userId'> = {},
+  ): Promise<PostPaginationResult> {
     try {
       const myOptions: PostQueryOptions = {
         ...options,
         userId,
         includeLikeStatus: false,
-        includeSaveStatus: false
+        includeSaveStatus: false,
       };
 
       // Default to include all statuses except deleted
@@ -266,34 +272,34 @@ export class PostService implements IPostService {
     }
   }
 
-/**
- * Notify followers of new post
- */
-private async notifyFollowers(userId: string, postId: string, postTitle: string): Promise<void> {
+  /**
+   * Notify followers of new post
+   */
+  private async notifyFollowers(userId: string, postId: string, postTitle: string): Promise<void> {
     try {
       // Get follower data
       const followersData = await this.followService.getFollowers(userId);
       const followers = followersData.data;
-  
+
       // Get user for notification content
       const user = await this.userRepository.findById(userId);
       if (!user) return;
-  
-      const authorName = user.artisanProfile 
-        ? user.artisanProfile.shopName 
+
+      const authorName = user.artisanProfile
+        ? user.artisanProfile.shopName
         : `${user.firstName} ${user.lastName}`;
-  
+
       // Send notification to each follower who opted in
       for (const follower of followers) {
         if (follower.notifyNewPosts) {
           await this.notificationService.createNotification({
             userId: follower.follower.id,
             type: NotificationType.NEW_POST,
-            title: "New Post from " + authorName,
+            title: 'New Post from ' + authorName,
             content: `${authorName} published a new post: "${postTitle}"`,
             relatedUserId: userId,
             relatedEntityId: postId,
-            relatedEntityType: 'post'
+            relatedEntityType: 'post',
           });
         }
       }
@@ -302,3 +308,4 @@ private async notifyFollowers(userId: string, postId: string, postTitle: string)
       // Don't throw error here to prevent interrupting the main flow
     }
   }
+}

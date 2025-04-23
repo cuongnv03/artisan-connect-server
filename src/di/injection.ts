@@ -84,6 +84,7 @@ import { CartService } from '../application/services/cart/CartService';
 import { ReviewService } from '../application/services/review/ReviewService';
 
 // Register services
+container.register('notificationService', new NotificationService());
 container.register('authService', new AuthService());
 container.register('userService', new UserService());
 container.register('artisanProfileService', new ArtisanProfileService());
@@ -91,7 +92,6 @@ container.register('followService', new FollowService());
 container.register('postService', new PostService());
 container.register('likeService', new LikeService());
 container.register('commentService', new CommentService());
-container.register('notificationService', new NotificationService());
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
 container.register('cartService', new CartService());
