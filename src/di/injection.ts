@@ -33,6 +33,8 @@ import { ArtisanProfileRepository } from '../infrastructure/database/repositorie
 import { UpgradeRequestRepository } from '../infrastructure/database/repositories/UpgradeRequestRepository';
 import { ProductRepository } from '../infrastructure/database/repositories/ProductRepository';
 import { CategoryRepository } from '../infrastructure/database/repositories/CategoryRepository';
+import { QuoteRepository } from '../infrastructure/database/repositories/QuoteRepository';
+import { OrderRepository } from '../infrastructure/database/repositories/OrderRepository';
 
 // Register repositories
 container.register('userRepository', new UserRepository(prisma));
@@ -43,6 +45,8 @@ container.register('artisanProfileRepository', new ArtisanProfileRepository(pris
 container.register('upgradeRequestRepository', new UpgradeRequestRepository(prisma));
 container.register('productRepository', new ProductRepository(prisma));
 container.register('categoryRepository', new CategoryRepository(prisma));
+container.register('quoteRepository', new QuoteRepository(prisma));
+container.register('orderRepository', new OrderRepository(prisma));
 
 // Import services
 import { AuthService } from '../application/services/auth/AuthService';
@@ -50,6 +54,8 @@ import { UserService } from '../application/services/user/UserService';
 import { ArtisanProfileService } from '../application/services/artisanProfile/ArtisanProfileService';
 import { ProductService } from '../application/services/product/ProductService';
 import { CategoryService } from '../application/services/product/CategoryService';
+import { QuoteService } from '../application/services/quote/QuoteService';
+import { OrderService } from '../application/services/order/OrderService';
 
 // Register services
 container.register('authService', new AuthService());
@@ -57,5 +63,7 @@ container.register('userService', new UserService());
 container.register('artisanProfileService', new ArtisanProfileService());
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
+container.register('quoteService', new QuoteService());
+container.register('orderService', new OrderService());
 
 console.log('Dependency injection initialized');

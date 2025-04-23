@@ -1,0 +1,44 @@
+import { Request, Response, NextFunction } from 'express';
+import { BaseController } from '../BaseController';
+import { ApiResponse } from '../../../../shared/utils/ApiResponse';
+import { IOrderService } from '../../../../application/services/order/OrderService.interface';
+import { AppError } from '../../../../shared/errors/AppError';
+import container from '../../../../di/container';
+
+export class GetOrderStatusHistoryController extends BaseController {
+  private orderService: IOrderService;
+
+  constructor() {
+    super();
+    this.orderService = container.resolve<IOrderService>('orderService');
+  }
+
+  protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      this.validateAuth(req);
+
+      const { id } = req.params;
+
+      // Get order to check permissions
+      const order = await this.orderService.getOrderById(id);
+      if (!order) {
+        throw AppError.notFound('Order not found');
+      }
+
+      // Check if user is involved in this order
+      if (
+        order.userId !== req.user!.id &&
+        !order.items.some((item) => item.sellerId === req.user!.id) &&
+        req.user!.role !== 'ADMIN'
+      ) {
+        throw AppError.forbidden('You do not have permission to view this order history');
+      }
+
+      const statusHistory = await this.orderService.getOrderStatusHistory(id);
+
+      ApiResponse.success(res, statusHistory, 'Order status history retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+}
