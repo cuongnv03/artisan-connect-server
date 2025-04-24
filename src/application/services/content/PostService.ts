@@ -11,6 +11,7 @@ import {
 import { IPostRepository } from '../../../domain/content/repositories/PostRepository.interface';
 import { IProductRepository } from '../../../domain/product/repositories/ProductRepository.interface';
 import { IUserRepository } from '../../../domain/user/repositories/UserRepository.interface';
+import { ISavedPostService } from '../social/SavedPostService.interface';
 import { IFollowService } from '../social/FollowService.interface';
 import { INotificationService } from '../notification/NotificationService.interface';
 import { NotificationType } from '../../../domain/notification/entities/Notification';
@@ -24,6 +25,7 @@ export class PostService implements IPostService {
   private userRepository: IUserRepository;
   private followService: IFollowService;
   private notificationService: INotificationService;
+  private savedPostService: ISavedPostService;
   private logger = Logger.getInstance();
 
   constructor() {
@@ -32,6 +34,7 @@ export class PostService implements IPostService {
     this.userRepository = container.resolve<IUserRepository>('userRepository');
     this.followService = container.resolve<IFollowService>('followService');
     this.notificationService = container.resolve<INotificationService>('notificationService');
+    this.savedPostService = container.resolve<ISavedPostService>('savedPostService');
   }
 
   /**
@@ -121,7 +124,26 @@ export class PostService implements IPostService {
    */
   async getPostById(id: string, requestUserId?: string): Promise<PostWithUser | null> {
     try {
-      return await this.postRepository.findByIdWithUser(id, requestUserId);
+      const post = await this.postRepository.findByIdWithUser(id, requestUserId);
+      // If no post found or not accessible
+      if (!post) {
+        return null;
+      }
+
+      // If a user is requesting and we need to check saved status
+      if (requestUserId && post) {
+        try {
+          // Check if the post is saved by the user
+          const isSaved = await this.savedPostService.hasSaved(requestUserId, id);
+          // Add the saved status to the post
+          (post as any).saved = isSaved;
+        } catch (error) {
+          // Non-critical error, just log it
+          this.logger.error(`Error checking saved status: ${error}`);
+        }
+      }
+
+      return post;
     } catch (error) {
       this.logger.error(`Error getting post by ID: ${error}`);
       return null;
@@ -133,7 +155,26 @@ export class PostService implements IPostService {
    */
   async getPostBySlug(slug: string, requestUserId?: string): Promise<PostWithUser | null> {
     try {
-      return await this.postRepository.findBySlugWithUser(slug, requestUserId);
+      const post = await this.postRepository.findBySlugWithUser(slug, requestUserId);
+      // If no post found or not accessible
+      if (!post) {
+        return null;
+      }
+
+      // If a user is requesting and we need to check saved status
+      if (requestUserId && post) {
+        try {
+          // Check if the post is saved by the user
+          const isSaved = await this.savedPostService.hasSaved(requestUserId, post.id);
+          // Add the saved status to the post
+          (post as any).saved = isSaved;
+        } catch (error) {
+          // Non-critical error, just log it
+          this.logger.error(`Error checking saved status: ${error}`);
+        }
+      }
+
+      return post;
     } catch (error) {
       this.logger.error(`Error getting post by slug: ${error}`);
       return null;

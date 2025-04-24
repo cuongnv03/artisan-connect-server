@@ -12,6 +12,7 @@ import quoteRoutes from './quote.routes';
 import orderRoutes from './order.routes';
 import cartRoutes from './cart.routes';
 import reviewRoutes from './review.routes';
+import analyticsRoutes from './analytics.routes';
 
 export const registerRoutes = (app: Express): void => {
   const apiPrefix = Config.API_PREFIX;
@@ -29,6 +30,7 @@ export const registerRoutes = (app: Express): void => {
   app.use(`${apiPrefix}/orders`, orderRoutes);
   app.use(`${apiPrefix}/cart`, cartRoutes);
   app.use(`${apiPrefix}/reviews`, reviewRoutes);
+  app.use(`${apiPrefix}/analytics`, analyticsRoutes);
 
   // Add more routes here as they are implemented
 };

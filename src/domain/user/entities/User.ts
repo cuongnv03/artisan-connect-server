@@ -1,3 +1,4 @@
+import { ArtisanProfile } from 'src/domain/artisanProfile/entities/ArtisanProfile';
 import { UserRole, UserStatus } from './../valueObjects/UserEnums';
 
 /**
@@ -25,6 +26,7 @@ export interface User {
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
+  artisanProfile?: ArtisanProfile | null; // Optional relationship to ArtisanProfile
 }
 
 /**

@@ -43,6 +43,7 @@ import { QuoteRepository } from '../infrastructure/database/repositories/QuoteRe
 import { OrderRepository } from '../infrastructure/database/repositories/OrderRepository';
 import { CartRepository } from '../infrastructure/database/repositories/CartRepository';
 import { ReviewRepository } from '../infrastructure/database/repositories/ReviewRepository';
+import { PostAnalyticsRepository } from '../infrastructure/database/repositories/PostAnalyticsRepository';
 
 // Register repositories
 container.register('userRepository', new UserRepository(prisma));
@@ -66,6 +67,7 @@ container.register('cartRepository', new CartRepository(prisma));
 container.register('quoteRepository', new QuoteRepository(prisma));
 container.register('orderRepository', new OrderRepository(prisma));
 container.register('reviewRepository', new ReviewRepository(prisma));
+container.register('postAnalyticsRepository', new PostAnalyticsRepository(prisma));
 
 // Import services
 import { AuthService } from '../application/services/auth/AuthService';
@@ -82,6 +84,7 @@ import { QuoteService } from '../application/services/quote/QuoteService';
 import { OrderService } from '../application/services/order/OrderService';
 import { CartService } from '../application/services/cart/CartService';
 import { ReviewService } from '../application/services/review/ReviewService';
+import { PostAnalyticsService } from '../application/services/analytics/PostAnalyticsService';
 
 // Register services
 container.register('notificationService', new NotificationService());
@@ -98,5 +101,6 @@ container.register('cartService', new CartService());
 container.register('quoteService', new QuoteService());
 container.register('orderService', new OrderService());
 container.register('reviewService', new ReviewService());
+container.register('postAnalyticsService', new PostAnalyticsService());
 
 console.log('Dependency injection initialized');

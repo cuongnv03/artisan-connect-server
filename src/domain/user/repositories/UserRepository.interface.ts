@@ -9,6 +9,11 @@ import { BaseRepository } from '../../repositories/BaseRepository';
  */
 export interface IUserRepository extends BaseRepository<User, string> {
   /**
+   * Find a user by ID
+   */
+  findById(id: string): Promise<User | null>;
+
+  /**
    * Find a user by email
    */
   findByEmail(email: string): Promise<User | null>;

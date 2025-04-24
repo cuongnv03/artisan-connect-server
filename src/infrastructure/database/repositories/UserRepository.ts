@@ -20,8 +20,20 @@ export class UserRepository extends BasePrismaRepository<User, string> implement
   /**
    * Convert Prisma User to Domain User
    */
-  private toDomainEntity(prismaUser: PrismaUser): User {
+  private toDomainEntity(prismaUser: PrismaUser & { artisanProfile?: any }): User {
     return prismaUser as User;
+  }
+
+  /**
+   * Find a user by ID
+   */
+  async findById(id: string): Promise<User | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { artisanProfile: true },
+    });
+
+    return user ? this.toDomainEntity(user) : null;
   }
 
   /**

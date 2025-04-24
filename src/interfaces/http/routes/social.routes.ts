@@ -22,6 +22,13 @@ import { DeleteCommentController } from '../controllers/social/DeleteCommentCont
 import { GetPostCommentsController } from '../controllers/social/GetPostCommentsController';
 import { GetCommentRepliesController } from '../controllers/social/GetCommentRepliesController';
 
+// Save posts controllers
+import { SavePostController } from '../controllers/social/SavePostController';
+import { UnsavePostController } from '../controllers/social/UnsavePostController';
+import { GetSavedPostsController } from '../controllers/social/GetSavedPostsController';
+import { ToggleSavePostController } from '../controllers/social/ToggleSavePostController';
+import { CheckSavedStatusController } from '../controllers/social/CheckSavedStatusController';
+
 // Validators
 import {
   followUserSchema,
@@ -35,6 +42,7 @@ import {
   updateCommentSchema,
   commentQuerySchema,
 } from '../validators/comment.validator';
+import { savePostSchema, getSavedPostsQuerySchema } from '../validators/savedPost.validator';
 
 const router = Router();
 
@@ -57,6 +65,13 @@ const updateCommentController = new UpdateCommentController();
 const deleteCommentController = new DeleteCommentController();
 const getPostCommentsController = new GetPostCommentsController();
 const getCommentRepliesController = new GetCommentRepliesController();
+
+// Initialize Save Post controllers
+const savePostController = new SavePostController();
+const unsavePostController = new UnsavePostController();
+const getSavedPostsController = new GetSavedPostsController();
+const toggleSavePostController = new ToggleSavePostController();
+const checkSavedStatusController = new CheckSavedStatusController();
 
 // Follow routes
 router.post('/follow', authenticate, validate(followUserSchema), followUserController.execute);
@@ -127,5 +142,17 @@ router.get(
   validate(commentQuerySchema, 'query'),
   getCommentRepliesController.execute,
 );
+
+// Save Post routes
+router.post('/', authenticate, validate(savePostSchema), savePostController.execute);
+router.delete('/:postId', authenticate, unsavePostController.execute);
+router.post('/toggle', authenticate, validate(savePostSchema), toggleSavePostController.execute);
+router.get(
+  '/',
+  authenticate,
+  validate(getSavedPostsQuerySchema, 'query'),
+  getSavedPostsController.execute,
+);
+router.get('/check/:postId', authenticate, checkSavedStatusController.execute);
 
 export default router;
