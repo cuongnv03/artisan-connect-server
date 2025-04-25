@@ -3,9 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-import { errorHandler } from './interfaces/http/middlewares/errorHandler.middleware';
+import { errorHandler } from './shared/middlewares/errorHandler.middleware';
 import { Config } from './config/config';
-import { Logger } from './shared/utils/Logger';
+import { Logger } from './core/logging/Logger';
 // Không import registerRoutes ở đây nữa
 
 export class App {

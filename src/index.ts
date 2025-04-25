@@ -1,9 +1,9 @@
 import app from './app';
 import { Config } from './config/config';
-import { Logger } from './shared/utils/Logger';
-import { PrismaClientManager } from './infrastructure/database/prisma/PrismaClient';
-import { Scheduler } from './interfaces/schedules/Scheduler';
-import './di/injection'; // Load dependency injection
+import { Logger } from './core/logging/Logger';
+import { PrismaClientManager } from './core/database/PrismaClient';
+import { Scheduler } from './core/schedulers/Scheduler';
+import './core/di/injection'; // Load dependency injection
 
 const logger = Logger.getInstance();
 const { port, env } = Config.getServerConfig();
