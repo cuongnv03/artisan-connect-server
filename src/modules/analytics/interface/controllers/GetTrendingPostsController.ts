@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IPostAnalyticsService } from '../../application/PostAnalyticsService.interface';
-import { IPostService } from '../../../content/application/PostService.interface';
+import { IPostAnalyticsService } from '../../services/PostAnalyticsService.interface';
+import { IPostService } from '../../../post/services/PostService.interface';
 import container from '../../../../core/di/container';
 
 export class GetTrendingPostsController extends BaseController {

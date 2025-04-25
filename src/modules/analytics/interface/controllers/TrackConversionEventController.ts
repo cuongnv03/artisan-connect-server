@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IPostAnalyticsService } from '../../application/PostAnalyticsService.interface';
+import { IPostAnalyticsService } from '../../services/PostAnalyticsService.interface';
 import container from '../../../../core/di/container';
 
 export class TrackConversionEventController extends BaseController {

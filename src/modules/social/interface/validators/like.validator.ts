@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { ReactionType } from '../../domain/entities/Like';
+import { ReactionType } from '../../models/Like';
 
 export const likeToggleSchema = Joi.object({
   postId: Joi.string().uuid(),

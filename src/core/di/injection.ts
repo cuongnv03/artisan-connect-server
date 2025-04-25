@@ -1,11 +1,11 @@
 import container from './container';
 import { Config } from '../../config/config';
-import { JwtService } from '../security/JwtService';
-import { BcryptService } from '../security/BcryptService';
+import { JwtService } from '../infrastructure/security/JwtService';
+import { BcryptService } from '../infrastructure/security/BcryptService';
 import { PrismaClientManager } from '../database/PrismaClient';
-import { CloudinaryService } from '../storage/CloudinaryService';
-import { EmailService } from '../email/EmailService';
-import { AITemplateService } from '../ai/AITemplateService';
+import { CloudinaryService } from '../infrastructure/storage/CloudinaryService';
+import { EmailService } from '../infrastructure/email/EmailService';
+import { AITemplateService } from '../infrastructure/ai/AITemplateService';
 import { EventBus } from '../events/EventBus';
 
 // Prisma client
@@ -29,26 +29,26 @@ container.register('aiTemplateService', new AITemplateService());
 container.register('eventBus', EventBus.getInstance());
 
 // Import repositories
-import { UserRepository } from '../../modules/user/infrastructure/UserRepository';
-import { RefreshTokenRepository } from '../../modules/user/infrastructure/RefreshTokenRepository';
-import { PasswordResetRepository } from '../../modules/user/infrastructure/PasswordResetRepository';
-import { EmailVerificationRepository } from '../../modules/user/infrastructure/EmailVerificationRepository';
-import { ArtisanProfileRepository } from '../../modules/artisanProfile/infrastructure/ArtisanProfileRepository';
-import { UpgradeRequestRepository } from '../../modules/artisanProfile/infrastructure/UpgradeRequestRepository';
-import { FollowRepository } from '../../modules/social/infrastructure/FollowRepository';
-import { SavedPostRepository } from '../../modules/social/infrastructure/SavedPostRepository';
-import { PostRepository } from '../../modules/content/infrastructure/PostRepository';
-import { LikeRepository } from '../../modules/social/infrastructure/LikeRepository';
-import { CommentRepository } from '../../modules/social/infrastructure/CommentRepository';
-import { NotificationRepository } from '../../modules/notification/infrastructure/NotificationRepository';
-import { NotificationPreferenceRepository } from '../../modules/notification/infrastructure/NotificationPreferenceRepository';
-import { ProductRepository } from '../../modules/product/infrastructure/ProductRepository';
-import { CategoryRepository } from '../../modules/product/infrastructure/CategoryRepository';
-import { QuoteRepository } from '../../modules/quote/infrastructure/QuoteRepository';
-import { OrderRepository } from '../../modules/order/infrastructure/OrderRepository';
-import { CartRepository } from '../../modules/cart/infrastructure/CartRepository';
-import { ReviewRepository } from '../../modules/review/infrastructure/ReviewRepository';
-import { PostAnalyticsRepository } from '../../modules/analytics/infrastructure/PostAnalyticsRepository';
+import { UserRepository } from '../../modules/user/repositories/UserRepository';
+import { RefreshTokenRepository } from '../../modules/user/repositories/RefreshTokenRepository';
+import { PasswordResetRepository } from '../../modules/user/repositories/PasswordResetRepository';
+import { EmailVerificationRepository } from '../../modules/user/repositories/EmailVerificationRepository';
+import { ArtisanProfileRepository } from '../../modules/artisanProfile/repositories/ArtisanProfileRepository';
+import { UpgradeRequestRepository } from '../../modules/artisanProfile/repositories/UpgradeRequestRepository';
+import { FollowRepository } from '../../modules/social/repositories/FollowRepository';
+import { SavedPostRepository } from '../../modules/social/repositories/SavedPostRepository';
+import { PostRepository } from '../../modules/post/repositories/PostRepository';
+import { LikeRepository } from '../../modules/social/repositories/LikeRepository';
+import { CommentRepository } from '../../modules/social/repositories/CommentRepository';
+import { NotificationRepository } from '../../modules/notification/repositories/NotificationRepository';
+import { NotificationPreferenceRepository } from '../../modules/notification/repositories/NotificationPreferenceRepository';
+import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
+import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
+import { QuoteRepository } from '../../modules/quote/repositories/QuoteRepository';
+import { OrderRepository } from '../../modules/order/repositories/OrderRepository';
+import { CartRepository } from '../../modules/cart/repositories/CartRepository';
+import { ReviewRepository } from '../../modules/review/repositories/ReviewRepository';
+import { PostAnalyticsRepository } from '../../modules/analytics/repositories/PostAnalyticsRepository';
 
 // Register repositories
 container.register('userRepository', new UserRepository(prisma));
@@ -76,22 +76,22 @@ container.register('reviewRepository', new ReviewRepository(prisma));
 container.register('postAnalyticsRepository', new PostAnalyticsRepository(prisma));
 
 // Import services
-import { AuthService } from '../../modules/user/application/AuthService';
-import { UserService } from '../../modules/user/application/UserService';
-import { ArtisanProfileService } from '../../modules/artisanProfile/application/ArtisanProfileService';
-import { FollowService } from '../../modules/social/application/FollowService';
-import { SavedPostService } from '../../modules/social/application/SavedPostService';
-import { PostService } from '../../modules/content/application/PostService';
-import { LikeService } from '../../modules/social/application/LikeService';
-import { CommentService } from '../../modules/social/application/CommentService';
-import { NotificationService } from '../../modules/notification/application/NotificationService';
-import { ProductService } from '../../modules/product/application/ProductService';
-import { CategoryService } from '../../modules/product/application/CategoryService';
-import { QuoteService } from '../../modules/quote/application/QuoteService';
-import { OrderService } from '../../modules/order/application/OrderService';
-import { CartService } from '../../modules/cart/application/CartService';
-import { ReviewService } from '../../modules/review/application/ReviewService';
-import { PostAnalyticsService } from '../../modules/analytics/application/PostAnalyticsService';
+import { AuthService } from '../../modules/user/services/AuthService';
+import { UserService } from '../../modules/user/services/UserService';
+import { ArtisanProfileService } from '../../modules/artisanProfile/services/ArtisanProfileService';
+import { FollowService } from '../../modules/social/services/FollowService';
+import { SavedPostService } from '../../modules/social/services/SavedPostService';
+import { PostService } from '../../modules/post/services/PostService';
+import { LikeService } from '../../modules/social/services/LikeService';
+import { CommentService } from '../../modules/social/services/CommentService';
+import { NotificationService } from '../../modules/notification/services/NotificationService';
+import { ProductService } from '../../modules/product/services/ProductService';
+import { CategoryService } from '../../modules/product/services/CategoryService';
+import { QuoteService } from '../../modules/quote/services/QuoteService';
+import { OrderService } from '../../modules/order/services/OrderService';
+import { CartService } from '../../modules/cart/services/CartService';
+import { ReviewService } from '../../modules/review/services/ReviewService';
+import { PostAnalyticsService } from '../../modules/analytics/services/PostAnalyticsService';
 
 // Register services
 container.register('authService', new AuthService());

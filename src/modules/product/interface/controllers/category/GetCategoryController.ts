@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
-import { ICategoryService } from '../../../application/CategoryService.interface';
+import { ICategoryService } from '../../../services/CategoryService.interface';
 import { AppError } from '../../../../../core/errors/AppError';
-import { CategoryQueryOptions } from '../../../domain/entities/Category';
+import { CategoryQueryOptions } from '../../../models/Category';
 import container from '../../../../../core/di/container';
 
 export class GetCategoryController extends BaseController {

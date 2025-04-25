@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IReviewService } from '../../application/ReviewService.interface';
+import { IReviewService } from '../../services/ReviewService.interface';
 import { AppError } from '../../../../core/errors/AppError';
 import container from '../../../../core/di/container';
 

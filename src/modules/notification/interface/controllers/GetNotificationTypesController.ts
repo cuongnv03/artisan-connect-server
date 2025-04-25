@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { INotificationService } from '../../application/NotificationService.interface';
-import { NotificationType } from '../../domain/entities/Notification';
+import { INotificationService } from '../../services/NotificationService.interface';
+import { NotificationType } from '../../models/Notification';
 import container from '../../../../core/di/container';
 
 export class GetNotificationTypesController extends BaseController {

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { ICommentService } from '../../application/CommentService.interface';
+import { ICommentService } from '../../services/CommentService.interface';
 import container from '../../../../core/di/container';
 
 export class DeleteCommentController extends BaseController {

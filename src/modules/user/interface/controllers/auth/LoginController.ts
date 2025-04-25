@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
-import { IAuthService } from '../../../application/AuthService.interface';
+import { IAuthService } from '../../../services/AuthService.interface';
 import { AppError } from '../../../../../core/errors/AppError';
 import { Config } from '../../../../../config/config';
 import container from '../../../../../core/di/container';

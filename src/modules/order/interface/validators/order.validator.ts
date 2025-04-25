@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { OrderStatus, PaymentMethod } from '../../domain/valueObjects/OrderEnums';
+import { OrderStatus, PaymentMethod } from '../../models/OrderEnums';
 
 export const createOrderFromCartSchema = Joi.object({
   addressId: Joi.string().uuid().required(),

@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
-import { IProductService } from '../../../application/ProductService.interface';
-import { ProductQueryOptions } from '../../../domain/entities/Product';
+import { IProductService } from '../../../services/ProductService.interface';
+import { ProductQueryOptions } from '../../../models/Product';
 import { AppError } from '../../../../../core/errors/AppError';
 import container from '../../../../../core/di/container';
 

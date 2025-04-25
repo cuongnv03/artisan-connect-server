@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { NotificationType } from '../../domain/entities/Notification';
+import { NotificationType } from '../../models/Notification';
 
 export const notificationQuerySchema = Joi.object({
   unreadOnly: Joi.boolean().default(false),

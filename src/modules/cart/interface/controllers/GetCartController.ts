@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { ICartService } from '../../application/CartService.interface';
+import { ICartService } from '../../services/CartService.interface';
 import container from '../../../../core/di/container';
 
 export class GetCartController extends BaseController {

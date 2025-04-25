@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IReviewService } from '../../application/ReviewService.interface';
-import { ReviewFilterOptions } from '../../domain/entities/Review';
+import { IReviewService } from '../../services/ReviewService.interface';
+import { ReviewFilterOptions } from '../../models/Review';
 import container from '../../../../core/di/container';
 
 export class GetReviewsController extends BaseController {

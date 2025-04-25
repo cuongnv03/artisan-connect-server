@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { ProductStatus } from '../../domain/valueObjects/ProductEnums';
+import { ProductStatus } from '../../models/ProductEnums';
 
 export const createProductSchema = Joi.object({
   name: Joi.string().required().min(3).max(200),

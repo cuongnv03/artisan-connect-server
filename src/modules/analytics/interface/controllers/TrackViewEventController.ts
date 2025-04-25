@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IPostAnalyticsService } from '../../application/PostAnalyticsService.interface';
+import { IPostAnalyticsService } from '../../services/PostAnalyticsService.interface';
 import { v4 as uuidv4 } from 'uuid';
 import container from '../../../../core/di/container';
 

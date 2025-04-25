@@ -1,5 +1,5 @@
 import { Logger } from '../logging/Logger';
-import { INotificationService } from '../../modules/notification/application/NotificationService.interface';
+import { INotificationService } from '../../modules/notification/services/NotificationService.interface';
 import container from '../di/container';
 
 export class NotificationCleanupJob {

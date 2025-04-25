@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IPostAnalyticsService } from '../../application/PostAnalyticsService.interface';
-import { IPostRepository } from '../../../content/domain/repositories/PostRepository.interface';
+import { IPostAnalyticsService } from '../../services/PostAnalyticsService.interface';
+import { IPostRepository } from '../../../post/repositories/PostRepository.interface';
 import { AppError } from '../../../../core/errors/AppError';
 import container from '../../../../core/di/container';
 

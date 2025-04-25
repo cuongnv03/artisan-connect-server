@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IReviewService } from '../../application/ReviewService.interface';
-import { IProductService } from '../../../product/application/ProductService.interface';
+import { IReviewService } from '../../services/ReviewService.interface';
+import { IProductService } from '../../../product/services/ProductService.interface';
 import container from '../../../../core/di/container';
 
 export class GetReviewableProductsController extends BaseController {

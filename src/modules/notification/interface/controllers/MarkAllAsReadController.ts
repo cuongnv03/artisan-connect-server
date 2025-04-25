@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { INotificationService } from '../../application/NotificationService.interface';
+import { INotificationService } from '../../services/NotificationService.interface';
 import container from '../../../../core/di/container';
 
 export class MarkAllAsReadController extends BaseController {

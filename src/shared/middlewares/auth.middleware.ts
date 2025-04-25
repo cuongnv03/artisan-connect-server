@@ -1,4 +1,4 @@
-import { JwtService } from '../../core/security/JwtService';
+import { JwtService } from '../../core/infrastructure/security/JwtService';
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClientManager } from '../../core/database/PrismaClient';
 import { AppError } from '../../core/errors/AppError';

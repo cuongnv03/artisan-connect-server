@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
-import { ICategoryService } from '../../../application/CategoryService.interface';
+import { ICategoryService } from '../../../services/CategoryService.interface';
 import { AppError } from '../../../../../core/errors/AppError';
 import container from '../../../../../core/di/container';
 

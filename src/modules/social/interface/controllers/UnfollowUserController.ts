@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IFollowService } from '../../application/FollowService.interface';
+import { IFollowService } from '../../services/FollowService.interface';
 import container from '../../../../core/di/container';
 
 export class UnfollowUserController extends BaseController {
