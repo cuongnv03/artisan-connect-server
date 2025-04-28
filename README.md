@@ -1,7 +1,5 @@
 # Artisan Connect - Backend API
 
-![Artisan Connect](https://example.com/artisan-connect-logo.png)
-
 ## 📋 Table of Contents
 
 - [Overview](#overview)
