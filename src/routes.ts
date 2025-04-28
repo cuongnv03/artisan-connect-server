@@ -5,6 +5,7 @@ import { Logger } from './core/logging/Logger';
 // Import router modules
 import authRoutes from './modules/user/interface/routes/auth.routes';
 import userRoutes from './modules/user/interface/routes/user.routes';
+import systemConfigRoutes from './modules/system/interface/routes/system-config.routes';
 import profileRoutes from './modules/profile/interface/routes/profile.routes';
 import artisanProfileRoutes from './modules/artisanProfile/interface/routes/artisanProfile.routes';
 import postRoutes from './modules/post/interface/routes/post.routes';
@@ -25,6 +26,7 @@ export const registerRoutes = (app: Express) => {
   // API routes với prefix
   app.use(`${apiPrefix}/auth`, authRoutes);
   app.use(`${apiPrefix}/users`, userRoutes);
+  app.use(`${apiPrefix}/config`, systemConfigRoutes);
   app.use(`${apiPrefix}/profiles`, profileRoutes);
   app.use(`${apiPrefix}/artisan-profiles`, artisanProfileRoutes);
   app.use(`${apiPrefix}/posts`, postRoutes);
