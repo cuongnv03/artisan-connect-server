@@ -33,6 +33,9 @@ import { UserRepository } from '../../modules/user/repositories/UserRepository';
 import { RefreshTokenRepository } from '../../modules/user/repositories/RefreshTokenRepository';
 import { PasswordResetRepository } from '../../modules/user/repositories/PasswordResetRepository';
 import { EmailVerificationRepository } from '../../modules/user/repositories/EmailVerificationRepository';
+import { SystemConfigRepository } from '../../modules/system/repositories/SystemConfigRepository';
+import { ProfileRepository } from '../../modules/profile/repositories/ProfileRepository';
+import { AddressRepository } from '../../modules/profile/repositories/AddressRepository';
 import { ArtisanProfileRepository } from '../../modules/artisanProfile/repositories/ArtisanProfileRepository';
 import { UpgradeRequestRepository } from '../../modules/artisanProfile/repositories/UpgradeRequestRepository';
 import { FollowRepository } from '../../modules/social/repositories/FollowRepository';
@@ -55,6 +58,9 @@ container.register('userRepository', new UserRepository(prisma));
 container.register('refreshTokenRepository', new RefreshTokenRepository(prisma));
 container.register('passwordResetRepository', new PasswordResetRepository(prisma));
 container.register('emailVerificationRepository', new EmailVerificationRepository(prisma));
+container.register('systemConfigRepository', new SystemConfigRepository(prisma));
+container.register('profileRepository', new ProfileRepository(prisma));
+container.register('addressRepository', new AddressRepository(prisma));
 container.register('artisanProfileRepository', new ArtisanProfileRepository(prisma));
 container.register('upgradeRequestRepository', new UpgradeRequestRepository(prisma));
 container.register('followRepository', new FollowRepository(prisma));
@@ -78,7 +84,9 @@ container.register('postAnalyticsRepository', new PostAnalyticsRepository(prisma
 // Import services
 import { AuthService } from '../../modules/user/services/AuthService';
 import { UserService } from '../../modules/user/services/UserService';
+import { SystemConfigService } from '../../modules/system/services/SystemConfigService';
 import { ArtisanProfileService } from '../../modules/artisanProfile/services/ArtisanProfileService';
+import { ProfileService } from '../../modules/profile/services/ProfileService';
 import { FollowService } from '../../modules/social/services/FollowService';
 import { SavedPostService } from '../../modules/social/services/SavedPostService';
 import { PostService } from '../../modules/post/services/PostService';
@@ -96,6 +104,8 @@ import { PostAnalyticsService } from '../../modules/analytics/services/PostAnaly
 // Register services
 container.register('authService', new AuthService());
 container.register('userService', new UserService());
+container.register('systemConfigService', new SystemConfigService());
+container.register('profileService', new ProfileService());
 container.register('artisanProfileService', new ArtisanProfileService());
 container.register('followService', new FollowService());
 container.register('savedPostService', new SavedPostService());
@@ -110,5 +120,10 @@ container.register('quoteService', new QuoteService());
 container.register('orderService', new OrderService());
 container.register('reviewService', new ReviewService());
 container.register('postAnalyticsService', new PostAnalyticsService());
+
+const systemConfigService = container.resolve<SystemConfigService>('systemConfigService');
+systemConfigService.initDefaultConfigs().catch((err) => {
+  console.error('Failed to initialize default configs:', err);
+});
 
 console.log('Dependency injection initialized');
