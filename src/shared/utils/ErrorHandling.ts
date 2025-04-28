@@ -23,7 +23,6 @@ export function withErrorHandling<T, Args extends any[]>(
         .join(', ');
       logger.error(`${errorMessage} [Args: ${formattedArgs}]: ${error}`);
 
-      // Giữ nguyên AppError nếu đã là AppError
       if (error instanceof AppError) throw error;
 
       // Tạo AppError mới với ngữ cảnh lỗi gốc

@@ -17,12 +17,15 @@ export class EventBus {
   /**
    * Subscribe to an event
    */
-  subscribe(event: string, callback: Function): void {
+  subscribe(event: string, callback: Function): () => void {
     if (!this.listeners[event]) {
       this.listeners[event] = [];
     }
     this.listeners[event].push(callback);
     this.logger.debug(`Subscribed to event: ${event}`);
+
+    // Return unsubscribe function
+    return () => this.unsubscribe(event, callback);
   }
 
   /**
@@ -53,5 +56,6 @@ export class EventBus {
     }
 
     this.listeners[event] = this.listeners[event].filter((listener) => listener !== callback);
+    this.logger.debug(`Unsubscribed from event: ${event}`);
   }
 }

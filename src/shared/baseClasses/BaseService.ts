@@ -44,6 +44,4 @@ export abstract class BaseService {
     }
     return entity;
   }
-
-  // Có thể thêm các phương thức utility chung khác cho services
 }

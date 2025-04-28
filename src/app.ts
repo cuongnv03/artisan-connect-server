@@ -6,7 +6,6 @@ import cookieParser from 'cookie-parser';
 import { errorHandler } from './shared/middlewares/errorHandler.middleware';
 import { Config } from './config/config';
 import { Logger } from './core/logging/Logger';
-// Không import registerRoutes ở đây nữa
 
 export class App {
   public app: Express;
@@ -53,7 +52,7 @@ export class App {
     });
 
     // Import here to make sure DI is already initialized
-    const { registerRoutes } = require('./interfaces/http/routes');
+    const { registerRoutes } = require('./routes');
     registerRoutes(this.app);
 
     // 404 handler
