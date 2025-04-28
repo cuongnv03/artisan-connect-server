@@ -5,6 +5,18 @@ import { PrismaClientManager } from './core/database/PrismaClient';
 import { Scheduler } from './core/schedulers/Scheduler';
 import './core/di/injection'; // Load dependency injection
 
+const appInstance = app as any;
+
+if (typeof appInstance.setupRoutes === 'function') {
+  appInstance.setupRoutes();
+} else {
+  app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+  const { registerRoutes } = require('./routes');
+  registerRoutes(app);
+}
+
 const logger = Logger.getInstance();
 const { port, env } = Config.getServerConfig();
 

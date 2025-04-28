@@ -27,6 +27,9 @@ import { RejectUpgradeRequestController } from '../controllers/RejectUpgradeRequ
 const router = Router();
 
 // Initialize controllers
+const getUpgradeRequestsController = new GetUpgradeRequestsController();
+const approveUpgradeRequestController = new ApproveUpgradeRequestController();
+const rejectUpgradeRequestController = new RejectUpgradeRequestController();
 const createArtisanProfileController = new CreateArtisanProfileController();
 const updateArtisanProfileController = new UpdateArtisanProfileController();
 const getArtisanProfileController = new GetArtisanProfileController();
@@ -36,9 +39,29 @@ const generateTemplateController = new GenerateTemplateController();
 const getDefaultTemplatesController = new GetDefaultTemplatesController();
 const requestUpgradeController = new RequestUpgradeController();
 const getUpgradeRequestStatusController = new GetUpgradeRequestStatusController();
-const getUpgradeRequestsController = new GetUpgradeRequestsController();
-const approveUpgradeRequestController = new ApproveUpgradeRequestController();
-const rejectUpgradeRequestController = new RejectUpgradeRequestController();
+
+// Admin routes
+router.get(
+  '/upgrade-requests',
+  authenticate,
+  authorize(['ADMIN']),
+  getUpgradeRequestsController.execute,
+);
+
+router.post(
+  '/upgrade-requests/:id/approve',
+  authenticate,
+  authorize(['ADMIN']),
+  approveUpgradeRequestController.execute,
+);
+
+router.post(
+  '/upgrade-requests/:id/reject',
+  authenticate,
+  authorize(['ADMIN']),
+  validate(adminNotesSchema),
+  rejectUpgradeRequestController.execute,
+);
 
 // Public routes - don't require authentication
 router.get('/templates', getDefaultTemplatesController.execute);
@@ -81,28 +104,5 @@ router.post(
 );
 
 router.get('/upgrade-request/status', authenticate, getUpgradeRequestStatusController.execute);
-
-// Admin routes
-router.get(
-  '/upgrade-requests',
-  authenticate,
-  authorize(['ADMIN']),
-  getUpgradeRequestsController.execute,
-);
-
-router.post(
-  '/upgrade-requests/:id/approve',
-  authenticate,
-  authorize(['ADMIN']),
-  approveUpgradeRequestController.execute,
-);
-
-router.post(
-  '/upgrade-requests/:id/reject',
-  authenticate,
-  authorize(['ADMIN']),
-  validate(adminNotesSchema),
-  rejectUpgradeRequestController.execute,
-);
 
 export default router;
