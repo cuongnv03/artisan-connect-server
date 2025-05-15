@@ -79,6 +79,29 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
 
       if (!post) return null;
 
+      // Parse the content string into an array of content blocks
+      let parsedContent: ContentBlock[] = [];
+
+      try {
+        if (typeof post.content === 'string') {
+          parsedContent = JSON.parse(post.content);
+        } else if (Array.isArray(post.content)) {
+          parsedContent = post.content as unknown as ContentBlock[];
+        } else if (typeof post.content === 'object') {
+          // If it's an object but not an array, convert to array with single item
+          parsedContent = [post.content as unknown as ContentBlock];
+        }
+
+        // Validate that parsedContent is now an array
+        if (!Array.isArray(parsedContent)) {
+          this.logger.error(`Parsed content is not an array: ${typeof parsedContent}`);
+          parsedContent = []; // Fallback to empty array
+        }
+      } catch (parseError) {
+        this.logger.error(`Error parsing post content: ${parseError}`);
+        parsedContent = []; // Fallback to empty array if parsing fails
+      }
+
       // Format product mentions
       const productMentions = post.productMentions.map((mention) => ({
         productId: mention.product.id,
@@ -91,7 +114,7 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       // Transform post to include like and save status if requested
       const postWithUser: PostWithUser = {
         ...post,
-        content: post.content as unknown as ContentBlock[],
+        content: parsedContent,
         templateData: post.templateData as any,
         productMentions,
         liked: requestUserId ? post.likes.length > 0 : undefined,
@@ -167,6 +190,29 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
 
       if (!post) return null;
 
+      // Parse the content string into an array of content blocks
+      let parsedContent: ContentBlock[] = [];
+
+      try {
+        if (typeof post.content === 'string') {
+          parsedContent = JSON.parse(post.content);
+        } else if (Array.isArray(post.content)) {
+          parsedContent = post.content as unknown as ContentBlock[];
+        } else if (typeof post.content === 'object') {
+          // If it's an object but not an array, convert to array with single item
+          parsedContent = [post.content as unknown as ContentBlock];
+        }
+
+        // Validate that parsedContent is now an array
+        if (!Array.isArray(parsedContent)) {
+          this.logger.error(`Parsed content is not an array: ${typeof parsedContent}`);
+          parsedContent = []; // Fallback to empty array
+        }
+      } catch (parseError) {
+        this.logger.error(`Error parsing post content: ${parseError}`);
+        parsedContent = []; // Fallback to empty array if parsing fails
+      }
+
       // Format product mentions
       const productMentions = post.productMentions.map((mention) => ({
         productId: mention.product.id,
@@ -179,7 +225,7 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       // Transform post to include like and save status if requested
       const postWithUser: PostWithUser = {
         ...post,
-        content: post.content as unknown as ContentBlock[],
+        content: parsedContent,
         templateData: post.templateData as any,
         productMentions,
         liked: requestUserId ? post.likes.length > 0 : undefined,
@@ -204,6 +250,17 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
    */
   async createPost(userId: string, data: CreatePostDto): Promise<PostWithUser> {
     try {
+      // Ensure content is an array before saving
+      let contentToSave = data.content;
+      if (!Array.isArray(contentToSave)) {
+        this.logger.warn('Content is not an array, converting...');
+        contentToSave = Array.isArray(data.content)
+          ? data.content
+          : typeof data.content === 'string'
+            ? JSON.parse(data.content)
+            : [data.content];
+      }
+
       // Generate slug from title
       const slug = await this.generateSlug(data.title);
 
