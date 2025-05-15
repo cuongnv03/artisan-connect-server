@@ -39,7 +39,7 @@ export const registerRoutes = (app: Express) => {
   app.use(`${apiPrefix}/quotes`, quoteRoutes);
   app.use(`${apiPrefix}/orders`, orderRoutes);
   app.use(`${apiPrefix}/reviews`, reviewRoutes);
-  // app.use(`${apiPrefix}/notifications`, notificationRoutes);
+  app.use(`${apiPrefix}/notifications`, notificationRoutes);
   // Thêm routes khác
 
   logger.info('Routes registered');
