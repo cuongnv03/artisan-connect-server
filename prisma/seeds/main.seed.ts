@@ -14,9 +14,6 @@ import { seedFollows } from './follows.seed';
 import { seedCartItems } from './cart-items.seed';
 import { seedOrders } from './orders.seed';
 import { seedQuotes } from './quotes.seed';
-import { seedMessages } from './messages.seed';
-import { seedNotifications } from './notifications.seed';
-import { seedNotificationPreferences } from './notification-preferences.seed';
 import { seedSavedPosts } from './saved-posts.seed';
 import { seedUserActivity } from './user-activity.seed';
 import { seedPostAnalytics } from './post-analytics.seed';
@@ -55,11 +52,6 @@ async function main() {
     await seedCartItems();
     await seedOrders();
     await seedQuotes();
-
-    // Messages and notifications
-    await seedMessages();
-    await seedNotifications();
-    await seedNotificationPreferences();
 
     // Analytics and system
     await seedUserActivity();

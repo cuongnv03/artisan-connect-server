@@ -43,8 +43,6 @@ import { SavedPostRepository } from '../../modules/social/repositories/SavedPost
 import { PostRepository } from '../../modules/post/repositories/PostRepository';
 import { LikeRepository } from '../../modules/social/repositories/LikeRepository';
 import { CommentRepository } from '../../modules/social/repositories/CommentRepository';
-import { NotificationRepository } from '../../modules/notification/repositories/NotificationRepository';
-import { NotificationPreferenceRepository } from '../../modules/notification/repositories/NotificationPreferenceRepository';
 import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
 import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
 import { QuoteRepository } from '../../modules/quote/repositories/QuoteRepository';
@@ -68,11 +66,6 @@ container.register('postRepository', new PostRepository(prisma));
 container.register('likeRepository', new LikeRepository(prisma));
 container.register('commentRepository', new CommentRepository(prisma));
 container.register('savedPostRepository', new SavedPostRepository(prisma));
-container.register('notificationRepository', new NotificationRepository(prisma));
-container.register(
-  'notificationPreferenceRepository',
-  new NotificationPreferenceRepository(prisma),
-);
 container.register('productRepository', new ProductRepository(prisma));
 container.register('categoryRepository', new CategoryRepository(prisma));
 container.register('cartRepository', new CartRepository(prisma));
@@ -92,7 +85,6 @@ import { SavedPostService } from '../../modules/social/services/SavedPostService
 import { PostService } from '../../modules/post/services/PostService';
 import { LikeService } from '../../modules/social/services/LikeService';
 import { CommentService } from '../../modules/social/services/CommentService';
-import { NotificationService } from '../../modules/notification/services/NotificationService';
 import { ProductService } from '../../modules/product/services/ProductService';
 import { CategoryService } from '../../modules/product/services/CategoryService';
 import { QuoteService } from '../../modules/quote/services/QuoteService';
@@ -112,7 +104,6 @@ container.register('savedPostService', new SavedPostService());
 container.register('postService', new PostService());
 container.register('likeService', new LikeService());
 container.register('commentService', new CommentService());
-container.register('notificationService', new NotificationService());
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
 container.register('cartService', new CartService());

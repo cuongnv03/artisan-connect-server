@@ -44,32 +44,28 @@ model User {
   deletedAt      DateTime?
 
   // Relations
-  profile                Profile?
-  artisanProfile         ArtisanProfile?
-  upgradeRequest         ArtisanUpgradeRequest?
-  posts                  Post[]
-  products               Product[]
-  followers              Follow[]                 @relation("following")
-  following              Follow[]                 @relation("follower")
-  likes                  Like[]
-  comments               Comment[]
-  cartItems              CartItem[]
-  orders                 Order[]                  @relation("CustomerOrders")
-  sellerOrders           OrderItem[]              @relation("SellerOrderItems")
-  reviews                Review[]
-  sentMessages           Message[]                @relation("MessageSender")
-  receivedMessages       Message[]                @relation("MessageRecipient")
-  quoteRequests          QuoteRequest[]           @relation("CustomerQuotes")
-  artisanQuotes          QuoteRequest[]           @relation("ArtisanQuotes")
-  notifications          Notification[]
-  sessions               Session[]
-  refreshTokens          RefreshToken[]
-  savedPosts             SavedPost[]
-  activities             UserActivity[]
-  passwordResets         PasswordReset[]
-  emailVerifications     EmailVerification[]
-  ReviewHelpful          ReviewHelpful[]
-  NotificationPreference NotificationPreference[]
+  profile            Profile?
+  artisanProfile     ArtisanProfile?
+  upgradeRequest     ArtisanUpgradeRequest?
+  posts              Post[]
+  products           Product[]
+  followers          Follow[]               @relation("following")
+  following          Follow[]               @relation("follower")
+  likes              Like[]
+  comments           Comment[]
+  cartItems          CartItem[]
+  orders             Order[]                @relation("CustomerOrders")
+  sellerOrders       OrderItem[]            @relation("SellerOrderItems")
+  reviews            Review[]
+  quoteRequests      QuoteRequest[]         @relation("CustomerQuotes")
+  artisanQuotes      QuoteRequest[]         @relation("ArtisanQuotes")
+  sessions           Session[]
+  refreshTokens      RefreshToken[]
+  savedPosts         SavedPost[]
+  activities         UserActivity[]
+  passwordResets     PasswordReset[]
+  emailVerifications EmailVerification[]
+  ReviewHelpful      ReviewHelpful[]
 
   @@index([email])
   @@index([username])
@@ -671,80 +667,6 @@ model OrderStatusHistory {
   @@index([orderId])
   @@index([status])
   @@index([createdAt])
-}
-
-//------------- COMMUNICATION MODELS -------------//
-model Message {
-  id          String    @id @default(uuid())
-  senderId    String
-  recipientId String
-  content     String    @db.Text
-  attachments String[]
-  isRead      Boolean   @default(false)
-  readAt      DateTime?
-  createdAt   DateTime  @default(now())
-
-  // Relations
-  sender    User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  recipient User @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-
-  @@index([senderId])
-  @@index([recipientId])
-  @@index([isRead])
-  @@index([createdAt])
-}
-
-enum NotificationType {
-  LIKE
-  COMMENT
-  FOLLOW
-  MENTION
-  QUOTE_REQUEST
-  QUOTE_RESPONSE
-  ORDER_STATUS
-  MESSAGE
-  REVIEW
-  SYSTEM
-}
-
-model Notification {
-  id                String           @id @default(uuid())
-  userId            String
-  type              NotificationType
-  title             String
-  content           String
-  isRead            Boolean          @default(false)
-  data              Json? // Additional context data
-  relatedUserId     String? // User who triggered notification
-  relatedEntityId   String? // Related entity ID (post, product, etc.)
-  relatedEntityType String? // Type of related entity
-  readAt            DateTime?
-  createdAt         DateTime         @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([type])
-  @@index([isRead])
-  @@index([createdAt])
-}
-
-model NotificationPreference {
-  id        String           @id @default(uuid())
-  userId    String
-  type      NotificationType
-  enabled   Boolean          @default(true)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Composite unique constraint
-  @@unique([userId, type])
-  @@index([userId])
-  @@index([type])
 }
 
 //------------- ANALYTICS MODELS -------------//

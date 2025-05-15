@@ -1,6 +1,5 @@
 import { CronJob } from 'cron';
 import { Logger } from '../logging/Logger';
-import { NotificationCleanupJob } from './NotificationCleanupJob';
 
 export class Scheduler {
   private static instance: Scheduler;
@@ -22,21 +21,7 @@ export class Scheduler {
    * Setup all scheduled jobs
    */
   private setupJobs(): void {
-    // Notification cleanup job - run every day at 3 AM
-    const notificationCleanupJob = new CronJob(
-      '0 3 * * *',
-      () => {
-        const job = new NotificationCleanupJob();
-        job.execute().catch((err) => {
-          this.logger.error(`Failed to execute notification cleanup job: ${err}`);
-        });
-      },
-      null,
-      false,
-      'UTC',
-    );
-
-    this.jobs.push(notificationCleanupJob);
+    this.logger.info('No scheduled jobs configured');
   }
 
   /**

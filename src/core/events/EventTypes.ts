@@ -65,15 +65,6 @@ export enum EventType {
   CART_ITEM_ADDED = 'cart.itemAdded',
   CART_ITEM_REMOVED = 'cart.itemRemoved',
 
-  // Notification events
-  NOTIFICATION_CREATED = 'notification.created',
-  NOTIFICATION_READ = 'notification.read',
-  NOTIFICATION_DELETED = 'notification.deleted',
-
-  // Message events
-  MESSAGE_SENT = 'message.sent',
-  MESSAGE_READ = 'message.read',
-
   // System events
   ANALYTICS_UPDATED = 'system.analyticsUpdated',
   SYSTEM_ERROR = 'system.error',
@@ -456,43 +447,6 @@ export interface EventData {
     userId: string;
     productId: string;
     sellerId: string;
-  };
-
-  // Notification events
-  [EventType.NOTIFICATION_CREATED]: {
-    notificationId: string;
-    userId: string;
-    type: string;
-    title: string;
-    content: string;
-    relatedUserId?: string;
-    relatedEntityId?: string;
-    relatedEntityType?: string;
-  };
-
-  [EventType.NOTIFICATION_READ]: {
-    notificationId: string;
-    userId: string;
-  };
-
-  [EventType.NOTIFICATION_DELETED]: {
-    notificationId: string;
-    userId: string;
-  };
-
-  // Message events
-  [EventType.MESSAGE_SENT]: {
-    messageId: string;
-    senderId: string;
-    recipientId: string;
-    content: string;
-    hasAttachments: boolean;
-  };
-
-  [EventType.MESSAGE_READ]: {
-    messageId: string;
-    senderId: string;
-    recipientId: string;
   };
 
   // System events

@@ -17,7 +17,6 @@ import cartRoutes from './modules/cart/interface/routes/cart.routes';
 import quoteRoutes from './modules/quote/interface/routes/quote.routes';
 import orderRoutes from './modules/order/interface/routes/order.routes';
 import reviewRoutes from './modules/review/interface/routes/review.routes';
-import notificationRoutes from './modules/notification/interface/routes/notification.routes';
 
 const logger = Logger.getInstance();
 const apiPrefix = Config.API_PREFIX;
@@ -39,7 +38,6 @@ export const registerRoutes = (app: Express) => {
   app.use(`${apiPrefix}/quotes`, quoteRoutes);
   app.use(`${apiPrefix}/orders`, orderRoutes);
   app.use(`${apiPrefix}/reviews`, reviewRoutes);
-  app.use(`${apiPrefix}/notifications`, notificationRoutes);
   // Thêm routes khác
 
   logger.info('Routes registered');
