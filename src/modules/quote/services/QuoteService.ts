@@ -58,7 +58,13 @@ export class QuoteService implements IQuoteService {
       }
 
       // Create quote request
-      return await this.quoteRepository.createQuoteRequest(customerId, data);
+      const quoteRequest = await this.quoteRepository.createQuoteRequest(customerId, data);
+
+      this.logger.info(
+        `Quote request created: Customer ${customerId} requested quote for product ${data.productId} from artisan ${quoteRequest.artisanId}`,
+      );
+
+      return quoteRequest;
     } catch (error) {
       this.logger.error(`Error creating quote request: ${error}`);
       if (error instanceof AppError) throw error;
@@ -220,6 +226,19 @@ export class QuoteService implements IQuoteService {
         await this.quoteRepository.addMessageToQuote(quoteId, artisanId, response.message);
       }
 
+      // Log appropriate message based on action
+      if (response.action === 'accept') {
+        this.logger.info(
+          `Quote ${quoteId} accepted by artisan ${artisanId} at price ${updateData.finalPrice}`,
+        );
+      } else if (response.action === 'reject') {
+        this.logger.info(`Quote ${quoteId} rejected by artisan ${artisanId}`);
+      } else if (response.action === 'counter') {
+        this.logger.info(
+          `Artisan ${artisanId} made counter offer of ${response.counterOffer} for quote ${quoteId}`,
+        );
+      }
+
       return updatedQuote;
     } catch (error) {
       this.logger.error(`Error responding to quote request: ${error}`);
@@ -248,7 +267,11 @@ export class QuoteService implements IQuoteService {
         );
       }
 
-      return await this.quoteRepository.addMessageToQuote(quoteId, userId, data.message);
+      const message = await this.quoteRepository.addMessageToQuote(quoteId, userId, data.message);
+
+      this.logger.info(`User ${userId} added message to quote ${quoteId}`);
+
+      return message;
     } catch (error) {
       this.logger.error(`Error adding message to quote: ${error}`);
       if (error instanceof AppError) throw error;
@@ -283,7 +306,16 @@ export class QuoteService implements IQuoteService {
       }
 
       // Update quote to REJECTED status
-      return await this.quoteRepository.updateQuoteStatus(quoteId, QuoteStatus.REJECTED);
+      const cancelledQuote = await this.quoteRepository.updateQuoteStatus(
+        quoteId,
+        QuoteStatus.REJECTED,
+      );
+
+      this.logger.info(
+        `Quote ${quoteId} cancelled by ${userId === quote.customerId ? 'customer' : 'artisan'} ${userId}`,
+      );
+
+      return cancelledQuote;
     } catch (error) {
       this.logger.error(`Error cancelling quote request: ${error}`);
       if (error instanceof AppError) throw error;
@@ -296,7 +328,13 @@ export class QuoteService implements IQuoteService {
    */
   async cleanupExpiredQuotes(): Promise<number> {
     try {
-      return await this.quoteRepository.markExpiredQuotes();
+      const count = await this.quoteRepository.markExpiredQuotes();
+
+      if (count > 0) {
+        this.logger.info(`Marked ${count} quotes as expired`);
+      }
+
+      return count;
     } catch (error) {
       this.logger.error(`Error cleaning up expired quotes: ${error}`);
       return 0;
@@ -316,7 +354,11 @@ export class QuoteService implements IQuoteService {
       }
 
       // Update quote to the new status
-      return await this.quoteRepository.updateQuoteStatus(quoteId, status);
+      const updatedQuote = await this.quoteRepository.updateQuoteStatus(quoteId, status);
+
+      this.logger.info(`Quote ${quoteId} status updated to ${status}`);
+
+      return updatedQuote;
     } catch (error) {
       this.logger.error(`Error updating quote status: ${error}`);
       if (error instanceof AppError) throw error;

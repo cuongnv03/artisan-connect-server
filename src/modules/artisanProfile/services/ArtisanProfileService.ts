@@ -16,7 +16,6 @@ import { IArtisanProfileRepository } from '../repositories/ArtisanProfileReposit
 import { IUpgradeRequestRepository } from '../repositories/UpgradeRequestRepository.interface';
 import { IUserRepository } from '../../user/repositories/UserRepository.interface';
 import { CloudinaryService } from '../../../core/infrastructure/storage/CloudinaryService';
-import { AITemplateService } from '../../../core/infrastructure/ai/AITemplateService';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -31,7 +30,6 @@ export class ArtisanProfileService implements IArtisanProfileService {
   private upgradeRequestRepository: IUpgradeRequestRepository;
   private userRepository: IUserRepository;
   private cloudinaryService: CloudinaryService;
-  private aiTemplateService: AITemplateService;
   private logger = Logger.getInstance();
 
   constructor() {
@@ -43,7 +41,6 @@ export class ArtisanProfileService implements IArtisanProfileService {
     );
     this.userRepository = container.resolve<IUserRepository>('userRepository');
     this.cloudinaryService = container.resolve<CloudinaryService>('cloudinaryService');
-    this.aiTemplateService = container.resolve<AITemplateService>('aiTemplateService');
   }
 
   /**
@@ -71,6 +68,8 @@ export class ArtisanProfileService implements IArtisanProfileService {
 
       // Update user role
       await this.userRepository.updateUserRole(userId, UserRole.ARTISAN);
+
+      this.logger.info(`Artisan profile created for user ${userId}`);
 
       return profile;
     } catch (error) {
@@ -112,7 +111,11 @@ export class ArtisanProfileService implements IArtisanProfileService {
       }
 
       // Update profile
-      return await this.artisanProfileRepository.updateProfile(userId, data);
+      const updatedProfile = await this.artisanProfileRepository.updateProfile(userId, data);
+
+      this.logger.info(`Artisan profile updated for user ${userId}`);
+
+      return updatedProfile;
     } catch (error) {
       this.logger.error(`Error updating artisan profile: ${error}`);
       throw error;
@@ -160,7 +163,8 @@ export class ArtisanProfileService implements IArtisanProfileService {
   }
 
   /**
-   * Generate template using AI
+   * Generate template
+   * Simplified implementation instead of using AI service
    */
   async generateTemplate(userId: string, data: GenerateTemplateDto): Promise<TemplateResult> {
     try {
@@ -170,21 +174,195 @@ export class ArtisanProfileService implements IArtisanProfileService {
         throw AppError.notFound('Artisan profile not found');
       }
 
-      // Generate template using AI service
-      const templateResult = await this.aiTemplateService.generateTemplate(data);
+      // Generate template ID
+      const templateId = `template-${Math.random().toString(36).substring(2, 11)}`;
+
+      // Create simple template data based on style and preferences
+      const customData = this.generateSimpleTemplateData(data);
 
       // Update profile with template info
       await this.artisanProfileRepository.updateProfile(userId, {
-        templateId: templateResult.templateId,
-        templateStyle: templateResult.templateStyle,
-        customData: templateResult.customData,
+        templateId: templateId,
+        templateStyle: data.style,
+        customData: customData,
       });
 
-      return templateResult;
+      this.logger.info(`Template generated for user ${userId} with style ${data.style}`);
+
+      return {
+        templateId,
+        templateStyle: data.style,
+        customData,
+        preview: `https://example.com/template-previews/${data.style.toLowerCase()}.jpg`,
+      };
     } catch (error) {
       this.logger.error(`Error generating template: ${error}`);
       throw error;
     }
+  }
+
+  /**
+   * Simple template data generator
+   * (Replacement for AITemplateService)
+   */
+  private generateSimpleTemplateData(data: GenerateTemplateDto): Record<string, any> {
+    const { style, preferences } = data;
+
+    // Generate color palette based on preferences
+    const colorPalette = this.getColorPalette(preferences.colorScheme || 'neutral');
+
+    // Determine layout
+    const layout = preferences.layout || 'standard';
+
+    return {
+      colorPalette,
+      layout,
+      emphasis: preferences.emphasis || 'balanced',
+      styleElements: {
+        fonts: this.getFontsForStyle(style),
+        borders: this.getBordersForStyle(style),
+        accents: this.getAccentsForStyle(style),
+      },
+      sections: this.getSectionsForLayout(layout),
+    };
+  }
+
+  /**
+   * Get color palette based on preference
+   */
+  private getColorPalette(scheme: string): Record<string, string> {
+    const palettes: Record<string, Record<string, string>> = {
+      warm: {
+        primary: '#e63946',
+        secondary: '#f1faee',
+        accent: '#a8dadc',
+        background: '#f9f7f3',
+        text: '#1d3557',
+      },
+      cool: {
+        primary: '#457b9d',
+        secondary: '#f1faee',
+        accent: '#e63946',
+        background: '#f8f9fa',
+        text: '#1d3557',
+      },
+      earthy: {
+        primary: '#606c38',
+        secondary: '#fefae0',
+        accent: '#dda15e',
+        background: '#faedcd',
+        text: '#283618',
+      },
+      neutral: {
+        primary: '#2a9d8f',
+        secondary: '#e9c46a',
+        accent: '#f4a261',
+        background: '#f8f9fa',
+        text: '#264653',
+      },
+    };
+
+    return palettes[scheme] || palettes.neutral;
+  }
+
+  /**
+   * Get font settings for style
+   */
+  private getFontsForStyle(style: string): Record<string, string> {
+    const fontSets: Record<string, Record<string, string>> = {
+      modern: {
+        heading: 'Montserrat, sans-serif',
+        body: 'Open Sans, sans-serif',
+        accent: 'Roboto, sans-serif',
+      },
+      traditional: {
+        heading: 'Playfair Display, serif',
+        body: 'Merriweather, serif',
+        accent: 'Georgia, serif',
+      },
+      artistic: {
+        heading: 'Abril Fatface, cursive',
+        body: 'Lora, serif',
+        accent: 'Dancing Script, cursive',
+      },
+      minimalist: {
+        heading: 'Poppins, sans-serif',
+        body: 'Work Sans, sans-serif',
+        accent: 'Nunito, sans-serif',
+      },
+    };
+
+    return fontSets[style] || fontSets.modern;
+  }
+
+  /**
+   * Get border settings for style
+   */
+  private getBordersForStyle(style: string): Record<string, string> {
+    const borderSets: Record<string, Record<string, string>> = {
+      modern: {
+        type: 'solid',
+        width: '1px',
+      },
+      traditional: {
+        type: 'double',
+        width: '3px',
+      },
+      artistic: {
+        type: 'dotted',
+        width: '2px',
+      },
+      minimalist: {
+        type: 'none',
+        width: '0',
+      },
+    };
+
+    return borderSets[style] || borderSets.modern;
+  }
+
+  /**
+   * Get accent settings for style
+   */
+  private getAccentsForStyle(style: string): Record<string, boolean> {
+    const accentSets: Record<string, Record<string, boolean>> = {
+      modern: {
+        useIcons: true,
+        useAnimations: true,
+        useShadows: true,
+      },
+      traditional: {
+        useIcons: false,
+        useAnimations: false,
+        useShadows: true,
+      },
+      artistic: {
+        useIcons: true,
+        useAnimations: true,
+        useShadows: false,
+      },
+      minimalist: {
+        useIcons: true,
+        useAnimations: false,
+        useShadows: false,
+      },
+    };
+
+    return accentSets[style] || accentSets.modern;
+  }
+
+  /**
+   * Get sections for layout
+   */
+  private getSectionsForLayout(layout: string): string[] {
+    const layoutSections: Record<string, string[]> = {
+      standard: ['header', 'about', 'gallery', 'products', 'contact'],
+      portfolio: ['hero', 'about', 'featured', 'gallery', 'testimonials', 'contact'],
+      storefront: ['header', 'featured', 'categories', 'products', 'about', 'contact'],
+      blog: ['header', 'about', 'posts', 'gallery', 'contact'],
+    };
+
+    return layoutSections[layout] || layoutSections.standard;
   }
 
   /**
@@ -263,16 +441,27 @@ export class ArtisanProfileService implements IArtisanProfileService {
           throw AppError.conflict('You already have a pending upgrade request', 'PENDING_REQUEST');
         } else if (existingRequest.status === UpgradeRequestStatus.REJECTED) {
           // Update existing rejected request
-          return this.upgradeRequestRepository.updateUpgradeRequest(existingRequest.id, {
-            ...data,
-            status: UpgradeRequestStatus.PENDING,
-            adminNotes: null,
-          });
+          const updatedRequest = await this.upgradeRequestRepository.updateUpgradeRequest(
+            existingRequest.id,
+            {
+              ...data,
+              status: UpgradeRequestStatus.PENDING,
+              adminNotes: null,
+            },
+          );
+
+          this.logger.info(`Upgrade request updated for user ${userId}`);
+
+          return updatedRequest;
         }
       }
 
       // Create new upgrade request
-      return this.upgradeRequestRepository.createUpgradeRequest(userId, data);
+      const newRequest = await this.upgradeRequestRepository.createUpgradeRequest(userId, data);
+
+      this.logger.info(`New upgrade request created for user ${userId}`);
+
+      return newRequest;
     } catch (error) {
       this.logger.error(`Error requesting upgrade: ${error}`);
       throw error;
@@ -338,7 +527,14 @@ export class ArtisanProfileService implements IArtisanProfileService {
       }
 
       // Process the approval
-      return this.upgradeRequestRepository.approveRequest(requestId, adminNotes);
+      const updatedRequest = await this.upgradeRequestRepository.approveRequest(
+        requestId,
+        adminNotes,
+      );
+
+      this.logger.info(`Upgrade request ${requestId} approved for user ${request.userId}`);
+
+      return updatedRequest;
     } catch (error) {
       this.logger.error(`Error approving upgrade request: ${error}`);
       throw error;
@@ -364,7 +560,14 @@ export class ArtisanProfileService implements IArtisanProfileService {
       }
 
       // Process the rejection
-      return this.upgradeRequestRepository.rejectRequest(requestId, adminNotes);
+      const updatedRequest = await this.upgradeRequestRepository.rejectRequest(
+        requestId,
+        adminNotes,
+      );
+
+      this.logger.info(`Upgrade request ${requestId} rejected for user ${request.userId}`);
+
+      return updatedRequest;
     } catch (error) {
       this.logger.error(`Error rejecting upgrade request: ${error}`);
       throw error;

@@ -29,6 +29,7 @@ export class PostAnalyticsService implements IPostAnalyticsService {
         throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
       }
 
+      this.logger.debug(`Fetching analytics for post ${postId}`);
       return await this.postAnalyticsRepository.findByPostId(postId);
     } catch (error) {
       this.logger.error(`Error getting post analytics: ${error}`);
@@ -54,6 +55,9 @@ export class PostAnalyticsService implements IPostAnalyticsService {
       const isUniqueView = !sessionViewedPosts.has(postId);
       if (isUniqueView) {
         sessionViewedPosts.add(postId);
+        this.logger.debug(`Unique view for post ${postId} from session ${sessionId}`);
+      } else {
+        this.logger.debug(`Repeat view for post ${postId} from session ${sessionId}`);
       }
 
       // Track the view
@@ -62,6 +66,18 @@ export class PostAnalyticsService implements IPostAnalyticsService {
       // If time spent is provided, update average read time
       if (timeSpent && timeSpent > 0) {
         await this.postAnalyticsRepository.updateAvgReadTime(postId, timeSpent);
+        this.logger.debug(`Updated read time for post ${postId}: ${timeSpent}s`);
+      }
+
+      // Log additional details if user is identified
+      if (userId) {
+        this.logger.info(
+          `Post ${postId} viewed by user ${userId}, timeSpent: ${timeSpent || 'unknown'}`,
+        );
+      } else {
+        this.logger.info(
+          `Post ${postId} viewed by anonymous user, timeSpent: ${timeSpent || 'unknown'}`,
+        );
       }
 
       // Periodically clean up old sessions
@@ -78,6 +94,7 @@ export class PostAnalyticsService implements IPostAnalyticsService {
   async trackConversionEvent(postId: string): Promise<void> {
     try {
       await this.postAnalyticsRepository.trackConversion(postId);
+      this.logger.info(`Conversion tracked for post ${postId}`);
     } catch (error) {
       this.logger.error(`Error tracking conversion event: ${error}`);
       // Non-critical operation, just log the error
@@ -95,6 +112,7 @@ export class PostAnalyticsService implements IPostAnalyticsService {
         throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
       }
 
+      this.logger.info(`Fetching insights for post ${postId} over ${days} days`);
       return await this.postAnalyticsRepository.getPostInsights(postId, days);
     } catch (error) {
       this.logger.error(`Error getting post insights: ${error}`);
@@ -108,6 +126,7 @@ export class PostAnalyticsService implements IPostAnalyticsService {
    */
   async getTrendingPosts(limit: number = 10): Promise<string[]> {
     try {
+      this.logger.info(`Fetching top ${limit} trending posts`);
       return await this.postAnalyticsRepository.getTrendingPosts(limit);
     } catch (error) {
       this.logger.error(`Error getting trending posts: ${error}`);
@@ -128,7 +147,11 @@ export class PostAnalyticsService implements IPostAnalyticsService {
       // This is a simplified example - in production, you'd use proper session management
       if (this.sessionViews.size > 1000) {
         // Only clean up if we have a lot of sessions
+        this.logger.debug(
+          `Cleaning up session views cache, current size: ${this.sessionViews.size}`,
+        );
         this.sessionViews.clear();
+        this.logger.debug('Session views cache cleared');
       }
     } catch (error) {
       this.logger.error(`Error cleaning up sessions: ${error}`);

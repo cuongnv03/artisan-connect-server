@@ -22,6 +22,7 @@ export class ProductService extends BaseService implements IProductService {
   private productRepository: IProductRepository;
   private categoryRepository: ICategoryRepository;
   private cloudinaryService: CloudinaryService;
+
   constructor() {
     super([
       { methodName: 'createProduct', errorMessage: 'Failed to create product' },
@@ -46,7 +47,11 @@ export class ProductService extends BaseService implements IProductService {
       Validators.validatePositiveNumber(data.price, 'Price');
       Validators.validateNonEmptyArray(data.images, 'Product images');
 
-      return await this.productRepository.createProduct(sellerId, data);
+      const product = await this.productRepository.createProduct(sellerId, data);
+
+      this.logger.info(`Product created: ${product.id} by seller: ${sellerId}`);
+
+      return product;
     },
     'Failed to create product',
     'PRODUCT_CREATION_ERROR',
@@ -127,7 +132,11 @@ export class ProductService extends BaseService implements IProductService {
         await this.handleImageReplacement(currentProduct.images, data.images);
       }
 
-      return await this.productRepository.updateProduct(id, sellerId, data);
+      const updatedProduct = await this.productRepository.updateProduct(id, sellerId, data);
+
+      this.logger.info(`Product updated: ${id} by seller: ${sellerId}`);
+
+      return updatedProduct;
     } catch (error) {
       this.logger.error(`Error updating product: ${error}`);
       if (error instanceof AppError) throw error;
@@ -144,7 +153,11 @@ export class ProductService extends BaseService implements IProductService {
     data: PriceUpdateDto,
   ): Promise<ProductWithDetails> {
     try {
-      return await this.productRepository.updatePrice(id, sellerId, data);
+      const updatedProduct = await this.productRepository.updatePrice(id, sellerId, data);
+
+      this.logger.info(`Product price updated to ${data.price}: ${id} by seller: ${sellerId}`);
+
+      return updatedProduct;
     } catch (error) {
       this.logger.error(`Error updating product price: ${error}`);
       if (error instanceof AppError) throw error;
@@ -158,7 +171,13 @@ export class ProductService extends BaseService implements IProductService {
   async deleteProduct(id: string, sellerId: string): Promise<boolean> {
     try {
       // We'll use soft delete for products to maintain order history
-      return await this.productRepository.deleteProduct(id, sellerId);
+      const result = await this.productRepository.deleteProduct(id, sellerId);
+
+      if (result) {
+        this.logger.info(`Product deleted: ${id} by seller: ${sellerId}`);
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error deleting product: ${error}`);
       if (error instanceof AppError) throw error;
@@ -226,6 +245,7 @@ export class ProductService extends BaseService implements IProductService {
           const publicId = this.extractPublicIdFromUrl(imageUrl);
           if (publicId) {
             await this.cloudinaryService.deleteFile(publicId);
+            this.logger.info(`Deleted unused image: ${publicId}`);
           }
         }
       }

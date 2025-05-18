@@ -1,5 +1,4 @@
 import { IFollowService } from './FollowService.interface';
-import { EventBus } from '../../../core/events/EventBus';
 import {
   Follow,
   FollowWithDetails,
@@ -17,7 +16,6 @@ export class FollowService implements IFollowService {
   private followRepository: IFollowRepository;
   private userRepository: IUserRepository;
   private logger = Logger.getInstance();
-  private eventBus = EventBus.getInstance();
 
   constructor() {
     this.followRepository = container.resolve<IFollowRepository>('followRepository');
@@ -54,13 +52,10 @@ export class FollowService implements IFollowService {
         notifyNewPosts,
       );
 
-      // Emit event
-      this.eventBus.publish('user.followed', {
-        followerId,
-        followerName: `${follower.firstName} ${follower.lastName}`,
-        followingId,
-        followingName: `${following.firstName} ${following.lastName}`,
-      });
+      // Log the follow action
+      this.logger.info(
+        `User ${followerId} (${follower.firstName} ${follower.lastName}) followed user ${followingId} (${following.firstName} ${following.lastName})`,
+      );
 
       return follow;
     } catch (error) {
@@ -75,7 +70,13 @@ export class FollowService implements IFollowService {
    */
   async unfollowUser(followerId: string, followingId: string): Promise<boolean> {
     try {
-      return await this.followRepository.removeFollow(followerId, followingId);
+      const result = await this.followRepository.removeFollow(followerId, followingId);
+
+      if (result) {
+        this.logger.info(`User ${followerId} unfollowed user ${followingId}`);
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error unfollowing user: ${error}`);
       if (error instanceof AppError) throw error;
@@ -92,11 +93,17 @@ export class FollowService implements IFollowService {
     notify: boolean,
   ): Promise<Follow> {
     try {
-      return await this.followRepository.updateNotificationPreference(
+      const updated = await this.followRepository.updateNotificationPreference(
         followerId,
         followingId,
         notify,
       );
+
+      this.logger.info(
+        `User ${followerId} updated notification preference for ${followingId} to ${notify ? 'enabled' : 'disabled'}`,
+      );
+
+      return updated;
     } catch (error) {
       this.logger.error(`Error updating notification preference: ${error}`);
       if (error instanceof AppError) throw error;

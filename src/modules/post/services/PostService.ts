@@ -1,6 +1,5 @@
 import { withErrorHandling, applyErrorHandlingToClass } from '../../../shared/utils/ErrorHandling';
 import { IPostService } from './PostService.interface';
-import { EventBus } from '../../../core/events/EventBus';
 import {
   Post,
   PostWithUser,
@@ -22,7 +21,6 @@ export class PostService implements IPostService {
   private productRepository: IProductRepository;
   private userRepository: IUserRepository;
   private logger = Logger.getInstance();
-  private eventBus = EventBus.getInstance();
 
   constructor() {
     this.postRepository = container.resolve<IPostRepository>('postRepository');
@@ -69,21 +67,15 @@ export class PostService implements IPostService {
     // Create post
     const post = await this.postRepository.createPost(userId, data);
 
-    // If post is published immediately, emit event
+    // Log post creation with status info
     if (data.publishNow && data.status === PostStatus.PUBLISHED) {
-      const user = await this.userRepository.findById(userId);
-      if (user) {
-        const authorName = user.artisanProfile
-          ? user.artisanProfile.shopName
-          : `${user.firstName} ${user.lastName}`;
+      const authorName = user.artisanProfile
+        ? user.artisanProfile.shopName
+        : `${user.firstName} ${user.lastName}`;
 
-        this.eventBus.publish('post.published', {
-          authorId: userId,
-          authorName,
-          postId: post.id,
-          postTitle: post.title,
-        });
-      }
+      this.logger.info(`Post published: ${post.id} "${post.title}" by ${authorName} (${userId})`);
+    } else {
+      this.logger.info(`Post created as draft: ${post.id} "${post.title}" by user ${userId}`);
     }
 
     return post;
@@ -125,20 +117,18 @@ export class PostService implements IPostService {
       // Update post
       const updatedPost = await this.postRepository.updatePost(id, userId, data);
 
-      // If post was draft and is now published, emit event
-      if (post && post.status === PostStatus.DRAFT && data.status === PostStatus.PUBLISHED) {
+      // Log status change if applicable
+      const wasStatusChanged = post && post.status !== data.status;
+      if (wasStatusChanged && data.status === PostStatus.PUBLISHED) {
         const user = await this.userRepository.findById(userId);
         if (user) {
           const authorName = user.artisanProfile
             ? user.artisanProfile.shopName
             : `${user.firstName} ${user.lastName}`;
 
-          this.eventBus.publish('post.published', {
-            authorId: userId,
-            authorName,
-            postId: id,
-            postTitle: updatedPost.title,
-          });
+          this.logger.info(
+            `Post published: ${id} "${updatedPost.title}" by ${authorName} (${userId})`,
+          );
         }
       }
 
@@ -179,7 +169,23 @@ export class PostService implements IPostService {
    */
   async deletePost(id: string, userId: string): Promise<boolean> {
     try {
-      return await this.postRepository.deletePost(id, userId);
+      // Get post details before deletion for logging
+      const post = await this.postRepository.findByIdWithUser(id);
+      if (!post) {
+        throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
+      }
+
+      if (post.userId !== userId) {
+        throw new AppError('You can only delete your own posts', 403, 'FORBIDDEN');
+      }
+
+      const result = await this.postRepository.deletePost(id, userId);
+
+      if (result) {
+        this.logger.info(`Post deleted: ${id} "${post.title}" by user ${userId}`);
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error deleting post: ${error}`);
       if (error instanceof AppError) throw error;
@@ -192,25 +198,31 @@ export class PostService implements IPostService {
    */
   async publishPost(id: string, userId: string): Promise<PostWithUser> {
     try {
-      const post = await this.postRepository.publishPost(id, userId);
+      // Get post details before publishing
+      const post = await this.postRepository.findByIdWithUser(id);
+      if (!post) {
+        throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
+      }
 
-      // Get user info for notification
+      if (post.userId !== userId) {
+        throw new AppError('You can only publish your own posts', 403, 'FORBIDDEN');
+      }
+
+      const publishedPost = await this.postRepository.publishPost(id, userId);
+
+      // Log publication
       const user = await this.userRepository.findById(userId);
       if (user) {
         const authorName = user.artisanProfile
           ? user.artisanProfile.shopName
           : `${user.firstName} ${user.lastName}`;
 
-        // Emit event instead of direct call
-        this.eventBus.publish('post.published', {
-          authorId: userId,
-          authorName,
-          postId: id,
-          postTitle: post.title,
-        });
+        this.logger.info(
+          `Post published: ${id} "${publishedPost.title}" by ${authorName} (${userId})`,
+        );
       }
 
-      return post;
+      return publishedPost;
     } catch (error) {
       this.logger.error(`Error publishing post: ${error}`);
       if (error instanceof AppError) throw error;
@@ -223,7 +235,21 @@ export class PostService implements IPostService {
    */
   async archivePost(id: string, userId: string): Promise<PostWithUser> {
     try {
-      return await this.postRepository.archivePost(id, userId);
+      // Get post details before archiving
+      const post = await this.postRepository.findByIdWithUser(id);
+      if (!post) {
+        throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
+      }
+
+      if (post.userId !== userId) {
+        throw new AppError('You can only archive your own posts', 403, 'FORBIDDEN');
+      }
+
+      const archivedPost = await this.postRepository.archivePost(id, userId);
+
+      this.logger.info(`Post archived: ${id} "${archivedPost.title}" by user ${userId}`);
+
+      return archivedPost;
     } catch (error) {
       this.logger.error(`Error archiving post: ${error}`);
       if (error instanceof AppError) throw error;
@@ -298,6 +324,13 @@ export class PostService implements IPostService {
   async viewPost(id: string, userId?: string): Promise<void> {
     try {
       await this.postRepository.incrementViewCount(id);
+
+      // Log view info with optional user ID
+      if (userId) {
+        this.logger.debug(`Post ${id} viewed by user ${userId}`);
+      } else {
+        this.logger.debug(`Post ${id} viewed by anonymous user`);
+      }
     } catch (error) {
       this.logger.error(`Error viewing post: ${error}`);
       // Don't throw errors for view increments

@@ -55,7 +55,13 @@ export class CartService implements ICartService {
       }
 
       // Add to cart
-      return await this.cartRepository.addToCart(userId, data.productId, data.quantity);
+      const cartItem = await this.cartRepository.addToCart(userId, data.productId, data.quantity);
+
+      this.logger.info(
+        `User ${userId} added product ${data.productId} (quantity: ${data.quantity}) to cart`,
+      );
+
+      return cartItem;
     } catch (error) {
       this.logger.error(`Error adding to cart: ${error}`);
       if (error instanceof AppError) throw error;
@@ -112,6 +118,9 @@ export class CartService implements ICartService {
       // If quantity is 0, remove item from cart
       if (data.quantity === 0) {
         await this.cartRepository.removeFromCart(userId, productId);
+        this.logger.info(
+          `User ${userId} removed product ${productId} from cart by setting quantity to 0`,
+        );
         throw new AppError('Item removed from cart', 200, 'ITEM_REMOVED');
       }
 
@@ -125,7 +134,17 @@ export class CartService implements ICartService {
       }
 
       // Update cart item
-      return await this.cartRepository.updateCartItemQuantity(userId, productId, data.quantity);
+      const cartItem = await this.cartRepository.updateCartItemQuantity(
+        userId,
+        productId,
+        data.quantity,
+      );
+
+      this.logger.info(
+        `User ${userId} updated quantity of product ${productId} to ${data.quantity} in cart`,
+      );
+
+      return cartItem;
     } catch (error) {
       this.logger.error(`Error updating cart item quantity: ${error}`);
       if (error instanceof AppError) throw error;
@@ -138,7 +157,13 @@ export class CartService implements ICartService {
    */
   async removeFromCart(userId: string, productId: string): Promise<boolean> {
     try {
-      return await this.cartRepository.removeFromCart(userId, productId);
+      const result = await this.cartRepository.removeFromCart(userId, productId);
+
+      if (result) {
+        this.logger.info(`User ${userId} removed product ${productId} from cart`);
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error removing item from cart: ${error}`);
       if (error instanceof AppError) throw error;
@@ -151,7 +176,13 @@ export class CartService implements ICartService {
    */
   async clearCart(userId: string): Promise<boolean> {
     try {
-      return await this.cartRepository.clearCart(userId);
+      const result = await this.cartRepository.clearCart(userId);
+
+      if (result) {
+        this.logger.info(`User ${userId} cleared their entire cart`);
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error clearing cart: ${error}`);
       if (error instanceof AppError) throw error;
@@ -193,6 +224,9 @@ export class CartService implements ICartService {
       const result = await this.cartRepository.validateCartItems(userId);
 
       if (!result.valid) {
+        this.logger.info(
+          `Cart validation failed for user ${userId}: Some items out of stock or unavailable`,
+        );
         return {
           valid: false,
           message: 'Some items in your cart are out of stock or unavailable',
@@ -200,6 +234,7 @@ export class CartService implements ICartService {
         };
       }
 
+      this.logger.info(`Cart validation successful for user ${userId}`);
       return { valid: true };
     } catch (error) {
       this.logger.error(`Error validating cart for checkout: ${error}`);

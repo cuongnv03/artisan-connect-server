@@ -4,9 +4,6 @@ import { JwtService } from '../infrastructure/security/JwtService';
 import { BcryptService } from '../infrastructure/security/BcryptService';
 import { PrismaClientManager } from '../database/PrismaClient';
 import { CloudinaryService } from '../infrastructure/storage/CloudinaryService';
-import { EmailService } from '../infrastructure/email/EmailService';
-import { AITemplateService } from '../infrastructure/ai/AITemplateService';
-import { EventBus } from '../events/EventBus';
 
 // Prisma client
 const prisma = PrismaClientManager.getClient();
@@ -18,15 +15,6 @@ container.register('bcryptService', new BcryptService(Config.BCRYPT_SALT_ROUNDS)
 
 // Storage services
 container.register('cloudinaryService', new CloudinaryService(Config.getCloudinaryConfig()));
-
-// Email service
-container.register('emailService', new EmailService());
-
-// Register AI service
-container.register('aiTemplateService', new AITemplateService());
-
-// Register event bus
-container.register('eventBus', EventBus.getInstance());
 
 // Import repositories
 import { UserRepository } from '../../modules/user/repositories/UserRepository';
@@ -112,6 +100,7 @@ container.register('orderService', new OrderService());
 container.register('reviewService', new ReviewService());
 container.register('postAnalyticsService', new PostAnalyticsService());
 
+// Initialize system config
 const systemConfigService = container.resolve<SystemConfigService>('systemConfigService');
 systemConfigService.initDefaultConfigs().catch((err) => {
   console.error('Failed to initialize default configs:', err);

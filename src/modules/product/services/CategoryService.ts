@@ -28,7 +28,11 @@ export class CategoryService implements ICategoryService {
    */
   async createCategory(data: CreateCategoryDto): Promise<Category> {
     try {
-      return await this.categoryRepository.createCategory(data);
+      const category = await this.categoryRepository.createCategory(data);
+
+      this.logger.info(`Category created: ${category.id} - ${category.name}`);
+
+      return category;
     } catch (error) {
       this.logger.error(`Error creating category: ${error}`);
       if (error instanceof AppError) throw error;
@@ -57,7 +61,11 @@ export class CategoryService implements ICategoryService {
         await this.deleteOldImage(currentCategory.imageUrl);
       }
 
-      return await this.categoryRepository.updateCategory(id, data);
+      const updatedCategory = await this.categoryRepository.updateCategory(id, data);
+
+      this.logger.info(`Category updated: ${id} - ${updatedCategory.name}`);
+
+      return updatedCategory;
     } catch (error) {
       this.logger.error(`Error updating category: ${error}`);
       if (error instanceof AppError) throw error;
@@ -83,6 +91,8 @@ export class CategoryService implements ICategoryService {
       if (result && category.imageUrl) {
         await this.deleteOldImage(category.imageUrl);
       }
+
+      this.logger.info(`Category deleted: ${id} - ${category.name}`);
 
       return result;
     } catch (error) {
@@ -156,6 +166,7 @@ export class CategoryService implements ICategoryService {
         const publicId = this.extractPublicIdFromUrl(imageUrl);
         if (publicId) {
           await this.cloudinaryService.deleteFile(publicId);
+          this.logger.info(`Deleted old category image: ${publicId}`);
         }
       }
     } catch (error) {

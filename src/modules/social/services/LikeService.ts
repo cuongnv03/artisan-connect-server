@@ -1,5 +1,4 @@
 import { ILikeService } from './LikeService.interface';
-import { EventBus } from '../../../core/events/EventBus';
 import { Like, LikeWithUser, ReactionType, LikePaginationResult } from '../models/Like';
 import { ILikeRepository } from '../repositories/LikeRepository.interface';
 import { IUserRepository } from '../../user/repositories/UserRepository.interface';
@@ -13,13 +12,14 @@ export class LikeService implements ILikeService {
   private likeRepository: ILikeRepository;
   private postRepository: IPostRepository;
   private commentRepository: ICommentRepository;
+  private userRepository: IUserRepository;
   private logger = Logger.getInstance();
-  private eventBus = EventBus.getInstance();
 
   constructor() {
     this.likeRepository = container.resolve<ILikeRepository>('likeRepository');
     this.postRepository = container.resolve<IPostRepository>('postRepository');
     this.commentRepository = container.resolve<ICommentRepository>('commentRepository');
+    this.userRepository = container.resolve<IUserRepository>('userRepository');
   }
 
   /**
@@ -73,35 +73,25 @@ export class LikeService implements ILikeService {
         reaction: data.reaction,
       });
 
-      // Get liker info
-      const liker = await container.resolve<IUserRepository>('userRepository').findById(userId);
+      // Get liker info for logging
+      const liker = await this.userRepository.findById(userId);
       if (liker) {
         const likerName = `${liker.firstName} ${liker.lastName}`;
 
-        // Emit appropriate event
+        // Log appropriate information based on what was liked
         if (data.postId) {
           const post = await this.postRepository.findByIdWithUser(data.postId);
-          if (post && post.userId !== userId) {
-            this.eventBus.publish('post.liked', {
-              postOwnerId: post.userId,
-              likerId: userId,
-              likerName,
-              postId: data.postId,
-              postTitle: post.title,
-              reaction: data.reaction || ReactionType.LIKE,
-            });
+          if (post) {
+            this.logger.info(
+              `User ${userId} (${likerName}) liked post ${data.postId} "${post.title}" with reaction: ${data.reaction || ReactionType.LIKE}`,
+            );
           }
         } else if (data.commentId) {
           const comment = await this.commentRepository.findByIdWithUser(data.commentId);
-          if (comment && comment.userId !== userId) {
-            this.eventBus.publish('comment.liked', {
-              commentOwnerId: comment.userId,
-              likerId: userId,
-              likerName,
-              commentId: data.commentId,
-              postId: comment.postId,
-              reaction: data.reaction || ReactionType.LIKE,
-            });
+          if (comment) {
+            this.logger.info(
+              `User ${userId} (${likerName}) liked comment ${data.commentId} on post ${comment.postId} with reaction: ${data.reaction || ReactionType.LIKE}`,
+            );
           }
         }
       }
@@ -122,7 +112,18 @@ export class LikeService implements ILikeService {
     data: { postId?: string; commentId?: string },
   ): Promise<boolean> {
     try {
-      return await this.likeRepository.deleteLike(userId, data);
+      const result = await this.likeRepository.deleteLike(userId, data);
+
+      // Log the unlike action
+      if (result) {
+        if (data.postId) {
+          this.logger.info(`User ${userId} unliked post ${data.postId}`);
+        } else if (data.commentId) {
+          this.logger.info(`User ${userId} unliked comment ${data.commentId}`);
+        }
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error removing like: ${error}`);
       if (error instanceof AppError) throw error;

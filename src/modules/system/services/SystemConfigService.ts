@@ -9,12 +9,11 @@ import {
   ConfigPaginationResult,
 } from '../models/SystemConfig';
 import { AppError } from '../../../core/errors/AppError';
-import { EventBus } from '../../../core/events/EventBus';
 import container from '../../../core/di/container';
 
 export class SystemConfigService extends BaseService implements ISystemConfigService {
   private systemConfigRepository: ISystemConfigRepository;
-  private eventBus: EventBus;
+
   // Default configs that should be initialized
   private defaultConfigs: Record<string, { value: any; description: string }> = {
     'site.name': {
@@ -60,7 +59,6 @@ export class SystemConfigService extends BaseService implements ISystemConfigSer
 
     this.systemConfigRepository =
       container.resolve<ISystemConfigRepository>('systemConfigRepository');
-    this.eventBus = EventBus.getInstance();
   }
 
   /**
@@ -110,12 +108,10 @@ export class SystemConfigService extends BaseService implements ISystemConfigSer
     // Set the config value
     const config = await this.systemConfigRepository.setValue(key, value, userId, description);
 
-    // Publish event
-    this.eventBus.publish('system.configUpdated', {
-      key,
-      value,
-      updatedBy: userId,
-    });
+    // Log the config update
+    this.logger.info(
+      `Config value updated: ${key} = ${JSON.stringify(value)} by user ${userId || 'system'}`,
+    );
 
     return config;
   }
@@ -127,12 +123,10 @@ export class SystemConfigService extends BaseService implements ISystemConfigSer
     // Create the config
     const config = await this.systemConfigRepository.createConfig(data, userId);
 
-    // Publish event
-    this.eventBus.publish('system.configCreated', {
-      key: data.key,
-      value: data.value,
-      createdBy: userId,
-    });
+    // Log config creation
+    this.logger.info(
+      `New config created: ${data.key} = ${JSON.stringify(data.value)} by user ${userId || 'system'}`,
+    );
 
     return config;
   }
@@ -141,15 +135,22 @@ export class SystemConfigService extends BaseService implements ISystemConfigSer
    * Update config
    */
   async updateConfig(key: string, data: UpdateConfigDto, userId?: string): Promise<SystemConfig> {
+    // Get current config for logging changes
+    const currentConfig = await this.systemConfigRepository.findByKey(key);
+
     // Update the config
     const config = await this.systemConfigRepository.updateConfig(key, data, userId);
 
-    // Publish event
-    this.eventBus.publish('system.configUpdated', {
-      key,
-      value: data.value,
-      updatedBy: userId,
-    });
+    // Log the config update with changes
+    if (currentConfig) {
+      this.logger.info(
+        `Config ${key} updated by ${userId || 'system'}, old value: ${JSON.stringify(currentConfig.value)}, new value: ${JSON.stringify(data.value)}`,
+      );
+    } else {
+      this.logger.info(
+        `Config ${key} updated to ${JSON.stringify(data.value)} by ${userId || 'system'}`,
+      );
+    }
 
     return config;
   }
@@ -163,10 +164,8 @@ export class SystemConfigService extends BaseService implements ISystemConfigSer
       const deleted = await this.systemConfigRepository.deleteByKey(key);
 
       if (deleted) {
-        // Publish event
-        this.eventBus.publish('system.configDeleted', {
-          key,
-        });
+        // Log config deletion
+        this.logger.info(`Config deleted: ${key}`);
       }
 
       return deleted;

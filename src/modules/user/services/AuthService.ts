@@ -1,5 +1,4 @@
 import { IAuthService } from './AuthService.interface';
-import { EventBus } from '../../../core/events/EventBus';
 import {
   RegisterUserDto,
   LoginUserDto,
@@ -13,7 +12,6 @@ import { IUserRepository } from '../repositories/UserRepository.interface';
 import { IRefreshTokenRepository } from '../repositories/RefreshTokenRepository.interface';
 import { IPasswordResetRepository } from '../repositories/PasswordResetRepository.interface';
 import { IEmailVerificationRepository } from '../repositories/EmailVerificationRepository.interface';
-import { EmailService } from '../../../core/infrastructure/email/EmailService';
 import { BcryptService } from '../../../core/infrastructure/security/BcryptService';
 import { JwtService } from '../../../core/infrastructure/security/JwtService';
 import { AppError } from '../../../core/errors/AppError';
@@ -29,11 +27,9 @@ export class AuthService implements IAuthService {
   private refreshTokenRepository: IRefreshTokenRepository;
   private passwordResetRepository: IPasswordResetRepository;
   private emailVerificationRepository: IEmailVerificationRepository;
-  private emailService: EmailService;
   private bcryptService: BcryptService;
   private jwtService: JwtService;
   private logger = Logger.getInstance();
-  private eventBus = EventBus.getInstance();
 
   constructor() {
     this.userRepository = container.resolve<IUserRepository>('userRepository');
@@ -44,7 +40,6 @@ export class AuthService implements IAuthService {
     this.emailVerificationRepository = container.resolve<IEmailVerificationRepository>(
       'emailVerificationRepository',
     );
-    this.emailService = container.resolve<EmailService>('emailService');
     this.bcryptService = container.resolve<BcryptService>('bcryptService');
     this.jwtService = container.resolve<JwtService>('jwtService');
   }
@@ -83,9 +78,6 @@ export class AuthService implements IAuthService {
       lastName: data.lastName,
       role: (data.role as any) || 'CUSTOMER',
     });
-
-    // Initialize default notification preferences
-    this.eventBus.publish('user.registered', { userId: user.id });
 
     // Return user without password
     return toSafeUser(user);
@@ -227,6 +219,7 @@ export class AuthService implements IAuthService {
 
   /**
    * Send password reset email
+   * Note: Email sending is removed, we just create the token
    */
   async forgotPassword(data: ForgotPasswordDto): Promise<boolean> {
     try {
@@ -251,8 +244,8 @@ export class AuthService implements IAuthService {
         expiresAt,
       });
 
-      // Send email
-      await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+      // Email sending removed
+      this.logger.info(`Password reset token created for user ${user.id}`);
 
       return true;
     } catch (error) {
@@ -295,6 +288,7 @@ export class AuthService implements IAuthService {
 
   /**
    * Send email verification token
+   * Note: Email sending is removed, we just create the token
    */
   async sendVerificationEmail(userId: string): Promise<boolean> {
     try {
@@ -323,8 +317,8 @@ export class AuthService implements IAuthService {
         expiresAt,
       });
 
-      // Send email
-      await this.emailService.sendVerificationEmail(user.email, verificationToken);
+      // Email sending removed
+      this.logger.info(`Verification token created for user ${user.id}`);
 
       return true;
     } catch (error) {

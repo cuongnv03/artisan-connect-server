@@ -12,11 +12,13 @@ import {
   UpdateShippingInfoDto,
   ConvertToOrderDto,
 } from '../models/Order';
-import { OrderStatus } from '../models/OrderEnums';
+import { OrderStatus, PaymentMethod } from '../models/OrderEnums';
 import { OrderStatusHistory } from '../models/OrderStatusHistory';
 import { CartItem } from '../../cart/models/CartItem';
+import { QuoteStatus } from '../../../modules/quote';
 import { IOrderRepository } from '../repositories/OrderRepository.interface';
 import { IUserRepository } from '../../user/repositories/UserRepository.interface';
+import { IAddressRepository } from '../../profile/repositories/AddressRepository.interface';
 import { IQuoteRepository } from '../../quote/repositories/QuoteRepository.interface';
 import { IProductRepository } from '../../product/repositories/ProductRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
@@ -27,6 +29,7 @@ import container from '../../../core/di/container';
 export class OrderService implements IOrderService {
   private orderRepository: IOrderRepository;
   private userRepository: IUserRepository;
+  private addressRepository: IAddressRepository;
   private quoteRepository: IQuoteRepository;
   private productRepository: IProductRepository;
   private cartService: ICartService;
@@ -36,6 +39,7 @@ export class OrderService implements IOrderService {
   constructor() {
     this.orderRepository = container.resolve<IOrderRepository>('orderRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
+    this.addressRepository = container.resolve<IAddressRepository>('addressRepository');
     this.quoteRepository = container.resolve<IQuoteRepository>('quoteRepository');
     this.productRepository = container.resolve<IProductRepository>('productRepository');
     this.cartService = container.resolve<ICartService>('cartService');
@@ -65,16 +69,16 @@ export class OrderService implements IOrderService {
         throw new AppError(cartValidation.message || 'Cart validation failed', 400, 'INVALID_CART');
       }
 
-      // 4. Lấy thông tin chi tiết giỏ hàng từ CartService
+      // 4. Get cart items
       const cartItems = await this.cartService.getCartItems(userId);
 
-      // 5. Chuẩn bị order items từ cart items
+      // 5. Prepare order items
       const { orderItems, subtotal } = await this.prepareOrderItemsFromCart(cartItems);
 
-      // 6. Tạo order number
+      // 6. Generate order number
       const orderNumber = await this.generateOrderNumber();
 
-      // 7. Gọi repository để tạo đơn hàng (không có business logic)
+      // 7. Create the order
       const order = await this.orderRepository.createOrderWithItems(userId, {
         orderNumber,
         addressId: data.addressId,
@@ -84,13 +88,18 @@ export class OrderService implements IOrderService {
         subtotal,
       });
 
-      // 8. Cập nhật tồn kho cho từng sản phẩm
+      // 8. Update product stock for each item
       for (const item of order.items) {
         await this.productRepository.decrementStock(item.productId, item.quantity);
       }
 
-      // 9. Sau khi tạo đơn hàng thành công, xóa giỏ hàng
+      // 9. Clear the cart after successful order creation
       await this.cartService.clearCart(userId);
+
+      // Log order creation
+      this.logger.info(
+        `Order created from cart: ${order.id} (${order.orderNumber}) by user ${userId} with ${order.items.length} items, total: ${order.totalAmount}`,
+      );
 
       return order;
     } catch (error) {
@@ -107,7 +116,7 @@ export class OrderService implements IOrderService {
     orderItems: any[];
     subtotal: number;
   }> {
-    // Business logic để chuyển đổi cart items sang order items
+    // Business logic to convert cart items to order items
     const orderItems: any[] = [];
     let subtotal = 0;
 
@@ -115,12 +124,12 @@ export class OrderService implements IOrderService {
       const product = item.product;
       if (!product) continue;
 
-      // Tính giá cho từng item
+      // Calculate price for each item
       const price = product.discountPrice ?? product.price;
       const itemTotal = price * item.quantity;
       subtotal += itemTotal;
 
-      // Chuẩn bị dữ liệu sản phẩm để lưu snapshot
+      // Prepare product data for snapshot
       const productSnapshot = {
         id: product.id,
         name: product.name,
@@ -129,7 +138,7 @@ export class OrderService implements IOrderService {
         isCustomizable: product.isCustomizable,
       };
 
-      // Thêm vào danh sách order items
+      // Add to order items list
       orderItems.push({
         productId: product.id,
         sellerId: product.seller?.id || '',
@@ -146,7 +155,7 @@ export class OrderService implements IOrderService {
    * Validate shipping address
    */
   private async validateShippingAddress(userId: string, addressId: string): Promise<void> {
-    // Logic kiểm tra địa chỉ giao hàng
+    // Logic to validate shipping address
     const address = await this.addressRepository.findById(addressId);
 
     if (!address) {
@@ -204,11 +213,16 @@ export class OrderService implements IOrderService {
         );
       }
 
-      // Tạo đơn hàng từ quote
+      // Create order from quote
       const order = await this.orderRepository.createOrderFromQuote(userId, data);
 
-      // Cập nhật trạng thái quote sau khi tạo đơn hàng thành công
-      await this.quoteService.updateQuoteStatus(data.quoteRequestId, 'COMPLETED');
+      // Update quote status after successful order creation
+      await this.quoteService.updateQuoteStatus(data.quoteRequestId, QuoteStatus.COMPLETED);
+
+      // Log order creation from quote
+      this.logger.info(
+        `Order created from quote: ${order.id} (${order.orderNumber}) by user ${userId}, quoteId: ${data.quoteRequestId}`,
+      );
 
       return order;
     } catch (error) {
@@ -272,7 +286,12 @@ export class OrderService implements IOrderService {
       });
 
       // Mark quote as COMPLETED via QuoteService
-      await this.quoteService.updateQuoteStatus(quoteId, 'COMPLETED');
+      await this.quoteService.updateQuoteStatus(quoteId, QuoteStatus.COMPLETED);
+
+      // Log the conversion
+      this.logger.info(
+        `Quote ${quoteId} converted to order ${order.id} (${order.orderNumber}) by user ${userId}`,
+      );
 
       return order;
     } catch (error) {
@@ -371,7 +390,18 @@ export class OrderService implements IOrderService {
       // Additional validations based on role and status
       await this.validateStatusUpdate(order, data.status, updatedBy);
 
-      return await this.orderRepository.updateOrderStatus(id, data, updatedBy);
+      // Update order status
+      const updatedOrder = await this.orderRepository.updateOrderStatus(id, data.status, {
+        note: data.note,
+        createdBy: updatedBy,
+      });
+
+      // Log status change
+      this.logger.info(
+        `Order ${id} (${order.orderNumber}) status changed from ${order.status} to ${data.status} by user ${updatedBy}`,
+      );
+
+      return updatedOrder;
     } catch (error) {
       this.logger.error(`Error updating order status: ${error}`);
       if (error instanceof AppError) throw error;
@@ -413,7 +443,18 @@ export class OrderService implements IOrderService {
         );
       }
 
-      return await this.orderRepository.updateShippingInfo(id, data);
+      // Update shipping info
+      const updatedOrder = await this.orderRepository.updateShippingInfo(id, data);
+
+      // Log shipping info update
+      this.logger.info(
+        `Shipping info updated for order ${id} (${order.orderNumber}) by seller ${sellerId}`,
+      );
+      if (data.trackingNumber) {
+        this.logger.info(`Tracking number ${data.trackingNumber} added to order ${id}`);
+      }
+
+      return updatedOrder;
     } catch (error) {
       this.logger.error(`Error updating shipping info: ${error}`);
       if (error instanceof AppError) throw error;
@@ -428,8 +469,14 @@ export class OrderService implements IOrderService {
     try {
       // In a real implementation, this would integrate with a payment gateway
       // Here we're just simulating a successful payment process
+      const updatedOrder = await this.orderRepository.processPayment(id, paymentIntentId);
 
-      return await this.orderRepository.processPayment(id, paymentIntentId);
+      // Log payment processing
+      this.logger.info(
+        `Payment processed for order ${id} (${updatedOrder.orderNumber}), paymentIntentId: ${paymentIntentId}`,
+      );
+
+      return updatedOrder;
     } catch (error) {
       this.logger.error(`Error processing payment: ${error}`);
       if (error instanceof AppError) throw error;
@@ -467,16 +514,18 @@ export class OrderService implements IOrderService {
         );
       }
 
-      // Cập nhật trạng thái đơn hàng sang CANCELLED
-      const cancelledOrder = await this.orderRepository.updateOrderStatus(
-        id,
-        OrderStatus.CANCELLED,
-        { note: note || 'Order cancelled', createdBy: userId },
-      );
+      // Cancel the order
+      const cancelledOrder = await this.orderRepository.cancelOrder(id, note, userId);
 
-      // Khôi phục tồn kho
+      // Log order cancellation
+      this.logger.info(`Order ${id} (${order.orderNumber}) cancelled by user ${userId}`);
+
+      // Restore product stock for each item
       for (const item of order.items) {
         await this.productRepository.incrementStock(item.productId, item.quantity);
+        this.logger.info(
+          `Restored ${item.quantity} units to product ${item.productId} stock after order cancellation`,
+        );
       }
 
       return cancelledOrder;

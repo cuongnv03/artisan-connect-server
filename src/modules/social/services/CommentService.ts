@@ -1,5 +1,4 @@
 import { ICommentService } from './CommentService.interface';
-import { EventBus } from '../../../core/events/EventBus';
 import {
   Comment,
   CommentWithUser,
@@ -18,12 +17,13 @@ import container from '../../../core/di/container';
 export class CommentService implements ICommentService {
   private commentRepository: ICommentRepository;
   private postRepository: IPostRepository;
+  private userRepository: IUserRepository;
   private logger = Logger.getInstance();
-  private eventBus = EventBus.getInstance();
 
   constructor() {
     this.commentRepository = container.resolve<ICommentRepository>('commentRepository');
     this.postRepository = container.resolve<IPostRepository>('postRepository');
+    this.userRepository = container.resolve<IUserRepository>('userRepository');
   }
 
   /**
@@ -33,40 +33,27 @@ export class CommentService implements ICommentService {
     try {
       const comment = await this.commentRepository.createComment(userId, data);
 
-      // Get commenter info
-      const commenter = await container.resolve<IUserRepository>('userRepository').findById(userId);
+      // Get commenter info for logging
+      const commenter = await this.userRepository.findById(userId);
       if (!commenter) return comment;
 
       const commenterName = `${commenter.firstName} ${commenter.lastName}`;
 
-      // Get post info
+      // Get post info for logging
       const post = await this.postRepository.findByIdWithUser(data.postId);
       if (!post) return comment;
 
-      // Emit event if this is a new comment on a post
+      // Log based on comment type (new comment or reply)
       if (!data.parentId) {
-        this.eventBus.publish('post.commented', {
-          postOwnerId: post.userId,
-          commenterId: userId,
-          commenterName,
-          postId: data.postId,
-          postTitle: post.title,
-          commentId: comment.id,
-        });
-      }
-      // Emit event if this is a reply to another comment
-      else {
+        this.logger.info(
+          `User ${userId} (${commenterName}) commented on post ${data.postId} "${post.title}"`,
+        );
+      } else {
         const parentComment = await this.commentRepository.findByIdWithUser(data.parentId);
-        if (parentComment && parentComment.userId !== userId) {
-          this.eventBus.publish('comment.replied', {
-            parentCommentOwnerId: parentComment.userId,
-            replierId: userId,
-            replierName: commenterName,
-            parentCommentId: data.parentId,
-            replyId: comment.id,
-            postId: data.postId,
-            postTitle: post.title,
-          });
+        if (parentComment) {
+          this.logger.info(
+            `User ${userId} (${commenterName}) replied to comment ${data.parentId} on post ${data.postId} "${post.title}"`,
+          );
         }
       }
 
@@ -87,7 +74,11 @@ export class CommentService implements ICommentService {
     data: UpdateCommentDto,
   ): Promise<CommentWithUser> {
     try {
-      return await this.commentRepository.updateComment(id, userId, data);
+      const updated = await this.commentRepository.updateComment(id, userId, data);
+
+      this.logger.info(`User ${userId} updated comment ${id}`);
+
+      return updated;
     } catch (error) {
       this.logger.error(`Error updating comment: ${error}`);
       if (error instanceof AppError) throw error;
@@ -100,7 +91,16 @@ export class CommentService implements ICommentService {
    */
   async deleteComment(id: string, userId: string): Promise<boolean> {
     try {
-      return await this.commentRepository.deleteComment(id, userId);
+      // Get comment info before deletion for logging
+      const comment = await this.commentRepository.findByIdWithUser(id);
+
+      const deleted = await this.commentRepository.deleteComment(id, userId);
+
+      if (deleted && comment) {
+        this.logger.info(`User ${userId} deleted comment ${id} on post ${comment.postId}`);
+      }
+
+      return deleted;
     } catch (error) {
       this.logger.error(`Error deleting comment: ${error}`);
       if (error instanceof AppError) throw error;

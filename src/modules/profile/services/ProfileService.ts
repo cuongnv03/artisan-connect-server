@@ -6,14 +6,12 @@ import { IUserRepository } from '../../user/repositories/UserRepository.interfac
 import { Profile, ProfileWithUser, UpdateProfileDto } from '../models/Profile';
 import { Address, CreateAddressDto, UpdateAddressDto } from '../models/Address';
 import { AppError } from '../../../core/errors/AppError';
-import { EventBus } from '../../../core/events/EventBus';
 import container from '../../../core/di/container';
 
 export class ProfileService extends BaseService implements IProfileService {
   private profileRepository: IProfileRepository;
   private addressRepository: IAddressRepository;
   private userRepository: IUserRepository;
-  private eventBus: EventBus;
 
   constructor() {
     super([
@@ -27,7 +25,6 @@ export class ProfileService extends BaseService implements IProfileService {
     this.profileRepository = container.resolve<IProfileRepository>('profileRepository');
     this.addressRepository = container.resolve<IAddressRepository>('addressRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
-    this.eventBus = EventBus.getInstance();
   }
 
   /**
@@ -68,13 +65,7 @@ export class ProfileService extends BaseService implements IProfileService {
     }
 
     const profile = await this.profileRepository.updateProfile(userId, data);
-
-    // Publish event
-    this.eventBus.publish('user.profileUpdated', {
-      userId,
-      profileId: profile.id,
-      updatedFields: Object.keys(data),
-    });
+    this.logger.info(`Profile updated for user: ${userId}`);
 
     return profile;
   }
@@ -105,12 +96,7 @@ export class ProfileService extends BaseService implements IProfileService {
 
     // Create address
     const address = await this.addressRepository.createAddress(profile.id, data);
-
-    // Publish event
-    this.eventBus.publish('user.addressCreated', {
-      userId,
-      addressId: address.id,
-    });
+    this.logger.info(`Address created for user: ${userId}`);
 
     return address;
   }
@@ -130,13 +116,7 @@ export class ProfileService extends BaseService implements IProfileService {
 
     // Update address
     const updatedAddress = await this.addressRepository.updateAddress(id, data);
-
-    // Publish event
-    this.eventBus.publish('user.addressUpdated', {
-      userId,
-      addressId: id,
-      updatedFields: Object.keys(data),
-    });
+    this.logger.info(`Address ${id} updated for user: ${userId}`);
 
     return updatedAddress;
   }
@@ -157,12 +137,7 @@ export class ProfileService extends BaseService implements IProfileService {
 
       // Delete address
       await this.addressRepository.delete(id);
-
-      // Publish event
-      this.eventBus.publish('user.addressDeleted', {
-        userId,
-        addressId: id,
-      });
+      this.logger.info(`Address ${id} deleted for user: ${userId}`);
 
       return true;
     } catch (error) {
@@ -187,12 +162,7 @@ export class ProfileService extends BaseService implements IProfileService {
 
     // Set as default
     const address = await this.addressRepository.setAsDefault(id, profile.id);
-
-    // Publish event
-    this.eventBus.publish('user.defaultAddressChanged', {
-      userId,
-      addressId: id,
-    });
+    this.logger.info(`Address ${id} set as default for user: ${userId}`);
 
     return address;
   }

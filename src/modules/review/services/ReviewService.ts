@@ -70,13 +70,20 @@ export class ReviewService implements IReviewService {
       }
 
       // Create review
-      return await this.reviewRepository.createReview(userId, {
+      const review = await this.reviewRepository.createReview(userId, {
         productId: data.productId,
         rating: data.rating,
         title: data.title,
         comment: data.comment,
         images: data.images || [],
       });
+
+      // Log review creation
+      this.logger.info(
+        `User ${userId} created review for product ${data.productId} with rating ${data.rating}`,
+      );
+
+      return review;
     } catch (error) {
       this.logger.error(`Error creating review: ${error}`);
       if (error instanceof AppError) throw error;
@@ -104,8 +111,35 @@ export class ReviewService implements IReviewService {
         throw new AppError('Rating must be between 1 and 5', 400, 'INVALID_RATING');
       }
 
+      // Get original review for logging changes
+      const originalReview = await this.reviewRepository.findById(id);
+      if (!originalReview) {
+        throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
+      }
+
       // Update review
-      return await this.reviewRepository.updateReview(id, userId, data);
+      const updatedReview = await this.reviewRepository.updateReview(id, userId, data);
+
+      // Log review update with specific changes
+      let changesLog = '';
+      if (data.rating && data.rating !== originalReview.rating) {
+        changesLog += `rating changed from ${originalReview.rating} to ${data.rating}, `;
+      }
+      if (data.title !== undefined && data.title !== originalReview.title) {
+        changesLog += 'title updated, ';
+      }
+      if (data.comment !== undefined && data.comment !== originalReview.comment) {
+        changesLog += 'comment updated, ';
+      }
+      if (data.images && JSON.stringify(data.images) !== JSON.stringify(originalReview.images)) {
+        changesLog += 'images updated, ';
+      }
+
+      this.logger.info(
+        `User ${userId} updated review ${id} for product ${updatedReview.productId}: ${changesLog.slice(0, -2)}`,
+      );
+
+      return updatedReview;
     } catch (error) {
       this.logger.error(`Error updating review: ${error}`);
       if (error instanceof AppError) throw error;
@@ -118,7 +152,23 @@ export class ReviewService implements IReviewService {
    */
   async deleteReview(id: string, userId: string): Promise<boolean> {
     try {
-      return await this.reviewRepository.deleteReview(id, userId);
+      // Get review details before deletion for logging
+      const review = await this.reviewRepository.findById(id);
+      if (!review) {
+        throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
+      }
+
+      if (review.userId !== userId) {
+        throw new AppError('You can only delete your own reviews', 403, 'FORBIDDEN');
+      }
+
+      const result = await this.reviewRepository.deleteReview(id, userId);
+
+      if (result) {
+        this.logger.info(`User ${userId} deleted review ${id} for product ${review.productId}`);
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error deleting review: ${error}`);
       if (error instanceof AppError) throw error;
@@ -194,7 +244,34 @@ export class ReviewService implements IReviewService {
     data: MarkReviewHelpfulDto,
   ): Promise<Review> {
     try {
-      return await this.reviewRepository.markReviewHelpful(reviewId, userId, data.helpful);
+      // Get review for validation and logging
+      const review = await this.reviewRepository.findById(reviewId);
+      if (!review) {
+        throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
+      }
+
+      // Check if user is marking their own review
+      if (review.userId === userId) {
+        throw new AppError('You cannot mark your own review as helpful', 400, 'INVALID_ACTION');
+      }
+
+      // Check current state to log appropriate action
+      const currentState = await this.reviewRepository.hasMarkedReviewHelpful(reviewId, userId);
+
+      const updatedReview = await this.reviewRepository.markReviewHelpful(
+        reviewId,
+        userId,
+        data.helpful,
+      );
+
+      // Log marking action with appropriate action
+      if (data.helpful && !currentState) {
+        this.logger.info(`User ${userId} marked review ${reviewId} as helpful`);
+      } else if (!data.helpful && currentState) {
+        this.logger.info(`User ${userId} unmarked review ${reviewId} as helpful`);
+      }
+
+      return updatedReview;
     } catch (error) {
       this.logger.error(`Error marking review as helpful: ${error}`);
       if (error instanceof AppError) throw error;

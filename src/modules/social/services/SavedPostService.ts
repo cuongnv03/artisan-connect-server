@@ -37,7 +37,11 @@ export class SavedPostService implements ISavedPostService {
       }
 
       // Save the post
-      return await this.savedPostRepository.savePost(userId, postId);
+      const savedPost = await this.savedPostRepository.savePost(userId, postId);
+
+      this.logger.info(`User ${userId} saved post ${postId}`);
+
+      return savedPost;
     } catch (error) {
       this.logger.error(`Error saving post: ${error}`);
       if (error instanceof AppError) throw error;
@@ -57,7 +61,13 @@ export class SavedPostService implements ISavedPostService {
       }
 
       // Unsave the post
-      return await this.savedPostRepository.unsavePost(userId, postId);
+      const result = await this.savedPostRepository.unsavePost(userId, postId);
+
+      if (result) {
+        this.logger.info(`User ${userId} unsaved post ${postId}`);
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(`Error unsaving post: ${error}`);
       if (error instanceof AppError) throw error;
