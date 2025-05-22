@@ -1,7 +1,9 @@
 import Joi from 'joi';
 
 export const savePostSchema = Joi.object({
-  postId: Joi.string().uuid().required(),
+  postId: Joi.string().uuid().required().messages({
+    'any.required': 'Post ID is required',
+  }),
 });
 
 export const getSavedPostsQuerySchema = Joi.object({

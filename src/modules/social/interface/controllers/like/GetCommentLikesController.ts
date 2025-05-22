@@ -1,9 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { BaseController } from '../../../../shared/baseClasses/BaseController';
-import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { ILikeService } from '../../services/LikeService.interface';
-import { AppError } from '../../../../core/errors/AppError';
-import container from '../../../../core/di/container';
+import { BaseController } from '../../../../../shared/baseClasses/BaseController';
+import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
+import { ILikeService } from '../../../services/LikeService.interface';
+import container from '../../../../../core/di/container';
 
 export class GetCommentLikesController extends BaseController {
   private likeService: ILikeService;

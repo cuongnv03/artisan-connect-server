@@ -1,7 +1,7 @@
 import { ILikeService } from './LikeService.interface';
-import { Like, LikeWithUser, ReactionType, LikePaginationResult } from '../models/Like';
+import { Like, LikeWithUser, LikePaginationResult } from '../models/Like';
 import { ILikeRepository } from '../repositories/LikeRepository.interface';
-import { IUserRepository } from '../../user/repositories/UserRepository.interface';
+import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { IPostRepository } from '../../post/repositories/PostRepository.interface';
 import { ICommentRepository } from '../repositories/CommentRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
@@ -22,33 +22,18 @@ export class LikeService implements ILikeService {
     this.userRepository = container.resolve<IUserRepository>('userRepository');
   }
 
-  /**
-   * Toggle like on a post or comment
-   */
   async toggleLike(
     userId: string,
-    data: { postId?: string; commentId?: string; reaction?: ReactionType },
+    data: { postId?: string; commentId?: string },
   ): Promise<boolean> {
     try {
-      // Check if already liked
-      const hasLiked = await this.hasLiked(userId, {
-        postId: data.postId,
-        commentId: data.commentId,
-      });
+      const hasLiked = await this.hasLiked(userId, data);
 
-      // Toggle like status
       if (hasLiked) {
-        await this.removeLike(userId, {
-          postId: data.postId,
-          commentId: data.commentId,
-        });
+        await this.removeLike(userId, data);
         return false; // No longer liked
       } else {
-        await this.addLike(userId, {
-          postId: data.postId,
-          commentId: data.commentId,
-          reaction: data.reaction,
-        });
+        await this.addLike(userId, data);
         return true; // Now liked
       }
     } catch (error) {
@@ -58,43 +43,13 @@ export class LikeService implements ILikeService {
     }
   }
 
-  /**
-   * Like a post or comment
-   */
-  async addLike(
-    userId: string,
-    data: { postId?: string; commentId?: string; reaction?: ReactionType },
-  ): Promise<Like> {
+  async addLike(userId: string, data: { postId?: string; commentId?: string }): Promise<Like> {
     try {
-      // Create the like
-      const like = await this.likeRepository.createLike(userId, {
-        postId: data.postId,
-        commentId: data.commentId,
-        reaction: data.reaction,
-      });
+      const like = await this.likeRepository.createLike(userId, data);
 
-      // Get liker info for logging
-      const liker = await this.userRepository.findById(userId);
-      if (liker) {
-        const likerName = `${liker.firstName} ${liker.lastName}`;
-
-        // Log appropriate information based on what was liked
-        if (data.postId) {
-          const post = await this.postRepository.findByIdWithUser(data.postId);
-          if (post) {
-            this.logger.info(
-              `User ${userId} (${likerName}) liked post ${data.postId} "${post.title}" with reaction: ${data.reaction || ReactionType.LIKE}`,
-            );
-          }
-        } else if (data.commentId) {
-          const comment = await this.commentRepository.findByIdWithUser(data.commentId);
-          if (comment) {
-            this.logger.info(
-              `User ${userId} (${likerName}) liked comment ${data.commentId} on post ${comment.postId} with reaction: ${data.reaction || ReactionType.LIKE}`,
-            );
-          }
-        }
-      }
+      this.logger.info(
+        `User ${userId} liked ${data.postId ? 'post' : 'comment'} ${data.postId || data.commentId}`,
+      );
 
       return like;
     } catch (error) {
@@ -104,9 +59,6 @@ export class LikeService implements ILikeService {
     }
   }
 
-  /**
-   * Unlike a post or comment
-   */
   async removeLike(
     userId: string,
     data: { postId?: string; commentId?: string },
@@ -114,13 +66,10 @@ export class LikeService implements ILikeService {
     try {
       const result = await this.likeRepository.deleteLike(userId, data);
 
-      // Log the unlike action
       if (result) {
-        if (data.postId) {
-          this.logger.info(`User ${userId} unliked post ${data.postId}`);
-        } else if (data.commentId) {
-          this.logger.info(`User ${userId} unliked comment ${data.commentId}`);
-        }
+        this.logger.info(
+          `User ${userId} unliked ${data.postId ? 'post' : 'comment'} ${data.postId || data.commentId}`,
+        );
       }
 
       return result;
@@ -131,9 +80,6 @@ export class LikeService implements ILikeService {
     }
   }
 
-  /**
-   * Check if user has liked post or comment
-   */
   async hasLiked(userId: string, data: { postId?: string; commentId?: string }): Promise<boolean> {
     try {
       return await this.likeRepository.hasLiked(userId, data);
@@ -143,9 +89,6 @@ export class LikeService implements ILikeService {
     }
   }
 
-  /**
-   * Get likes for a post
-   */
   async getPostLikes(postId: string, page?: number, limit?: number): Promise<LikePaginationResult> {
     try {
       return await this.likeRepository.getPostLikes(postId, page, limit);
@@ -156,9 +99,6 @@ export class LikeService implements ILikeService {
     }
   }
 
-  /**
-   * Get likes for a comment
-   */
   async getCommentLikes(
     commentId: string,
     page?: number,
@@ -173,15 +113,11 @@ export class LikeService implements ILikeService {
     }
   }
 
-  /**
-   * Get like count for post or comment
-   */
   async getLikeCount(data: { postId?: string; commentId?: string }): Promise<number> {
     try {
       return await this.likeRepository.getLikesCount(data);
     } catch (error) {
       this.logger.error(`Error getting like count: ${error}`);
-      if (error instanceof AppError) throw error;
       return 0;
     }
   }

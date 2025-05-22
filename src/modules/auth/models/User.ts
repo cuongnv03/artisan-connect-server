@@ -1,3 +1,4 @@
+import { UserWithArtisanProfile } from './../../user/models/User';
 import { UserRole, UserStatus } from './UserEnums';
 
 export interface User {

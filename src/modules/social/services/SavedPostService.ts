@@ -1,7 +1,7 @@
 import { ISavedPostService } from './SavedPostService.interface';
 import { SavedPost, SavedPostWithDetails, SavedPostPaginationResult } from '../models/SavedPost';
 import { ISavedPostRepository } from '../repositories/SavedPostRepository.interface';
-import { IUserRepository } from '../../user/repositories/UserRepository.interface';
+import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { IPostRepository } from '../../post/repositories/PostRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
@@ -19,21 +19,12 @@ export class SavedPostService implements ISavedPostService {
     this.postRepository = container.resolve<IPostRepository>('postRepository');
   }
 
-  /**
-   * Save a post
-   */
   async savePost(userId: string, postId: string): Promise<SavedPost> {
     try {
-      // Validate user
+      // Validate user exists
       const user = await this.userRepository.findById(userId);
       if (!user) {
         throw new AppError('User not found', 404, 'USER_NOT_FOUND');
-      }
-
-      // Validate post exists and is published
-      const post = await this.postRepository.findById(postId);
-      if (!post || post.status !== 'PUBLISHED' || post.deletedAt) {
-        throw new AppError('Post not found or not available', 404, 'POST_NOT_FOUND');
       }
 
       // Save the post
@@ -49,18 +40,8 @@ export class SavedPostService implements ISavedPostService {
     }
   }
 
-  /**
-   * Unsave a post
-   */
   async unsavePost(userId: string, postId: string): Promise<boolean> {
     try {
-      // Validate user
-      const user = await this.userRepository.findById(userId);
-      if (!user) {
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
-      }
-
-      // Unsave the post
       const result = await this.savedPostRepository.unsavePost(userId, postId);
 
       if (result) {
@@ -75,9 +56,6 @@ export class SavedPostService implements ISavedPostService {
     }
   }
 
-  /**
-   * Toggle saved status
-   */
   async toggleSavePost(userId: string, postId: string): Promise<boolean> {
     try {
       const hasSaved = await this.hasSaved(userId, postId);
@@ -96,9 +74,6 @@ export class SavedPostService implements ISavedPostService {
     }
   }
 
-  /**
-   * Check if user has saved a post
-   */
   async hasSaved(userId: string, postId: string): Promise<boolean> {
     try {
       return await this.savedPostRepository.hasSaved(userId, postId);
@@ -108,29 +83,23 @@ export class SavedPostService implements ISavedPostService {
     }
   }
 
-  /**
-   * Get saved posts for a user
-   */
   async getSavedPosts(
     userId: string,
     page: number = 1,
     limit: number = 10,
   ): Promise<SavedPostPaginationResult> {
     try {
-      // Validate user
+      // Validate user exists
       const user = await this.userRepository.findById(userId);
       if (!user) {
-        throw AppError.notFound('User not found', 'USER_NOT_FOUND');
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
       }
 
       return await this.savedPostRepository.getSavedPosts(userId, page, limit);
     } catch (error) {
       this.logger.error(`Error getting saved posts: ${error}`);
       if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to get saved posts', 'SERVICE_ERROR', {
-        cause: error as Error,
-        metadata: { userId, page, limit },
-      });
+      throw new AppError('Failed to get saved posts', 500, 'SERVICE_ERROR');
     }
   }
 }

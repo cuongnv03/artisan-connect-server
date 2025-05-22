@@ -17,22 +17,28 @@ container.register('bcryptService', new BcryptService(Config.BCRYPT_SALT_ROUNDS)
 container.register('cloudinaryService', new CloudinaryService(Config.getCloudinaryConfig()));
 
 // Import repositories
-// === USER MODULE REPOSITORIES ===
 import { UserRepository } from '../../modules/auth/repositories/UserRepository';
 import { RefreshTokenRepository } from '../../modules/auth/repositories/RefreshTokenRepository';
 import { PasswordResetRepository } from '../../modules/auth/repositories/PasswordResetRepository';
 import { EmailVerificationRepository } from '../../modules/auth/repositories/EmailVerificationRepository';
+
+import { SystemConfigRepository } from '../../modules/system/repositories/SystemConfigRepository';
+
 import { ProfileRepository } from '../../modules/user/repositories/ProfileRepository';
 import { AddressRepository } from '../../modules/user/repositories/AddressRepository';
 import { FollowRepository } from '../../modules/user/repositories/FollowRepository';
 import { UserActivityRepository } from '../../modules/user/repositories/UserActivityRepository';
-import { SystemConfigRepository } from '../../modules/system/repositories/SystemConfigRepository';
+
 import { ArtisanProfileRepository } from '../../modules/artisan/repositories/ArtisanProfileRepository';
 import { UpgradeRequestRepository } from '../../modules/artisan/repositories/UpgradeRequestRepository';
-import { SavedPostRepository } from '../../modules/social/repositories/SavedPostRepository';
+
 import { PostRepository } from '../../modules/post/repositories/PostRepository';
+
 import { LikeRepository } from '../../modules/social/repositories/LikeRepository';
 import { CommentRepository } from '../../modules/social/repositories/CommentRepository';
+import { SavedPostRepository } from '../../modules/social/repositories/SavedPostRepository';
+
+// Other repositories (for future modules)
 import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
 import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
 import { QuoteRepository } from '../../modules/quote/repositories/QuoteRepository';
@@ -46,17 +52,24 @@ container.register('userRepository', new UserRepository(prisma));
 container.register('refreshTokenRepository', new RefreshTokenRepository(prisma));
 container.register('passwordResetRepository', new PasswordResetRepository(prisma));
 container.register('emailVerificationRepository', new EmailVerificationRepository(prisma));
+
+container.register('systemConfigRepository', new SystemConfigRepository(prisma));
+
 container.register('profileRepository', new ProfileRepository(prisma));
 container.register('addressRepository', new AddressRepository(prisma));
 container.register('followRepository', new FollowRepository(prisma));
 container.register('userActivityRepository', new UserActivityRepository(prisma));
-container.register('systemConfigRepository', new SystemConfigRepository(prisma));
+
 container.register('artisanProfileRepository', new ArtisanProfileRepository(prisma));
 container.register('upgradeRequestRepository', new UpgradeRequestRepository(prisma));
+
 container.register('postRepository', new PostRepository(prisma));
+
 container.register('likeRepository', new LikeRepository(prisma));
 container.register('commentRepository', new CommentRepository(prisma));
 container.register('savedPostRepository', new SavedPostRepository(prisma));
+
+// Other repositories (placeholder)
 container.register('productRepository', new ProductRepository(prisma));
 container.register('categoryRepository', new CategoryRepository(prisma));
 container.register('cartRepository', new CartRepository(prisma));
@@ -67,14 +80,20 @@ container.register('postAnalyticsRepository', new PostAnalyticsRepository(prisma
 
 // Import services
 import { AuthService } from '../../modules/auth/services/AuthService';
-import { UserService } from '../../modules/user/services/UserService';
+
 import { SystemConfigService } from '../../modules/system/services/SystemConfigService';
+
+import { UserService } from '../../modules/user/services/UserService';
+
 import { ArtisanProfileService } from '../../modules/artisan/services/ArtisanProfileService';
-import { FollowService } from '../../modules/social/services/FollowService';
-import { SavedPostService } from '../../modules/social/services/SavedPostService';
+
 import { PostService } from '../../modules/post/services/PostService';
+
 import { LikeService } from '../../modules/social/services/LikeService';
 import { CommentService } from '../../modules/social/services/CommentService';
+import { SavedPostService } from '../../modules/social/services/SavedPostService';
+
+// Other services (placeholder)
 import { ProductService } from '../../modules/product/services/ProductService';
 import { CategoryService } from '../../modules/product/services/CategoryService';
 import { QuoteService } from '../../modules/quote/services/QuoteService';
@@ -85,14 +104,20 @@ import { PostAnalyticsService } from '../../modules/analytics/services/PostAnaly
 
 // Register services
 container.register('authService', new AuthService());
-container.register('userService', new UserService());
+
 container.register('systemConfigService', new SystemConfigService());
+
+container.register('userService', new UserService());
+
 container.register('artisanProfileService', new ArtisanProfileService());
-container.register('followService', new FollowService());
-container.register('savedPostService', new SavedPostService());
+
 container.register('postService', new PostService());
+
 container.register('likeService', new LikeService());
 container.register('commentService', new CommentService());
+container.register('savedPostService', new SavedPostService());
+
+// Other services (placeholder)
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
 container.register('cartService', new CartService());
@@ -101,10 +126,10 @@ container.register('orderService', new OrderService());
 container.register('reviewService', new ReviewService());
 container.register('postAnalyticsService', new PostAnalyticsService());
 
-// Initialize system config
-const systemConfigService = container.resolve<SystemConfigService>('systemConfigService');
-systemConfigService.initDefaultConfigs().catch((err) => {
-  console.error('Failed to initialize default configs:', err);
-});
+// // Initialize system config
+// const systemConfigService = container.resolve<SystemConfigService>('systemConfigService');
+// systemConfigService.initDefaultConfigs().catch((err) => {
+//   console.error('Failed to initialize default configs:', err);
+// });
 
 console.log('Dependency injection initialized');

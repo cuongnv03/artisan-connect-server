@@ -16,20 +16,15 @@ export class GetFollowedPostsController extends BaseController {
     try {
       this.validateAuth(req);
 
-      // Get query params
-      const type = req.query.type as any;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const sortBy = (req.query.sortBy as any) || 'publishedAt';
-      const sortOrder = (req.query.sortOrder as any) || 'desc';
+      const options = {
+        type: req.query.type as any,
+        page: parseInt(req.query.page as string) || 1,
+        limit: parseInt(req.query.limit as string) || 10,
+        sortBy: (req.query.sortBy as any) || 'publishedAt',
+        sortOrder: (req.query.sortOrder as any) || 'desc',
+      };
 
-      const posts = await this.postService.getFollowedPosts(req.user!.id, {
-        type,
-        page,
-        limit,
-        sortBy,
-        sortOrder,
-      });
+      const posts = await this.postService.getFollowedPosts(req.user!.id, options);
 
       ApiResponse.success(res, posts, 'Followed posts retrieved successfully');
     } catch (error) {

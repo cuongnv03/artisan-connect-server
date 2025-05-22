@@ -16,24 +16,16 @@ export class GetMyPostsController extends BaseController {
     try {
       this.validateAuth(req);
 
-      // Get query params
-      const status = req.query.status as any;
-      const type = req.query.type as any;
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const sortBy = (req.query.sortBy as any) || 'updatedAt';
-      const sortOrder = (req.query.sortOrder as any) || 'desc';
+      const options = {
+        status: req.query.status as any,
+        type: req.query.type as any,
+        page: parseInt(req.query.page as string) || 1,
+        limit: parseInt(req.query.limit as string) || 10,
+        sortBy: (req.query.sortBy as any) || 'updatedAt',
+        sortOrder: (req.query.sortOrder as any) || 'desc',
+      };
 
-      const posts = await this.postService.getMyPosts(req.user!.id, {
-        status,
-        type,
-        page,
-        limit,
-        sortBy,
-        sortOrder,
-      });
-
-      // Get post counts by status
+      const posts = await this.postService.getMyPosts(req.user!.id, options);
       const statusCounts = await this.postService.getPostStatusCounts(req.user!.id);
 
       ApiResponse.success(

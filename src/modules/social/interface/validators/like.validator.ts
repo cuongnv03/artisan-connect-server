@@ -1,13 +1,13 @@
 import Joi from 'joi';
-import { ReactionType } from '../../models/Like';
 
 export const likeToggleSchema = Joi.object({
   postId: Joi.string().uuid(),
   commentId: Joi.string().uuid(),
-  reaction: Joi.string()
-    .valid(...Object.values(ReactionType))
-    .default(ReactionType.LIKE),
-}).xor('postId', 'commentId');
+})
+  .xor('postId', 'commentId')
+  .messages({
+    'object.xor': 'Must provide either postId or commentId, but not both',
+  });
 
 export const likeQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),

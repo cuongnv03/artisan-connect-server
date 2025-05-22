@@ -1,7 +1,7 @@
-import { PrismaClient, Like as PrismaLike, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { BasePrismaRepository } from '../../../shared/baseClasses/BasePrismaRepository';
 import { ILikeRepository } from './LikeRepository.interface';
-import { Like, LikeWithUser, LikePaginationResult, ReactionType } from '../models/Like';
+import { Like, LikeWithUser, LikePaginationResult } from '../models/Like';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 
@@ -12,42 +12,35 @@ export class LikeRepository extends BasePrismaRepository<Like, string> implement
     super(prisma, 'like');
   }
 
-  /**
-   * Create a like
-   */
-  async createLike(
-    userId: string,
-    data: { postId?: string; commentId?: string; reaction?: ReactionType },
-  ): Promise<Like> {
+  async createLike(userId: string, data: { postId?: string; commentId?: string }): Promise<Like> {
     try {
-      // Validate: must provide either postId or commentId but not both
+      // Validate input
       if ((!data.postId && !data.commentId) || (data.postId && data.commentId)) {
-        throw new AppError('Must provide either postId or commentId', 400, 'INVALID_LIKE');
+        throw new AppError(
+          'Must provide either postId or commentId, but not both',
+          400,
+          'INVALID_INPUT',
+        );
       }
 
-      // Check if user has already liked this post/comment
-      const existingLike = await this.getLike(userId, {
-        postId: data.postId,
-        commentId: data.commentId,
-      });
-
+      // Check if already liked
+      const existingLike = await this.getLike(userId, data);
       if (existingLike) {
         throw new AppError('Already liked this item', 409, 'ALREADY_LIKED');
       }
 
-      // Create like in transaction to update counter
+      // Create like and update counters in transaction
       const like = await this.prisma.$transaction(async (tx) => {
-        // Create like
         const like = await tx.like.create({
           data: {
             userId,
             postId: data.postId,
             commentId: data.commentId,
-            reaction: data.reaction || ReactionType.LIKE,
+            reaction: 'like', // Fixed value since we only have one type
           },
         });
 
-        // Update like count on post or comment
+        // Update like count
         if (data.postId) {
           await tx.post.update({
             where: { id: data.postId },
@@ -71,38 +64,37 @@ export class LikeRepository extends BasePrismaRepository<Like, string> implement
     }
   }
 
-  /**
-   * Delete a like
-   */
   async deleteLike(
     userId: string,
     data: { postId?: string; commentId?: string },
   ): Promise<boolean> {
     try {
-      // Validate: must provide either postId or commentId but not both
+      // Validate input
       if ((!data.postId && !data.commentId) || (data.postId && data.commentId)) {
-        throw new AppError('Must provide either postId or commentId', 400, 'INVALID_LIKE');
+        throw new AppError(
+          'Must provide either postId or commentId, but not both',
+          400,
+          'INVALID_INPUT',
+        );
       }
 
-      // Find the like
-      const where: Prisma.LikeWhereUniqueInput = {
-        userId_postId: data.postId ? { userId, postId: data.postId } : undefined,
-        userId_commentId: data.commentId ? { userId, commentId: data.commentId } : undefined,
-      };
+      // Find and delete like with counter update
+      const result = await this.prisma.$transaction(async (tx) => {
+        const like = await tx.like.findFirst({
+          where: {
+            userId,
+            postId: data.postId,
+            commentId: data.commentId,
+          },
+        });
 
-      // Delete in transaction to update counter
-      await this.prisma.$transaction(async (tx) => {
-        // Find the like first
-        const like = await tx.like.findUnique({ where });
+        if (!like) return false;
 
-        if (!like) {
-          throw new AppError('Like not found', 404, 'LIKE_NOT_FOUND');
-        }
+        await tx.like.delete({
+          where: { id: like.id },
+        });
 
-        // Delete the like
-        await tx.like.delete({ where });
-
-        // Update like count on post or comment
+        // Update like count
         if (data.postId) {
           await tx.post.update({
             where: { id: data.postId },
@@ -114,79 +106,57 @@ export class LikeRepository extends BasePrismaRepository<Like, string> implement
             data: { likeCount: { decrement: 1 } },
           });
         }
+
+        return true;
       });
 
-      return true;
+      return result;
     } catch (error) {
       this.logger.error(`Error deleting like: ${error}`);
       if (error instanceof AppError) throw error;
-      if ((error as any).code === 'P2025') {
-        // Record not found
-        return false;
-      }
-      throw new AppError('Failed to delete like', 500, 'DATABASE_ERROR');
+      return false;
     }
   }
 
-  /**
-   * Get like by user and post or comment
-   */
   async getLike(
     userId: string,
     data: { postId?: string; commentId?: string },
   ): Promise<Like | null> {
     try {
-      // Validate: must provide either postId or commentId but not both
-      if ((!data.postId && !data.commentId) || (data.postId && data.commentId)) {
-        throw new AppError('Must provide either postId or commentId', 400, 'INVALID_LIKE');
-      }
+      const like = await this.prisma.like.findFirst({
+        where: {
+          userId,
+          postId: data.postId,
+          commentId: data.commentId,
+        },
+      });
 
-      // Build where clause
-      const where: Prisma.LikeWhereUniqueInput = {
-        userId_postId: data.postId ? { userId, postId: data.postId } : undefined,
-        userId_commentId: data.commentId ? { userId, commentId: data.commentId } : undefined,
-      };
-
-      const like = await this.prisma.like.findUnique({ where });
       return like as Like | null;
     } catch (error) {
       this.logger.error(`Error getting like: ${error}`);
-      if (error instanceof AppError) throw error;
       return null;
     }
   }
 
-  /**
-   * Check if user has liked
-   */
   async hasLiked(userId: string, data: { postId?: string; commentId?: string }): Promise<boolean> {
     try {
       const like = await this.getLike(userId, data);
       return !!like;
     } catch (error) {
-      this.logger.error(`Error checking if liked: ${error}`);
       return false;
     }
   }
 
-  /**
-   * Get likes for a post
-   */
   async getPostLikes(
     postId: string,
     page: number = 1,
     limit: number = 10,
   ): Promise<LikePaginationResult> {
     try {
-      // Count total likes
       const total = await this.prisma.like.count({
         where: { postId },
       });
 
-      // Calculate total pages
-      const totalPages = Math.ceil(total / limit);
-
-      // Get likes with user info
       const likes = await this.prisma.like.findMany({
         where: { postId },
         include: {
@@ -211,7 +181,7 @@ export class LikeRepository extends BasePrismaRepository<Like, string> implement
           total,
           page,
           limit,
-          totalPages,
+          totalPages: Math.ceil(total / limit),
         },
       };
     } catch (error) {
@@ -220,24 +190,16 @@ export class LikeRepository extends BasePrismaRepository<Like, string> implement
     }
   }
 
-  /**
-   * Get likes for a comment
-   */
   async getCommentLikes(
     commentId: string,
     page: number = 1,
     limit: number = 10,
   ): Promise<LikePaginationResult> {
     try {
-      // Count total likes
       const total = await this.prisma.like.count({
         where: { commentId },
       });
 
-      // Calculate total pages
-      const totalPages = Math.ceil(total / limit);
-
-      // Get likes with user info
       const likes = await this.prisma.like.findMany({
         where: { commentId },
         include: {
@@ -262,7 +224,7 @@ export class LikeRepository extends BasePrismaRepository<Like, string> implement
           total,
           page,
           limit,
-          totalPages,
+          totalPages: Math.ceil(total / limit),
         },
       };
     } catch (error) {
@@ -271,25 +233,16 @@ export class LikeRepository extends BasePrismaRepository<Like, string> implement
     }
   }
 
-  /**
-   * Get likes count
-   */
   async getLikesCount(data: { postId?: string; commentId?: string }): Promise<number> {
     try {
-      // Validate: must provide either postId or commentId but not both
-      if ((!data.postId && !data.commentId) || (data.postId && data.commentId)) {
-        throw new AppError('Must provide either postId or commentId', 400, 'INVALID_LIKE');
-      }
-
-      // Build where clause
-      const where: Prisma.LikeWhereInput = data.postId
-        ? { postId: data.postId }
-        : { commentId: data.commentId };
-
-      return await this.prisma.like.count({ where });
+      return await this.prisma.like.count({
+        where: {
+          postId: data.postId,
+          commentId: data.commentId,
+        },
+      });
     } catch (error) {
       this.logger.error(`Error getting likes count: ${error}`);
-      if (error instanceof AppError) throw error;
       return 0;
     }
   }

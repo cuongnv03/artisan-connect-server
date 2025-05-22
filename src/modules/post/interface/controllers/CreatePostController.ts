@@ -17,6 +17,7 @@ export class CreatePostController extends BaseController {
       this.validateAuth(req);
 
       const post = await this.postService.createPost(req.user!.id, req.body);
+
       ApiResponse.created(res, post, 'Post created successfully');
     } catch (error) {
       next(error);

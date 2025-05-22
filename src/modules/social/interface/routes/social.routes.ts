@@ -1,41 +1,28 @@
 import { Router } from 'express';
 import { validate } from '../../../../shared/middlewares/validate.middleware';
 import { authenticate } from '../../../../shared/middlewares/auth.middleware';
-
-// Follow controllers
-import { FollowUserController } from '../controllers/FollowUserController';
-import { UnfollowUserController } from '../controllers/UnfollowUserController';
-import { GetFollowStatusController } from '../controllers/GetFollowStatusController';
-import { UpdateFollowNotificationController } from '../controllers/UpdateFollowNotificationController';
-import { GetFollowersController } from '../controllers/GetFollowersController';
-import { GetFollowingController } from '../controllers/GetFollowingController';
+import { validateIdParam } from '../../../../shared/middlewares/request-validation.middleware';
 
 // Like controllers
-import { ToggleLikeController } from '../controllers/ToggleLikeController';
-import { GetPostLikesController } from '../controllers/GetPostLikesController';
-import { GetCommentLikesController } from '../controllers/GetCommentLikesController';
+import { ToggleLikeController } from '../controllers/like/ToggleLikeController';
+import { GetPostLikesController } from '../controllers/like/GetPostLikesController';
+import { GetCommentLikesController } from '../controllers/like/GetCommentLikesController';
 
 // Comment controllers
-import { CreateCommentController } from '../controllers/CreateCommentController';
-import { UpdateCommentController } from '../controllers/UpdateCommentController';
-import { DeleteCommentController } from '../controllers/DeleteCommentController';
-import { GetPostCommentsController } from '../controllers/GetPostCommentsController';
-import { GetCommentRepliesController } from '../controllers/GetCommentRepliesController';
+import { CreateCommentController } from '../controllers/comment/CreateCommentController';
+import { UpdateCommentController } from '../controllers/comment/UpdateCommentController';
+import { DeleteCommentController } from '../controllers/comment/DeleteCommentController';
+import { GetPostCommentsController } from '../controllers/comment/GetPostCommentsController';
+import { GetCommentRepliesController } from '../controllers/comment/GetCommentRepliesController';
 
-// Save posts controllers
-import { SavePostController } from '../controllers/SavePostController';
-import { UnsavePostController } from '../controllers/UnsavePostController';
-import { GetSavedPostsController } from '../controllers/GetSavedPostsController';
-import { ToggleSavePostController } from '../controllers/ToggleSavePostController';
-import { CheckSavedStatusController } from '../controllers/CheckSavedStatusController';
+// SavedPost controllers
+import { SavePostController } from '../controllers/savedPost/SavePostController';
+import { UnsavePostController } from '../controllers/savedPost/UnsavePostController';
+import { GetSavedPostsController } from '../controllers/savedPost/GetSavedPostsController';
+import { ToggleSavePostController } from '../controllers/savedPost/ToggleSavePostController';
+import { CheckSavedStatusController } from '../controllers/savedPost/CheckSavedStatusController';
 
 // Validators
-import {
-  followUserSchema,
-  updateNotificationSchema,
-  followQuerySchema,
-} from '../validators/follow.validator';
-
 import { likeToggleSchema, likeQuerySchema } from '../validators/like.validator';
 import {
   createCommentSchema,
@@ -46,75 +33,45 @@ import { savePostSchema, getSavedPostsQuerySchema } from '../validators/savedPos
 
 const router = Router();
 
-// Initialize Follow controllers
-const followUserController = new FollowUserController();
-const unfollowUserController = new UnfollowUserController();
-const getFollowStatusController = new GetFollowStatusController();
-const updateFollowNotificationController = new UpdateFollowNotificationController();
-const getFollowersController = new GetFollowersController();
-const getFollowingController = new GetFollowingController();
-
-// Initialize Like controllers
+// Initialize controllers
 const toggleLikeController = new ToggleLikeController();
 const getPostLikesController = new GetPostLikesController();
 const getCommentLikesController = new GetCommentLikesController();
 
-// Initialize Comment controllers
 const createCommentController = new CreateCommentController();
 const updateCommentController = new UpdateCommentController();
 const deleteCommentController = new DeleteCommentController();
 const getPostCommentsController = new GetPostCommentsController();
 const getCommentRepliesController = new GetCommentRepliesController();
 
-// Initialize Save Post controllers
 const savePostController = new SavePostController();
 const unsavePostController = new UnsavePostController();
 const getSavedPostsController = new GetSavedPostsController();
 const toggleSavePostController = new ToggleSavePostController();
 const checkSavedStatusController = new CheckSavedStatusController();
 
-// Follow routes
-router.post('/follow', authenticate, validate(followUserSchema), followUserController.execute);
-
-router.delete('/follow/:userId', authenticate, unfollowUserController.execute);
-
-router.get('/follow/:userId/status', authenticate, getFollowStatusController.execute);
-
-router.patch(
-  '/follow/:userId/notification',
-  authenticate,
-  validate(updateNotificationSchema),
-  updateFollowNotificationController.execute,
-);
-
-router.get(
-  '/users/:userId/followers',
-  validate(followQuerySchema, 'query'),
-  getFollowersController.execute,
-);
-
-router.get(
-  '/users/:userId/following',
-  validate(followQuerySchema, 'query'),
-  getFollowingController.execute,
-);
-
-// Like routes
+// === LIKE ROUTES ===
+// Toggle like (post or comment)
 router.post('/like', authenticate, validate(likeToggleSchema), toggleLikeController.execute);
 
+// Get post likes
 router.get(
   '/posts/:postId/likes',
+  validateIdParam('postId'),
   validate(likeQuerySchema, 'query'),
   getPostLikesController.execute,
 );
 
+// Get comment likes
 router.get(
   '/comments/:commentId/likes',
+  validateIdParam('commentId'),
   validate(likeQuerySchema, 'query'),
   getCommentLikesController.execute,
 );
 
-// Comment routes
+// === COMMENT ROUTES ===
+// Create comment
 router.post(
   '/comments',
   authenticate,
@@ -122,37 +79,68 @@ router.post(
   createCommentController.execute,
 );
 
+// Update comment
 router.patch(
   '/comments/:id',
   authenticate,
+  validateIdParam(),
   validate(updateCommentSchema),
   updateCommentController.execute,
 );
 
-router.delete('/comments/:id', authenticate, deleteCommentController.execute);
+// Delete comment
+router.delete('/comments/:id', authenticate, validateIdParam(), deleteCommentController.execute);
 
+// Get post comments
 router.get(
   '/posts/:postId/comments',
+  validateIdParam('postId'),
   validate(commentQuerySchema, 'query'),
   getPostCommentsController.execute,
 );
 
+// Get comment replies
 router.get(
   '/comments/:commentId/replies',
+  validateIdParam('commentId'),
   validate(commentQuerySchema, 'query'),
   getCommentRepliesController.execute,
 );
 
-// Save Post routes
-router.post('/', authenticate, validate(savePostSchema), savePostController.execute);
-router.delete('/:postId', authenticate, unsavePostController.execute);
-router.post('/toggle', authenticate, validate(savePostSchema), toggleSavePostController.execute);
+// === SAVED POSTS ROUTES ===
+// Save post
+router.post('/saved-posts', authenticate, validate(savePostSchema), savePostController.execute);
+
+// Unsave post
+router.delete(
+  '/saved-posts/:postId',
+  authenticate,
+  validateIdParam('postId'),
+  unsavePostController.execute,
+);
+
+// Toggle save post
+router.post(
+  '/saved-posts/toggle',
+  authenticate,
+  validate(savePostSchema),
+  toggleSavePostController.execute,
+);
+
+// Get saved posts
 router.get(
-  '/',
+  '/saved-posts',
   authenticate,
   validate(getSavedPostsQuerySchema, 'query'),
   getSavedPostsController.execute,
 );
-router.get('/check/:postId', authenticate, checkSavedStatusController.execute);
+
+// Check saved status
+router.get(
+  '/saved-posts/check/:postId',
+  authenticate,
+  validateIdParam('postId'),
+  checkSavedStatusController.execute,
+);
 
 export default router;

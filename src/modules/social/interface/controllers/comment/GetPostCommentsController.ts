@@ -1,9 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { BaseController } from '../../../../shared/baseClasses/BaseController';
-import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { ICommentService } from '../../services/CommentService.interface';
-import { AppError } from '../../../../core/errors/AppError';
-import container from '../../../../core/di/container';
+import { BaseController } from '../../../../../shared/baseClasses/BaseController';
+import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
+import { ICommentService } from '../../../services/CommentService.interface';
+import container from '../../../../../core/di/container';
 
 export class GetPostCommentsController extends BaseController {
   private commentService: ICommentService;
@@ -16,7 +15,7 @@ export class GetPostCommentsController extends BaseController {
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { postId } = req.params;
-      const { parentId, page, limit, includeReplies } = req.query;
+      const { parentId, page, limit, includeReplies, sortBy, sortOrder } = req.query;
 
       const comments = await this.commentService.getPostComments(
         postId,
@@ -26,6 +25,8 @@ export class GetPostCommentsController extends BaseController {
           limit: parseInt(limit as string) || 10,
           includeReplies: includeReplies === 'true',
           includeLikeStatus: !!req.user,
+          sortBy: (sortBy as any) || 'createdAt',
+          sortOrder: (sortOrder as any) || 'desc',
         },
         req.user?.id,
       );

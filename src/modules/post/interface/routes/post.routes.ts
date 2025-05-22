@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { validate } from '../../../../shared/middlewares/validate.middleware';
 import { authenticate } from '../../../../shared/middlewares/auth.middleware';
+import { validateIdParam } from '../../../../shared/middlewares/request-validation.middleware';
 
 // Controllers
 import { CreatePostController } from '../controllers/CreatePostController';
@@ -36,34 +37,52 @@ const getPostsController = new GetPostsController();
 const getMyPostsController = new GetMyPostsController();
 const getFollowedPostsController = new GetFollowedPostsController();
 
-// Public routes
+// === PUBLIC ROUTES ===
+// Get posts (public with optional filtering)
 router.get('/', validate(getPostsQuerySchema, 'query'), getPostsController.execute);
-router.get('/slug/:slug', getPostBySlugController.execute);
-router.get('/:id', getPostController.execute);
 
-// Protected routes - require authentication
+// Get post by slug (public)
+router.get('/slug/:slug', getPostBySlugController.execute);
+
+// Get post by ID (public)
+router.get('/:id', validateIdParam(), getPostController.execute);
+
+// === PROTECTED ROUTES ===
+// Create post
 router.post('/', authenticate, validate(createPostSchema), createPostController.execute);
 
-router.patch('/:id', authenticate, validate(updatePostSchema), updatePostController.execute);
-
-router.delete('/:id', authenticate, deletePostController.execute);
-
-router.post('/:id/publish', authenticate, publishPostController.execute);
-
-router.post('/:id/archive', authenticate, archivePostController.execute);
-
-router.get(
-  '/feed/followed',
+// Update post
+router.patch(
+  '/:id',
   authenticate,
-  validate(getPostsQuerySchema, 'query'),
-  getFollowedPostsController.execute,
+  validateIdParam(),
+  validate(updatePostSchema),
+  updatePostController.execute,
 );
 
+// Delete post
+router.delete('/:id', authenticate, validateIdParam(), deletePostController.execute);
+
+// Publish post
+router.post('/:id/publish', authenticate, validateIdParam(), publishPostController.execute);
+
+// Archive post
+router.post('/:id/archive', authenticate, validateIdParam(), archivePostController.execute);
+
+// Get my posts
 router.get(
   '/user/me',
   authenticate,
   validate(getMyPostsQuerySchema, 'query'),
   getMyPostsController.execute,
+);
+
+// Get followed posts (feed)
+router.get(
+  '/feed/followed',
+  authenticate,
+  validate(getPostsQuerySchema, 'query'),
+  getFollowedPostsController.execute,
 );
 
 export default router;

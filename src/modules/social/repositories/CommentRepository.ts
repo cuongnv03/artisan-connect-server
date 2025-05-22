@@ -1,4 +1,4 @@
-import { PrismaClient, Comment as PrismaComment, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { BasePrismaRepository } from '../../../shared/baseClasses/BasePrismaRepository';
 import { ICommentRepository } from './CommentRepository.interface';
 import {
@@ -22,13 +22,10 @@ export class CommentRepository
     super(prisma, 'comment');
   }
 
-  /**
-   * Find comment by ID with user details
-   */
   async findByIdWithUser(id: string, requestUserId?: string): Promise<CommentWithUser | null> {
     try {
       const comment = await this.prisma.comment.findUnique({
-        where: { id },
+        where: { id, deletedAt: null },
         include: {
           user: {
             select: {
@@ -39,12 +36,9 @@ export class CommentRepository
               avatarUrl: true,
             },
           },
-          // Include like status if requestUserId is provided
           likes: requestUserId
             ? {
-                where: {
-                  userId: requestUserId,
-                },
+                where: { userId: requestUserId },
               }
             : undefined,
         },
@@ -52,32 +46,18 @@ export class CommentRepository
 
       if (!comment) return null;
 
-      // Transform to include like status
-      const commentWithUser: CommentWithUser = {
-        ...comment,
-        liked: requestUserId ? comment.likes?.length > 0 : undefined,
-      };
-
-      // Remove prisma relation
-      if (requestUserId) {
-        delete (commentWithUser as any).likes;
-      }
-
-      return commentWithUser;
+      return this.transformCommentWithUser(comment, requestUserId);
     } catch (error) {
       this.logger.error(`Error finding comment by ID: ${error}`);
       return null;
     }
   }
 
-  /**
-   * Create a comment
-   */
   async createComment(userId: string, data: CreateCommentDto): Promise<CommentWithUser> {
     try {
-      // Validate: Check if post exists
+      // Validate post exists
       const post = await this.prisma.post.findUnique({
-        where: { id: data.postId },
+        where: { id: data.postId, deletedAt: null },
         select: { id: true },
       });
 
@@ -85,10 +65,10 @@ export class CommentRepository
         throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
       }
 
-      // If parentId is provided, validate parent comment
+      // If parentId provided, validate parent comment
       if (data.parentId) {
         const parentComment = await this.prisma.comment.findUnique({
-          where: { id: data.parentId },
+          where: { id: data.parentId, deletedAt: null },
           select: { id: true, postId: true },
         });
 
@@ -96,15 +76,13 @@ export class CommentRepository
           throw new AppError('Parent comment not found', 404, 'COMMENT_NOT_FOUND');
         }
 
-        // Ensure parent comment belongs to the same post
         if (parentComment.postId !== data.postId) {
           throw new AppError('Parent comment does not belong to this post', 400, 'INVALID_PARENT');
         }
       }
 
-      // Create comment in transaction to update counters
+      // Create comment and update counters
       const comment = await this.prisma.$transaction(async (tx) => {
-        // Create the comment
         const comment = await tx.comment.create({
           data: {
             userId,
@@ -135,7 +113,7 @@ export class CommentRepository
           data: { commentCount: { increment: 1 } },
         });
 
-        // If this is a reply, update parent comment's reply count
+        // If reply, update parent comment reply count
         if (data.parentId) {
           await tx.comment.update({
             where: { id: data.parentId },
@@ -146,7 +124,7 @@ export class CommentRepository
         return comment;
       });
 
-      return comment as unknown as CommentWithUser;
+      return this.transformCommentWithUser(comment, userId);
     } catch (error) {
       this.logger.error(`Error creating comment: ${error}`);
       if (error instanceof AppError) throw error;
@@ -154,18 +132,15 @@ export class CommentRepository
     }
   }
 
-  /**
-   * Update a comment
-   */
   async updateComment(
     id: string,
     userId: string,
     data: UpdateCommentDto,
   ): Promise<CommentWithUser> {
     try {
-      // Check if comment exists and belongs to user
+      // Check ownership
       const comment = await this.prisma.comment.findUnique({
-        where: { id },
+        where: { id, deletedAt: null },
         select: { userId: true },
       });
 
@@ -177,7 +152,6 @@ export class CommentRepository
         throw new AppError('You can only update your own comments', 403, 'FORBIDDEN');
       }
 
-      // Update comment
       const updatedComment = await this.prisma.comment.update({
         where: { id },
         data: {
@@ -198,7 +172,7 @@ export class CommentRepository
         },
       });
 
-      return updatedComment as unknown as CommentWithUser;
+      return this.transformCommentWithUser(updatedComment, userId);
     } catch (error) {
       this.logger.error(`Error updating comment: ${error}`);
       if (error instanceof AppError) throw error;
@@ -206,14 +180,11 @@ export class CommentRepository
     }
   }
 
-  /**
-   * Delete a comment (soft delete)
-   */
   async deleteComment(id: string, userId: string): Promise<boolean> {
     try {
-      // Check if comment exists
+      // Get comment info
       const comment = await this.prisma.comment.findUnique({
-        where: { id },
+        where: { id, deletedAt: null },
         select: { userId: true, postId: true, parentId: true },
       });
 
@@ -221,9 +192,8 @@ export class CommentRepository
         throw new AppError('Comment not found', 404, 'COMMENT_NOT_FOUND');
       }
 
-      // Check if user owns comment
+      // Check ownership or post ownership
       if (comment.userId !== userId) {
-        // Check if user is post owner
         const post = await this.prisma.post.findUnique({
           where: { id: comment.postId },
           select: { userId: true },
@@ -238,13 +208,12 @@ export class CommentRepository
         }
       }
 
-      // Delete in transaction to update counters
+      // Soft delete and update counters
       await this.prisma.$transaction(async (tx) => {
-        // Soft delete the comment
         await tx.comment.update({
           where: { id },
           data: {
-            content: '[Deleted comment]',
+            content: '[Comment deleted]',
             mediaUrl: null,
             deletedAt: new Date(),
           },
@@ -256,7 +225,7 @@ export class CommentRepository
           data: { commentCount: { decrement: 1 } },
         });
 
-        // If this is a reply, update parent comment's reply count
+        // If reply, update parent reply count
         if (comment.parentId) {
           await tx.comment.update({
             where: { id: comment.parentId },
@@ -273,9 +242,6 @@ export class CommentRepository
     }
   }
 
-  /**
-   * Get comments
-   */
   async getComments(
     options: CommentQueryOptions,
     requestUserId?: string,
@@ -284,37 +250,25 @@ export class CommentRepository
       const {
         postId,
         userId,
-        parentId = null, // Null means get top-level comments only
+        parentId = null,
         page = 1,
         limit = 10,
         includeLikeStatus = false,
         includeReplies = false,
-        includeDeletedParent = false,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
       } = options;
 
-      // Build where clause
       const where: Prisma.CommentWhereInput = {
-        deletedAt: null, // Don't include deleted comments
+        deletedAt: null,
       };
 
-      if (postId) {
-        where.postId = postId;
-      }
-
-      if (userId) {
-        where.userId = userId;
-      }
-
-      // Only get replies or top-level comments
+      if (postId) where.postId = postId;
+      if (userId) where.userId = userId;
       where.parentId = parentId;
 
-      // Count total matching comments
       const total = await this.prisma.comment.count({ where });
 
-      // Calculate total pages
-      const totalPages = Math.ceil(total / limit);
-
-      // Get comments
       const comments = await this.prisma.comment.findMany({
         where,
         include: {
@@ -330,21 +284,14 @@ export class CommentRepository
           likes:
             includeLikeStatus && requestUserId
               ? {
-                  where: {
-                    userId: requestUserId,
-                  },
+                  where: { userId: requestUserId },
                 }
               : undefined,
-          // Optionally include replies
           replies: includeReplies
             ? {
-                where: {
-                  deletedAt: null,
-                },
-                take: 2, // Only get a few replies by default
-                orderBy: {
-                  createdAt: 'desc',
-                },
+                where: { deletedAt: null },
+                take: 3,
+                orderBy: { createdAt: 'asc' },
                 include: {
                   user: {
                     select: {
@@ -358,60 +305,27 @@ export class CommentRepository
                   likes:
                     includeLikeStatus && requestUserId
                       ? {
-                          where: {
-                            userId: requestUserId,
-                          },
+                          where: { userId: requestUserId },
                         }
                       : undefined,
                 },
               }
             : undefined,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
       });
 
-      // Transform comments
-      const transformedComments = comments.map((comment) => {
-        // Add like status if requested
-        const commentWithUser: CommentWithUser = {
-          ...comment,
-          liked: includeLikeStatus && requestUserId ? comment.likes?.length > 0 : undefined,
-        };
-
-        // Transform replies if included
-        if (includeReplies && comment.replies) {
-          commentWithUser.replies = comment.replies.map((reply) => {
-            return {
-              ...reply,
-              liked: includeLikeStatus && requestUserId ? reply.likes?.length > 0 : undefined,
-            };
-          });
-
-          // Remove Prisma relations from replies
-          if (includeLikeStatus && requestUserId) {
-            commentWithUser.replies.forEach((reply) => {
-              delete (reply as any).likes;
-            });
-          }
-        }
-
-        // Remove Prisma relations
-        if (includeLikeStatus && requestUserId) {
-          delete (commentWithUser as any).likes;
-        }
-
-        return commentWithUser;
-      });
-
       return {
-        data: transformedComments,
+        data: comments.map((comment) =>
+          this.transformCommentWithUser(comment, requestUserId, includeReplies),
+        ),
         meta: {
           total,
           page,
           limit,
-          totalPages,
+          totalPages: Math.ceil(total / limit),
         },
       };
     } catch (error) {
@@ -420,16 +334,13 @@ export class CommentRepository
     }
   }
 
-  /**
-   * Get comment replies
-   */
   async getCommentReplies(
     commentId: string,
     options: Omit<CommentQueryOptions, 'postId' | 'parentId'> = {},
     requestUserId?: string,
   ): Promise<CommentPaginationResult> {
     try {
-      // Get parent comment first to get postId
+      // Get parent comment to get postId
       const parentComment = await this.prisma.comment.findUnique({
         where: { id: commentId },
         select: { postId: true },
@@ -439,12 +350,10 @@ export class CommentRepository
         throw new AppError('Parent comment not found', 404, 'COMMENT_NOT_FOUND');
       }
 
-      // Set up options for getting replies
       const repliesOptions: CommentQueryOptions = {
         ...options,
         postId: parentComment.postId,
         parentId: commentId,
-        includeLikeStatus: options.includeLikeStatus || false,
       };
 
       return this.getComments(repliesOptions, requestUserId);
@@ -455,39 +364,6 @@ export class CommentRepository
     }
   }
 
-  /**
-   * Increment comment reply count
-   */
-  async incrementReplyCount(commentId: string): Promise<void> {
-    try {
-      await this.prisma.comment.update({
-        where: { id: commentId },
-        data: { replyCount: { increment: 1 } },
-      });
-    } catch (error) {
-      this.logger.error(`Error incrementing reply count: ${error}`);
-      // Don't throw for counter updates
-    }
-  }
-
-  /**
-   * Decrement comment reply count
-   */
-  async decrementReplyCount(commentId: string): Promise<void> {
-    try {
-      await this.prisma.comment.update({
-        where: { id: commentId },
-        data: { replyCount: { decrement: 1 } },
-      });
-    } catch (error) {
-      this.logger.error(`Error decrementing reply count: ${error}`);
-      // Don't throw for counter updates
-    }
-  }
-
-  /**
-   * Check if comment belongs to user
-   */
   async isCommentOwner(id: string, userId: string): Promise<boolean> {
     try {
       const comment = await this.prisma.comment.findUnique({
@@ -497,8 +373,30 @@ export class CommentRepository
 
       return !!comment && comment.userId === userId;
     } catch (error) {
-      this.logger.error(`Error checking comment ownership: ${error}`);
       return false;
     }
+  }
+
+  private transformCommentWithUser(
+    comment: any,
+    requestUserId?: string,
+    includeReplies: boolean = false,
+  ): CommentWithUser {
+    const { likes, replies, ...commentData } = comment;
+
+    const result: CommentWithUser = {
+      ...commentData,
+      isLiked: requestUserId ? likes?.length > 0 : undefined,
+      canEdit: requestUserId ? commentData.userId === requestUserId : false,
+      canDelete: requestUserId ? commentData.userId === requestUserId : false,
+    };
+
+    if (includeReplies && replies) {
+      result.replies = replies.map((reply: any) =>
+        this.transformCommentWithUser(reply, requestUserId),
+      );
+    }
+
+    return result;
   }
 }

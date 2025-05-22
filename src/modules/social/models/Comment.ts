@@ -1,71 +1,56 @@
-/**
- * Comment entity
- */
 export interface Comment {
   id: string;
   postId: string;
   userId: string;
-  parentId?: string | null;
+  parentId?: string;
   content: string;
-  mediaUrl?: string | null;
+  mediaUrl?: string;
   likeCount: number;
   replyCount: number;
   isEdited: boolean;
   createdAt: Date;
   updatedAt: Date;
-  deletedAt?: Date | null;
+  deletedAt?: Date;
 }
 
-/**
- * Comment with user details
- */
 export interface CommentWithUser extends Comment {
   user: {
     id: string;
     firstName: string;
     lastName: string;
     username: string;
-    avatarUrl?: string | null;
+    avatarUrl?: string;
   };
-  liked?: boolean; // If the requesting user has liked this comment
-  replies?: CommentWithUser[]; // For nested comments, optional
+  isLiked?: boolean;
+  replies?: CommentWithUser[];
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
-/**
- * Create comment DTO
- */
 export interface CreateCommentDto {
   postId: string;
-  parentId?: string | null;
+  parentId?: string;
   content: string;
-  mediaUrl?: string | null;
+  mediaUrl?: string;
 }
 
-/**
- * Update comment DTO
- */
 export interface UpdateCommentDto {
   content?: string;
-  mediaUrl?: string | null;
+  mediaUrl?: string;
 }
 
-/**
- * Comment query options
- */
 export interface CommentQueryOptions {
   postId?: string;
   userId?: string;
-  parentId?: string | null; // Null means top-level comments only
+  parentId?: string | null;
   page?: number;
   limit?: number;
   includeLikeStatus?: boolean;
   includeReplies?: boolean;
-  includeDeletedParent?: boolean; // Include comments where parent was deleted
+  sortBy?: 'createdAt' | 'likeCount';
+  sortOrder?: 'asc' | 'desc';
 }
 
-/**
- * Comment pagination result
- */
 export interface CommentPaginationResult {
   data: CommentWithUser[];
   meta: {

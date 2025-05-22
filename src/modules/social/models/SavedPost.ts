@@ -1,6 +1,3 @@
-/**
- * SavedPost entity
- */
 export interface SavedPost {
   id: string;
   userId: string;
@@ -8,16 +5,13 @@ export interface SavedPost {
   createdAt: Date;
 }
 
-/**
- * SavedPost with post details
- */
 export interface SavedPostWithDetails extends SavedPost {
   post: {
     id: string;
     title: string;
-    slug?: string | null;
-    summary?: string | null;
-    thumbnailUrl?: string | null;
+    slug?: string;
+    summary?: string;
+    thumbnailUrl?: string;
     type: string;
     createdAt: Date;
     user: {
@@ -25,25 +19,19 @@ export interface SavedPostWithDetails extends SavedPost {
       username: string;
       firstName: string;
       lastName: string;
-      avatarUrl?: string | null;
+      avatarUrl?: string;
       artisanProfile?: {
         shopName: string;
         isVerified: boolean;
-      } | null;
+      };
     };
   };
 }
 
-/**
- * Save post DTO
- */
 export interface SavePostDto {
   postId: string;
 }
 
-/**
- * SavedPost pagination result
- */
 export interface SavedPostPaginationResult {
   data: SavedPostWithDetails[];
   meta: {

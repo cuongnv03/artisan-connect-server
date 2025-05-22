@@ -24,12 +24,13 @@ export const registerRoutes = (app: Express) => {
   try {
     // API routes với prefix
     app.use(`${apiPrefix}/auth`, authRoutes);
+    app.use(`${apiPrefix}/config`, systemConfigRoutes);
     app.use(`${apiPrefix}/users`, userRoutes);
     app.use(`${apiPrefix}/artisans`, artisanRoutes);
-    app.use(`${apiPrefix}/config`, systemConfigRoutes);
+
     app.use(`${apiPrefix}/posts`, postRoutes);
     app.use(`${apiPrefix}/social`, socialRoutes);
-    app.use(`${apiPrefix}/saved-posts`, socialRoutes);
+
     app.use(`${apiPrefix}/analytics`, analyticsRoutes);
     app.use(`${apiPrefix}/products`, productRoutes);
     app.use(`${apiPrefix}/categories`, categoryRoutes);
@@ -49,18 +50,18 @@ export const registerRoutes = (app: Express) => {
           auth: `${apiPrefix}/auth`,
           users: `${apiPrefix}/users`,
           artisans: `${apiPrefix}/artisans`,
-          // posts: `${apiPrefix}/posts`,
-          // products: `${apiPrefix}/products`,
-          // orders: `${apiPrefix}/orders`,
-          // cart: `${apiPrefix}/cart`,
-          // messages: `${apiPrefix}/messages`,
-          // notifications: `${apiPrefix}/notifications`,
+          posts: `${apiPrefix}/posts`,
+          social: `${apiPrefix}/social`,
+          products: `${apiPrefix}/products`,
+          orders: `${apiPrefix}/orders`,
+          cart: `${apiPrefix}/cart`,
+          analytics: `${apiPrefix}/analytics`,
         },
         documentation: `${apiPrefix}/docs`,
       });
     });
 
-    logger.info('Routes registered');
+    logger.info('Routes registered successfully');
   } catch (error) {
     logger.error(`Error registering routes: ${error}`);
     throw error;
