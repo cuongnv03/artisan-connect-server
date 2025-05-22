@@ -1,49 +1,38 @@
 import {
   Category,
   CategoryWithChildren,
+  CategoryWithParent,
+  CategoryTreeNode,
   CreateCategoryDto,
   UpdateCategoryDto,
   CategoryQueryOptions,
+  CategoryProductsResult,
 } from '../models/Category';
-import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface ICategoryService {
-  /**
-   * Create a new category
-   */
+  // Category CRUD
   createCategory(data: CreateCategoryDto): Promise<Category>;
-
-  /**
-   * Update a category
-   */
   updateCategory(id: string, data: UpdateCategoryDto): Promise<Category>;
-
-  /**
-   * Delete a category
-   */
+  getCategoryById(id: string, options?: CategoryQueryOptions): Promise<Category | null>;
+  getCategoryBySlug(slug: string, options?: CategoryQueryOptions): Promise<Category | null>;
   deleteCategory(id: string): Promise<boolean>;
 
-  /**
-   * Get category by ID
-   */
-  getCategoryById(id: string, options?: CategoryQueryOptions): Promise<Category | null>;
-
-  /**
-   * Get all categories
-   */
+  // Category queries
   getAllCategories(options?: CategoryQueryOptions): Promise<Category[]>;
+  getCategoryTree(): Promise<CategoryTreeNode[]>;
+  getRootCategories(options?: CategoryQueryOptions): Promise<CategoryWithChildren[]>;
+  getChildCategories(parentId: string, options?: CategoryQueryOptions): Promise<Category[]>;
+  getCategoryPath(categoryId: string): Promise<Category[]>;
 
-  /**
-   * Get category tree
-   */
-  getCategoryTree(): Promise<CategoryWithChildren[]>;
+  // Category-Product relationships
+  getProductsByCategory(categoryId: string, options?: any): Promise<CategoryProductsResult>;
+  getCategoriesWithProductCount(): Promise<CategoryWithChildren[]>;
 
-  /**
-   * Get products by category
-   */
-  getProductsByCategory(
-    categoryId: string,
-    page?: number,
-    limit?: number,
-  ): Promise<PaginatedResult<any>>;
+  // Category management
+  reorderCategories(categoryOrders: Array<{ id: string; sortOrder: number }>): Promise<boolean>;
+  moveCategory(categoryId: string, newParentId: string | null): Promise<Category>;
+  mergeCategoriesProducts(fromCategoryId: string, toCategoryId: string): Promise<boolean>;
+
+  // Validation
+  checkCategoryName(name: string, excludeId?: string): Promise<boolean>;
 }

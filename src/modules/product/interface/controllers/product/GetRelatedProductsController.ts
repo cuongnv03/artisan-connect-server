@@ -2,13 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
 import { IProductService } from '../../../services/ProductService.interface';
-import { AppError } from '../../../../../core/errors/AppError';
 import container from '../../../../../core/di/container';
-import { Logger } from '../../../../../core/logging/Logger';
 
-export class GetProductController extends BaseController {
+export class GetRelatedProductsController extends BaseController {
   private productService: IProductService;
-  private logger = Logger.getInstance();
 
   constructor() {
     super();
@@ -18,18 +15,11 @@ export class GetProductController extends BaseController {
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
-      const product = await this.productService.getProductById(id, req.user?.id);
+      const limit = parseInt(req.query.limit as string) || 5;
 
-      if (!product) {
-        throw AppError.notFound('Product not found');
-      }
+      const products = await this.productService.getRelatedProducts(id, limit);
 
-      // Increment view count asynchronously
-      this.productService.viewProduct(id, req.user?.id).catch((err) => {
-        this.logger.error(`Failed to increment view count: ${err}`);
-      });
-
-      ApiResponse.success(res, product, 'Product retrieved successfully');
+      ApiResponse.success(res, products, 'Related products retrieved successfully');
     } catch (error) {
       next(error);
     }

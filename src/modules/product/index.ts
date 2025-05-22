@@ -27,6 +27,6 @@ export function registerProductModule() {
 
   return {
     name: 'product',
-    description: 'Product and category management module',
+    description: 'Product and category management module with inventory tracking',
   };
 }

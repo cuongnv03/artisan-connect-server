@@ -1,6 +1,5 @@
-/**
- * Category entity
- */
+import { ProductPaginationResult } from './Product';
+
 export interface Category {
   id: string;
   name: string;
@@ -10,49 +9,54 @@ export interface Category {
   parentId?: string | null;
   level: number;
   sortOrder: number;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/**
- * Category with children
- */
 export interface CategoryWithChildren extends Category {
   children: CategoryWithChildren[];
+  productCount?: number;
 }
 
-/**
- * Category with parent
- */
 export interface CategoryWithParent extends Category {
   parent?: Category | null;
+  productCount?: number;
 }
 
-/**
- * Category creation attributes
- */
+export interface CategoryTreeNode extends Category {
+  children: CategoryTreeNode[];
+  productCount: number;
+  depth: number;
+}
+
 export interface CreateCategoryDto {
   name: string;
   description?: string;
   imageUrl?: string;
   parentId?: string | null;
+  sortOrder?: number;
 }
 
-/**
- * Category update attributes
- */
 export interface UpdateCategoryDto {
   name?: string;
   description?: string | null;
   imageUrl?: string | null;
   parentId?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
 }
 
-/**
- * Category query options
- */
 export interface CategoryQueryOptions {
-  includeStat?: boolean;
   includeChildren?: boolean;
   includeParent?: boolean;
+  includeProductCount?: boolean;
+  includeInactive?: boolean;
+  level?: number;
+  parentId?: string | null;
+}
+
+export interface CategoryProductsResult {
+  category: CategoryWithParent;
+  products: ProductPaginationResult;
 }

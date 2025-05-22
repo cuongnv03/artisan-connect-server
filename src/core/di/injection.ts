@@ -38,9 +38,9 @@ import { LikeRepository } from '../../modules/social/repositories/LikeRepository
 import { CommentRepository } from '../../modules/social/repositories/CommentRepository';
 import { SavedPostRepository } from '../../modules/social/repositories/SavedPostRepository';
 
-// Other repositories (for future modules)
 import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
 import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
+
 import { QuoteRepository } from '../../modules/quote/repositories/QuoteRepository';
 import { OrderRepository } from '../../modules/order/repositories/OrderRepository';
 import { CartRepository } from '../../modules/cart/repositories/CartRepository';
@@ -69,9 +69,9 @@ container.register('likeRepository', new LikeRepository(prisma));
 container.register('commentRepository', new CommentRepository(prisma));
 container.register('savedPostRepository', new SavedPostRepository(prisma));
 
-// Other repositories (placeholder)
 container.register('productRepository', new ProductRepository(prisma));
 container.register('categoryRepository', new CategoryRepository(prisma));
+
 container.register('cartRepository', new CartRepository(prisma));
 container.register('quoteRepository', new QuoteRepository(prisma));
 container.register('orderRepository', new OrderRepository(prisma));
@@ -93,9 +93,9 @@ import { LikeService } from '../../modules/social/services/LikeService';
 import { CommentService } from '../../modules/social/services/CommentService';
 import { SavedPostService } from '../../modules/social/services/SavedPostService';
 
-// Other services (placeholder)
 import { ProductService } from '../../modules/product/services/ProductService';
 import { CategoryService } from '../../modules/product/services/CategoryService';
+
 import { QuoteService } from '../../modules/quote/services/QuoteService';
 import { OrderService } from '../../modules/order/services/OrderService';
 import { CartService } from '../../modules/cart/services/CartService';
@@ -117,9 +117,9 @@ container.register('likeService', new LikeService());
 container.register('commentService', new CommentService());
 container.register('savedPostService', new SavedPostService());
 
-// Other services (placeholder)
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
+
 container.register('cartService', new CartService());
 container.register('quoteService', new QuoteService());
 container.register('orderService', new OrderService());

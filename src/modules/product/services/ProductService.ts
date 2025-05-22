@@ -1,142 +1,99 @@
-import { BaseService } from '../../../shared/baseClasses/BaseService';
 import { IProductService } from './ProductService.interface';
 import {
   Product,
+  ProductWithSeller,
   ProductWithDetails,
   CreateProductDto,
   UpdateProductDto,
   PriceUpdateDto,
   ProductQueryOptions,
+  ProductPaginationResult,
+  PriceHistory,
+  ProductStockUpdate,
+  ProductInventoryCheck,
 } from '../models/Product';
 import { IProductRepository } from '../repositories/ProductRepository.interface';
 import { ICategoryRepository } from '../repositories/CategoryRepository.interface';
+import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { CloudinaryService } from '../../../core/infrastructure/storage/CloudinaryService';
 import { AppError } from '../../../core/errors/AppError';
-import { withErrorHandling } from '../../../shared/utils/ErrorHandling';
-import { Validators } from '../../../shared/utils/Validators';
-import { PaginationUtils } from '../../../shared/utils/PaginationUtils';
+import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 import container from '../../../core/di/container';
 
-export class ProductService extends BaseService implements IProductService {
+export class ProductService implements IProductService {
   private productRepository: IProductRepository;
   private categoryRepository: ICategoryRepository;
+  private userRepository: IUserRepository;
   private cloudinaryService: CloudinaryService;
+  private logger = Logger.getInstance();
 
   constructor() {
-    super([
-      { methodName: 'createProduct', errorMessage: 'Failed to create product' },
-      { methodName: 'updateProduct', errorMessage: 'Failed to update product' },
-      { methodName: 'deleteProduct', errorMessage: 'Failed to delete product' },
-      { methodName: 'getProductById', errorMessage: 'Failed to get product by ID' },
-      { methodName: 'getProducts', errorMessage: 'Failed to get products' },
-      { methodName: 'getPriceHistory', errorMessage: 'Failed to get price history' },
-      { methodName: 'updatePrice', errorMessage: 'Failed to update product price' },
-    ]);
     this.productRepository = container.resolve<IProductRepository>('productRepository');
     this.categoryRepository = container.resolve<ICategoryRepository>('categoryRepository');
+    this.userRepository = container.resolve<IUserRepository>('userRepository');
     this.cloudinaryService = container.resolve<CloudinaryService>('cloudinaryService');
   }
 
-  /**
-   * Create a new product
-   */
-  createProduct = withErrorHandling(
-    async (sellerId: string, data: CreateProductDto): Promise<ProductWithDetails> => {
-      Validators.validateNotEmpty(data.name, 'Product name');
-      Validators.validatePositiveNumber(data.price, 'Price');
-      Validators.validateNonEmptyArray(data.images, 'Product images');
+  async createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithDetails> {
+    try {
+      // Validate seller exists and is artisan
+      const seller = await this.userRepository.findById(sellerId);
+      if (!seller) {
+        throw new AppError('Seller not found', 404, 'SELLER_NOT_FOUND');
+      }
+
+      if (seller.role !== 'ARTISAN') {
+        throw new AppError('Only artisans can create products', 403, 'FORBIDDEN');
+      }
+
+      // Validate categories if provided
+      if (data.categories && data.categories.length > 0) {
+        const validCategories = await this.categoryRepository.validateCategories(data.categories);
+        if (!validCategories) {
+          throw new AppError('One or more categories are invalid', 400, 'INVALID_CATEGORIES');
+        }
+      }
+
+      // Validate product data
+      this.validateProductData(data);
 
       const product = await this.productRepository.createProduct(sellerId, data);
 
-      this.logger.info(`Product created: ${product.id} by seller: ${sellerId}`);
+      this.logger.info(`Product created: ${product.id} "${product.name}" by seller ${sellerId}`);
 
       return product;
-    },
-    'Failed to create product',
-    'PRODUCT_CREATION_ERROR',
-  );
-
-  /**
-   * Validate product data
-   */
-  private validateProductData(data: CreateProductDto): void {
-    // Validate name
-    if (!data.name || data.name.trim().length < 3) {
-      throw AppError.validationFailed('Product name must be at least 3 characters');
-    }
-
-    // Validate price
-    if (data.price <= 0) {
-      throw AppError.validationFailed('Price must be greater than 0');
-    }
-
-    // Validate discount price
-    if (data.discountPrice !== null && data.discountPrice !== undefined) {
-      if (data.discountPrice <= 0) {
-        throw AppError.validationFailed('Discount price must be greater than 0');
-      }
-      if (data.discountPrice >= data.price) {
-        throw AppError.validationFailed('Discount price must be less than regular price');
-      }
-    }
-
-    // Validate quantity
-    if (data.quantity < 0) {
-      throw AppError.validationFailed('Quantity cannot be negative');
-    }
-
-    // Validate images
-    if (!data.images || data.images.length === 0) {
-      throw AppError.validationFailed('At least one product image is required');
+    } catch (error) {
+      this.logger.error(`Error creating product: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to create product', 500, 'SERVICE_ERROR');
     }
   }
 
-  /**
-   * Validate categories
-   */
-  private async validateCategories(categoryIds?: string[]): Promise<void> {
-    if (!categoryIds || categoryIds.length === 0) {
-      return;
-    }
-
-    // Check if all categories exist
-    const categoryCount = await this.productRepository.countCategoriesByIds(categoryIds);
-    if (categoryCount !== categoryIds.length) {
-      throw AppError.validationFailed('One or more categories not found', 'INVALID_CATEGORIES');
-    }
-  }
-
-  /**
-   * Update a product
-   */
   async updateProduct(
     id: string,
     sellerId: string,
     data: UpdateProductDto,
   ): Promise<ProductWithDetails> {
     try {
-      // Get current product to handle image deletion if needed
-      const currentProduct = await this.productRepository.findByIdWithDetails(id);
-
-      if (!currentProduct) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+      // Validate categories if provided
+      if (data.categories && data.categories.length > 0) {
+        const validCategories = await this.categoryRepository.validateCategories(data.categories);
+        if (!validCategories) {
+          throw new AppError('One or more categories are invalid', 400, 'INVALID_CATEGORIES');
+        }
       }
 
-      if (currentProduct.sellerId !== sellerId) {
-        throw new AppError('You can only update your own products', 403, 'FORBIDDEN');
+      // Validate updated data
+      if (data.name || data.price || data.quantity !== undefined) {
+        this.validateProductUpdateData(data);
       }
 
-      // Handle image replacement if needed
-      if (data.images && currentProduct.images) {
-        await this.handleImageReplacement(currentProduct.images, data.images);
-      }
+      const product = await this.productRepository.updateProduct(id, sellerId, data);
 
-      const updatedProduct = await this.productRepository.updateProduct(id, sellerId, data);
+      this.logger.info(`Product updated: ${id} by seller ${sellerId}`);
 
-      this.logger.info(`Product updated: ${id} by seller: ${sellerId}`);
-
-      return updatedProduct;
+      return product;
     } catch (error) {
       this.logger.error(`Error updating product: ${error}`);
       if (error instanceof AppError) throw error;
@@ -144,37 +101,30 @@ export class ProductService extends BaseService implements IProductService {
     }
   }
 
-  /**
-   * Update product price
-   */
-  async updatePrice(
-    id: string,
-    sellerId: string,
-    data: PriceUpdateDto,
-  ): Promise<ProductWithDetails> {
+  async getProductById(id: string, requestUserId?: string): Promise<ProductWithDetails | null> {
     try {
-      const updatedProduct = await this.productRepository.updatePrice(id, sellerId, data);
-
-      this.logger.info(`Product price updated to ${data.price}: ${id} by seller: ${sellerId}`);
-
-      return updatedProduct;
+      return await this.productRepository.findByIdWithDetails(id, requestUserId);
     } catch (error) {
-      this.logger.error(`Error updating product price: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update product price', 500, 'SERVICE_ERROR');
+      this.logger.error(`Error getting product by ID: ${error}`);
+      return null;
     }
   }
 
-  /**
-   * Delete a product
-   */
+  async getProductBySlug(slug: string, requestUserId?: string): Promise<ProductWithDetails | null> {
+    try {
+      return await this.productRepository.findBySlugWithDetails(slug, requestUserId);
+    } catch (error) {
+      this.logger.error(`Error getting product by slug: ${error}`);
+      return null;
+    }
+  }
+
   async deleteProduct(id: string, sellerId: string): Promise<boolean> {
     try {
-      // We'll use soft delete for products to maintain order history
       const result = await this.productRepository.deleteProduct(id, sellerId);
 
       if (result) {
-        this.logger.info(`Product deleted: ${id} by seller: ${sellerId}`);
+        this.logger.info(`Product deleted: ${id} by seller ${sellerId}`);
       }
 
       return result;
@@ -185,32 +135,12 @@ export class ProductService extends BaseService implements IProductService {
     }
   }
 
-  /**
-   * Get product by ID
-   */
-  async getProductById(id: string): Promise<ProductWithDetails | null> {
-    const product = await this.productRepository.findByIdWithDetails(id);
+  async getProducts(
+    options?: ProductQueryOptions,
+    requestUserId?: string,
+  ): Promise<ProductPaginationResult> {
     try {
-      return await Validators.validateExists(product, 'Product', id);
-    } catch (error) {
-      if (error instanceof AppError && error.statusCode === 404) {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Get products with pagination and filtering
-   */
-  async getProducts(options: ProductQueryOptions): Promise<PaginatedResult<Product>> {
-    const { page, limit } = PaginationUtils.normalizePaginationParams(options.page, options.limit);
-    try {
-      return await this.productRepository.getProducts({
-        ...options,
-        page,
-        limit,
-      });
+      return await this.productRepository.getProducts(options || {}, requestUserId);
     } catch (error) {
       this.logger.error(`Error getting products: ${error}`);
       if (error instanceof AppError) throw error;
@@ -218,12 +148,94 @@ export class ProductService extends BaseService implements IProductService {
     }
   }
 
-  /**
-   * Get price history for a product
-   */
-  async getPriceHistory(id: string, page?: number, limit?: number): Promise<PaginatedResult<any>> {
+  async getMyProducts(
+    sellerId: string,
+    options?: Omit<ProductQueryOptions, 'sellerId'>,
+  ): Promise<ProductPaginationResult> {
     try {
-      return await this.productRepository.getPriceHistory(id, page, limit);
+      return await this.productRepository.getMyProducts(sellerId, options);
+    } catch (error) {
+      this.logger.error(`Error getting my products: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get my products', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async searchProducts(
+    query: string,
+    options?: ProductQueryOptions,
+  ): Promise<ProductPaginationResult> {
+    try {
+      return await this.productRepository.searchProducts(query, options);
+    } catch (error) {
+      this.logger.error(`Error searching products: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to search products', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getProductsByCategory(
+    categoryId: string,
+    options?: ProductQueryOptions,
+  ): Promise<ProductPaginationResult> {
+    try {
+      return await this.productRepository.getProductsByCategory(categoryId, options);
+    } catch (error) {
+      this.logger.error(`Error getting products by category: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get products by category', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getFeaturedProducts(limit: number = 10): Promise<ProductWithSeller[]> {
+    try {
+      return await this.productRepository.getFeaturedProducts(limit);
+    } catch (error) {
+      this.logger.error(`Error getting featured products: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get featured products', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getRelatedProducts(productId: string, limit: number = 5): Promise<ProductWithSeller[]> {
+    try {
+      return await this.productRepository.getRelatedProducts(productId, limit);
+    } catch (error) {
+      this.logger.error(`Error getting related products: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get related products', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async updatePrice(
+    id: string,
+    sellerId: string,
+    data: PriceUpdateDto,
+  ): Promise<ProductWithDetails> {
+    try {
+      if (data.price <= 0) {
+        throw new AppError('Price must be greater than 0', 400, 'INVALID_PRICE');
+      }
+
+      const product = await this.productRepository.updatePrice(id, sellerId, data);
+
+      this.logger.info(`Product price updated: ${id} to ${data.price} by seller ${sellerId}`);
+
+      return product;
+    } catch (error) {
+      this.logger.error(`Error updating product price: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to update product price', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getPriceHistory(
+    productId: string,
+    page?: number,
+    limit?: number,
+  ): Promise<PaginatedResult<PriceHistory>> {
+    try {
+      return await this.productRepository.getPriceHistory(productId, page, limit);
     } catch (error) {
       this.logger.error(`Error getting price history: ${error}`);
       if (error instanceof AppError) throw error;
@@ -231,48 +243,226 @@ export class ProductService extends BaseService implements IProductService {
     }
   }
 
-  /**
-   * Helper to handle image replacement and deletion
-   */
-  private async handleImageReplacement(oldImages: string[], newImages: string[]): Promise<void> {
+  async updateStock(updates: ProductStockUpdate[]): Promise<boolean> {
     try {
-      // Find images that are in old but not in new (to be deleted)
-      const imagesToDelete = oldImages.filter((img) => !newImages.includes(img));
-
-      // Delete unused images from Cloudinary
-      for (const imageUrl of imagesToDelete) {
-        if (imageUrl.includes('cloudinary')) {
-          const publicId = this.extractPublicIdFromUrl(imageUrl);
-          if (publicId) {
-            await this.cloudinaryService.deleteFile(publicId);
-            this.logger.info(`Deleted unused image: ${publicId}`);
-          }
-        }
-      }
+      return await this.productRepository.updateStock(updates);
     } catch (error) {
-      this.logger.error(`Error handling image replacement: ${error}`);
-      // We don't want to fail the whole operation if image deletion fails
+      this.logger.error(`Error updating stock: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to update stock', 500, 'SERVICE_ERROR');
     }
   }
 
-  /**
-   * Extract public ID from Cloudinary URL
-   */
-  private extractPublicIdFromUrl(url: string): string | null {
-    if (!url || !url.includes('cloudinary.com')) {
-      return null;
+  async checkInventory(
+    items: Array<{ productId: string; quantity: number }>,
+  ): Promise<ProductInventoryCheck[]> {
+    try {
+      return await this.productRepository.checkInventory(items);
+    } catch (error) {
+      this.logger.error(`Error checking inventory: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to check inventory', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getLowStockProducts(sellerId: string, threshold: number = 5): Promise<ProductWithSeller[]> {
+    try {
+      return await this.productRepository.getLowStockProducts(sellerId, threshold);
+    } catch (error) {
+      this.logger.error(`Error getting low stock products: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get low stock products', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async publishProduct(id: string, sellerId: string): Promise<ProductWithDetails> {
+    try {
+      const product = await this.productRepository.publishProduct(id, sellerId);
+
+      this.logger.info(`Product published: ${id} by seller ${sellerId}`);
+
+      return product;
+    } catch (error) {
+      this.logger.error(`Error publishing product: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to publish product', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async unpublishProduct(id: string, sellerId: string): Promise<ProductWithDetails> {
+    try {
+      const product = await this.productRepository.unpublishProduct(id, sellerId);
+
+      this.logger.info(`Product unpublished: ${id} by seller ${sellerId}`);
+
+      return product;
+    } catch (error) {
+      this.logger.error(`Error unpublishing product: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to unpublish product', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async markOutOfStock(id: string, sellerId: string): Promise<ProductWithDetails> {
+    try {
+      const product = await this.productRepository.markOutOfStock(id, sellerId);
+
+      this.logger.info(`Product marked out of stock: ${id} by seller ${sellerId}`);
+
+      return product;
+    } catch (error) {
+      this.logger.error(`Error marking product out of stock: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to mark product out of stock', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async markInStock(id: string, sellerId: string): Promise<ProductWithDetails> {
+    try {
+      const product = await this.productRepository.markInStock(id, sellerId);
+
+      this.logger.info(`Product marked in stock: ${id} by seller ${sellerId}`);
+
+      return product;
+    } catch (error) {
+      this.logger.error(`Error marking product in stock: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to mark product in stock', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async viewProduct(id: string, userId?: string): Promise<void> {
+    try {
+      await this.productRepository.incrementViewCount(id);
+
+      if (userId) {
+        this.logger.debug(`Product ${id} viewed by user ${userId}`);
+      } else {
+        this.logger.debug(`Product ${id} viewed by anonymous user`);
+      }
+    } catch (error) {
+      this.logger.error(`Error viewing product: ${error}`);
+      // Don't throw errors for view increments
+    }
+  }
+
+  async getProductStats(sellerId: string): Promise<{
+    totalProducts: number;
+    publishedProducts: number;
+    outOfStockProducts: number;
+    totalViews: number;
+    totalSales: number;
+  }> {
+    try {
+      return await this.productRepository.getProductStats(sellerId);
+    } catch (error) {
+      this.logger.error(`Error getting product stats: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get product stats', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getProductsByIds(productIds: string[]): Promise<ProductWithSeller[]> {
+    try {
+      return await this.productRepository.getProductsByIds(productIds);
+    } catch (error) {
+      this.logger.error(`Error getting products by IDs: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get products by IDs', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getPopularTags(limit: number = 20): Promise<Array<{ tag: string; count: number }>> {
+    try {
+      return await this.productRepository.getPopularTags(limit);
+    } catch (error) {
+      this.logger.error(`Error getting popular tags: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get popular tags', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getProductsByTag(
+    tag: string,
+    options?: ProductQueryOptions,
+  ): Promise<ProductPaginationResult> {
+    try {
+      return await this.productRepository.getProductsByTag(tag, options);
+    } catch (error) {
+      this.logger.error(`Error getting products by tag: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get products by tag', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  // Private validation methods
+  private validateProductData(data: CreateProductDto): void {
+    if (!data.name || data.name.trim().length < 3) {
+      throw new AppError('Product name must be at least 3 characters', 400, 'INVALID_PRODUCT_NAME');
     }
 
-    const parts = url.split('/upload/');
-    if (parts.length < 2) return null;
+    if (data.price <= 0) {
+      throw new AppError('Price must be greater than 0', 400, 'INVALID_PRICE');
+    }
 
-    const afterUpload = parts[1];
-    // Remove any transformation parameters
-    const withoutParams = afterUpload.split('/').pop();
-    if (!withoutParams) return null;
+    if (data.discountPrice !== null && data.discountPrice !== undefined) {
+      if (data.discountPrice <= 0) {
+        throw new AppError('Discount price must be greater than 0', 400, 'INVALID_DISCOUNT_PRICE');
+      }
+      if (data.discountPrice >= data.price) {
+        throw new AppError(
+          'Discount price must be less than regular price',
+          400,
+          'INVALID_DISCOUNT_PRICE',
+        );
+      }
+    }
 
-    // Remove file extension
-    const publicId = withoutParams.split('.')[0];
-    return publicId;
+    if (data.quantity < 0) {
+      throw new AppError('Quantity cannot be negative', 400, 'INVALID_QUANTITY');
+    }
+
+    if (!data.images || data.images.length === 0) {
+      throw new AppError('At least one product image is required', 400, 'MISSING_IMAGES');
+    }
+
+    if (data.weight !== undefined && data.weight < 0) {
+      throw new AppError('Weight cannot be negative', 400, 'INVALID_WEIGHT');
+    }
+  }
+
+  private validateProductUpdateData(data: UpdateProductDto): void {
+    if (data.name !== undefined && (!data.name || data.name.trim().length < 3)) {
+      throw new AppError('Product name must be at least 3 characters', 400, 'INVALID_PRODUCT_NAME');
+    }
+
+    if (data.price !== undefined && data.price <= 0) {
+      throw new AppError('Price must be greater than 0', 400, 'INVALID_PRICE');
+    }
+
+    if (data.discountPrice !== undefined && data.discountPrice !== null) {
+      if (data.discountPrice <= 0) {
+        throw new AppError('Discount price must be greater than 0', 400, 'INVALID_DISCOUNT_PRICE');
+      }
+      if (data.price !== undefined && data.discountPrice >= data.price) {
+        throw new AppError(
+          'Discount price must be less than regular price',
+          400,
+          'INVALID_DISCOUNT_PRICE',
+        );
+      }
+    }
+
+    if (data.quantity !== undefined && data.quantity < 0) {
+      throw new AppError('Quantity cannot be negative', 400, 'INVALID_QUANTITY');
+    }
+
+    if (data.images !== undefined && (!data.images || data.images.length === 0)) {
+      throw new AppError('At least one product image is required', 400, 'MISSING_IMAGES');
+    }
+
+    if (data.weight !== undefined && data.weight !== null && data.weight < 0) {
+      throw new AppError('Weight cannot be negative', 400, 'INVALID_WEIGHT');
+    }
   }
 }

@@ -23,23 +23,31 @@ export class GetMyProductsController extends BaseController {
         throw AppError.forbidden('Only artisans can view their products');
       }
 
-      const options: ProductQueryOptions = {
+      const options: Omit<ProductQueryOptions, 'sellerId'> = {
         page: parseInt(req.query.page as string) || 1,
         limit: parseInt(req.query.limit as string) || 10,
-        sellerId: req.user!.id,
         status: req.query.status
           ? Array.isArray(req.query.status)
-            ? (req.query.status as any[])
+            ? (req.query.status as any)
             : [req.query.status as string]
           : undefined,
         search: req.query.search as string,
+        categoryId: req.query.categoryId as string,
         sortBy: (req.query.sortBy as string) || 'createdAt',
         sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
       };
 
-      const products = await this.productService.getProducts(options);
+      const products = await this.productService.getMyProducts(req.user!.id, options);
+      const stats = await this.productService.getProductStats(req.user!.id);
 
-      ApiResponse.success(res, products, 'My products retrieved successfully');
+      ApiResponse.success(
+        res,
+        {
+          products,
+          stats,
+        },
+        'My products retrieved successfully',
+      );
     } catch (error) {
       next(error);
     }

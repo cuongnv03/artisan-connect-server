@@ -1,75 +1,83 @@
 import { BaseRepository } from '../../../shared/interfaces/BaseRepository';
 import {
   Product,
+  ProductWithSeller,
   ProductWithDetails,
   CreateProductDto,
   UpdateProductDto,
   PriceUpdateDto,
   ProductQueryOptions,
+  ProductPaginationResult,
+  PriceHistory,
+  ProductStockUpdate,
+  ProductInventoryCheck,
 } from '../models/Product';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IProductRepository extends BaseRepository<Product, string> {
-  /**
-   * Find product by ID with details
-   */
-  findByIdWithDetails(id: string): Promise<ProductWithDetails | null>;
-
-  /**
-   * Create product
-   */
+  // Product CRUD with details
+  findByIdWithDetails(id: string, requestUserId?: string): Promise<ProductWithDetails | null>;
+  findBySlugWithDetails(slug: string, requestUserId?: string): Promise<ProductWithDetails | null>;
   createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithDetails>;
-
-  /**
-   * Count categories by IDs
-   */
-  countCategoriesByIds(categoryIds: string[]): Promise<number>;
-
-  /**
-   * Update product
-   */
   updateProduct(id: string, sellerId: string, data: UpdateProductDto): Promise<ProductWithDetails>;
-
-  /**
-   * Update product price
-   */
-  updatePrice(id: string, sellerId: string, data: PriceUpdateDto): Promise<ProductWithDetails>;
-
-  /**
-   * Delete product (soft delete)
-   */
   deleteProduct(id: string, sellerId: string): Promise<boolean>;
 
-  /**
-   * Get products with pagination
-   */
-  getProducts(options: ProductQueryOptions): Promise<PaginatedResult<Product>>;
+  // Product queries
+  getProducts(
+    options: ProductQueryOptions,
+    requestUserId?: string,
+  ): Promise<ProductPaginationResult>;
+  getMyProducts(
+    sellerId: string,
+    options?: Omit<ProductQueryOptions, 'sellerId'>,
+  ): Promise<ProductPaginationResult>;
+  searchProducts(query: string, options?: ProductQueryOptions): Promise<ProductPaginationResult>;
+  getProductsByCategory(
+    categoryId: string,
+    options?: ProductQueryOptions,
+  ): Promise<ProductPaginationResult>;
+  getFeaturedProducts(limit?: number): Promise<ProductWithSeller[]>;
+  getRelatedProducts(productId: string, limit?: number): Promise<ProductWithSeller[]>;
 
-  /**
-   * Get price history
-   */
-  getPriceHistory(productId: string, page?: number, limit?: number): Promise<PaginatedResult<any>>;
+  // Price management
+  updatePrice(id: string, sellerId: string, data: PriceUpdateDto): Promise<ProductWithDetails>;
+  getPriceHistory(
+    productId: string,
+    page?: number,
+    limit?: number,
+  ): Promise<PaginatedResult<PriceHistory>>;
 
-  /**
-   * Check if product belongs to seller
-   */
-  isProductOwner(productId: string, sellerId: string): Promise<boolean>;
+  // Inventory management
+  updateStock(updates: ProductStockUpdate[]): Promise<boolean>;
+  checkInventory(
+    items: Array<{ productId: string; quantity: number }>,
+  ): Promise<ProductInventoryCheck[]>;
+  getLowStockProducts(sellerId: string, threshold?: number): Promise<ProductWithSeller[]>;
 
-  /**
-   * Decrease product quantity
-   */
-  decrementStock(productId: string, quantity: number): Promise<void>;
+  // Product status and visibility
+  publishProduct(id: string, sellerId: string): Promise<ProductWithDetails>;
+  unpublishProduct(id: string, sellerId: string): Promise<ProductWithDetails>;
+  markOutOfStock(id: string, sellerId: string): Promise<ProductWithDetails>;
+  markInStock(id: string, sellerId: string): Promise<ProductWithDetails>;
 
-  /**
-   * Increase product quantity
-   */
-  incrementStock(productId: string, quantity: number): Promise<void>;
-
-  /**
-   * Validate stock availability for multiple products
-   */
-  validateStock(items: { productId: string; quantity: number }[]): Promise<{
-    valid: boolean;
-    invalidItems?: { productId: string; requestedQuantity: number; availableQuantity: number }[];
+  // Analytics and metrics
+  incrementViewCount(id: string): Promise<void>;
+  updateSalesCount(productId: string, quantity: number): Promise<void>;
+  getProductStats(sellerId: string): Promise<{
+    totalProducts: number;
+    publishedProducts: number;
+    outOfStockProducts: number;
+    totalViews: number;
+    totalSales: number;
   }>;
+
+  // Utility methods
+  generateSlug(name: string, sellerId: string): Promise<string>;
+  validateCategories(categoryIds: string[]): Promise<boolean>;
+  isProductOwner(productId: string, sellerId: string): Promise<boolean>;
+  getProductsByIds(productIds: string[]): Promise<ProductWithSeller[]>;
+
+  // Tag management
+  getPopularTags(limit?: number): Promise<Array<{ tag: string; count: number }>>;
+  getProductsByTag(tag: string, options?: ProductQueryOptions): Promise<ProductPaginationResult>;
 }

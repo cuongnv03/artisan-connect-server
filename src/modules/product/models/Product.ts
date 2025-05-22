@@ -1,9 +1,12 @@
-import { Category } from './Category';
 import { ProductStatus } from './ProductEnums';
 
-/**
- * Product entity
- */
+export interface ProductDimensions {
+  length?: number;
+  width?: number;
+  height?: number;
+  unit?: string; // 'cm', 'inch', etc.
+}
+
 export interface Product {
   id: string;
   sellerId: string;
@@ -24,46 +27,37 @@ export interface Product {
   avgRating?: number | null;
   reviewCount: number;
   viewCount: number;
+  salesCount: number;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
 }
 
-/**
- * Product with seller information
- */
 export interface ProductWithSeller extends Product {
   seller: {
     id: string;
     firstName: string;
     lastName: string;
+    username: string;
+    avatarUrl?: string | null;
     artisanProfile?: {
       shopName: string;
+      isVerified: boolean;
     } | null;
   };
 }
 
-/**
- * Product with category information
- */
 export interface ProductWithDetails extends ProductWithSeller {
-  categories: Category[];
+  categories: Array<{
+    id: string;
+    name: string;
+    slug: string;
+  }>;
   priceHistory: PriceHistory[];
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
-/**
- * Product dimensions
- */
-export interface ProductDimensions {
-  length?: number;
-  width?: number;
-  height?: number;
-  unit?: string;
-}
-
-/**
- * Price history entry
- */
 export interface PriceHistory {
   id: string;
   productId: string;
@@ -73,9 +67,6 @@ export interface PriceHistory {
   createdAt: Date;
 }
 
-/**
- * Product creation attributes
- */
 export interface CreateProductDto {
   name: string;
   description?: string;
@@ -83,19 +74,16 @@ export interface CreateProductDto {
   discountPrice?: number | null;
   quantity: number;
   categories?: string[];
-  status: ProductStatus;
+  status?: ProductStatus;
   images: string[];
   tags?: string[];
   attributes?: Record<string, any>;
-  isCustomizable: boolean;
+  isCustomizable?: boolean;
   sku?: string;
   weight?: number;
   dimensions?: ProductDimensions;
 }
 
-/**
- * Product update attributes
- */
 export interface UpdateProductDto {
   name?: string;
   description?: string | null;
@@ -106,24 +94,18 @@ export interface UpdateProductDto {
   status?: ProductStatus;
   images?: string[];
   tags?: string[];
-  attributes?: Record<string, any>;
+  attributes?: Record<string, any> | null;
   isCustomizable?: boolean;
-  sku?: string;
-  weight?: number;
-  dimensions?: ProductDimensions;
+  sku?: string | null;
+  weight?: number | null;
+  dimensions?: ProductDimensions | null;
 }
 
-/**
- * Price update dto
- */
 export interface PriceUpdateDto {
   price: number;
   changeNote?: string;
 }
 
-/**
- * Product query options
- */
 export interface ProductQueryOptions {
   page?: number;
   limit?: number;
@@ -132,8 +114,33 @@ export interface ProductQueryOptions {
   search?: string;
   minPrice?: number;
   maxPrice?: number;
-  status?: ProductStatus[];
+  status?: ProductStatus | ProductStatus[];
   isCustomizable?: boolean;
+  tags?: string[];
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  inStock?: boolean;
+}
+
+export interface ProductPaginationResult {
+  data: ProductWithSeller[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface ProductStockUpdate {
+  productId: string;
+  quantity: number;
+  operation: 'increment' | 'decrement' | 'set';
+}
+
+export interface ProductInventoryCheck {
+  productId: string;
+  requestedQuantity: number;
+  availableQuantity: number;
+  inStock: boolean;
 }

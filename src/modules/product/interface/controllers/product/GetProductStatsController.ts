@@ -4,11 +4,9 @@ import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
 import { IProductService } from '../../../services/ProductService.interface';
 import { AppError } from '../../../../../core/errors/AppError';
 import container from '../../../../../core/di/container';
-import { Logger } from '../../../../../core/logging/Logger';
 
-export class GetProductController extends BaseController {
+export class GetProductStatsController extends BaseController {
   private productService: IProductService;
-  private logger = Logger.getInstance();
 
   constructor() {
     super();
@@ -17,19 +15,15 @@ export class GetProductController extends BaseController {
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { id } = req.params;
-      const product = await this.productService.getProductById(id, req.user?.id);
+      this.validateAuth(req);
 
-      if (!product) {
-        throw AppError.notFound('Product not found');
+      if (req.user!.role !== 'ARTISAN') {
+        throw AppError.forbidden('Only artisans can view product statistics');
       }
 
-      // Increment view count asynchronously
-      this.productService.viewProduct(id, req.user?.id).catch((err) => {
-        this.logger.error(`Failed to increment view count: ${err}`);
-      });
+      const stats = await this.productService.getProductStats(req.user!.id);
 
-      ApiResponse.success(res, product, 'Product retrieved successfully');
+      ApiResponse.success(res, stats, 'Product statistics retrieved successfully');
     } catch (error) {
       next(error);
     }
