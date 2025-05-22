@@ -1,6 +1,9 @@
 {
     "compilerOptions": {
-        "target": "es2019",
+        "target": "ES2022",
+        "lib": [
+            "ES2022"
+        ],
         "module": "commonjs",
         "moduleResolution": "node",
         "outDir": "./dist",
@@ -10,22 +13,44 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
-        "declaration": true,
-        "removeComments": true,
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
         "allowSyntheticDefaultImports": true,
         "sourceMap": true,
-        "baseUrl": "./",
-        "incremental": true,
-        "strictNullChecks": true,
+        "declaration": true,
+        "declarationMap": true,
+        "removeComments": true,
         "noImplicitAny": true,
-        "strictBindCallApply": true,
-        "noFallthroughCasesInSwitch": true
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "exactOptionalPropertyTypes": true,
+        "noImplicitOverride": true,
+        "noPropertyAccessFromIndexSignature": false,
+        "noUncheckedIndexedAccess": true,
+        "paths": {
+            "@/*": [
+                "./src/*"
+            ],
+            "@/core/*": [
+                "./src/core/*"
+            ],
+            "@/modules/*": [
+                "./src/modules/*"
+            ],
+            "@/shared/*": [
+                "./src/shared/*"
+            ]
+        }
     },
     "include": [
         "src/**/*"
     ],
     "exclude": [
         "node_modules",
-        "dist"
+        "dist",
+        "**/*.test.ts",
+        "**/*.spec.ts"
     ]
 }
