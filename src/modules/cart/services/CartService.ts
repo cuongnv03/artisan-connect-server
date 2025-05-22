@@ -2,7 +2,7 @@ import { ICartService } from './CartService.interface';
 import { CartItem, CartWithTotals, AddToCartDto, UpdateCartItemDto } from '../models/CartItem';
 import { ICartRepository } from '../repositories/CartRepository.interface';
 import { IProductRepository } from '../../product/repositories/ProductRepository.interface';
-import { IUserRepository } from '../../user/repositories/UserRepository.interface';
+import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import container from '../../../core/di/container';

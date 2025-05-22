@@ -1,4 +1,4 @@
-import { PrismaClient, Category as PrismaCategory, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { BasePrismaRepository } from '../../../shared/baseClasses/BasePrismaRepository';
 import { ICartRepository } from './CartRepository.interface';
 import { CartItem, CartWithTotals } from '../models/CartItem';
