@@ -17,16 +17,18 @@ container.register('bcryptService', new BcryptService(Config.BCRYPT_SALT_ROUNDS)
 container.register('cloudinaryService', new CloudinaryService(Config.getCloudinaryConfig()));
 
 // Import repositories
-import { UserRepository } from '../../modules/user/repositories/UserRepository';
-import { RefreshTokenRepository } from '../../modules/user/repositories/RefreshTokenRepository';
-import { PasswordResetRepository } from '../../modules/user/repositories/PasswordResetRepository';
-import { EmailVerificationRepository } from '../../modules/user/repositories/EmailVerificationRepository';
+// === USER MODULE REPOSITORIES ===
+import { UserRepository } from '../../modules/auth/repositories/UserRepository';
+import { RefreshTokenRepository } from '../../modules/auth/repositories/RefreshTokenRepository';
+import { PasswordResetRepository } from '../../modules/auth/repositories/PasswordResetRepository';
+import { EmailVerificationRepository } from '../../modules/auth/repositories/EmailVerificationRepository';
+import { ProfileRepository } from '../../modules/user/repositories/ProfileRepository';
+import { AddressRepository } from '../../modules/user/repositories/AddressRepository';
+import { FollowRepository } from '../../modules/user/repositories/FollowRepository';
+import { UserActivityRepository } from '../../modules/user/repositories/UserActivityRepository';
 import { SystemConfigRepository } from '../../modules/system/repositories/SystemConfigRepository';
-import { ProfileRepository } from '../../modules/profile/repositories/ProfileRepository';
-import { AddressRepository } from '../../modules/profile/repositories/AddressRepository';
-import { ArtisanProfileRepository } from '../../modules/artisanProfile/repositories/ArtisanProfileRepository';
-import { UpgradeRequestRepository } from '../../modules/artisanProfile/repositories/UpgradeRequestRepository';
-import { FollowRepository } from '../../modules/social/repositories/FollowRepository';
+import { ArtisanProfileRepository } from '../../modules/artisan/repositories/ArtisanProfileRepository';
+import { UpgradeRequestRepository } from '../../modules/artisan/repositories/UpgradeRequestRepository';
 import { SavedPostRepository } from '../../modules/social/repositories/SavedPostRepository';
 import { PostRepository } from '../../modules/post/repositories/PostRepository';
 import { LikeRepository } from '../../modules/social/repositories/LikeRepository';
@@ -44,12 +46,13 @@ container.register('userRepository', new UserRepository(prisma));
 container.register('refreshTokenRepository', new RefreshTokenRepository(prisma));
 container.register('passwordResetRepository', new PasswordResetRepository(prisma));
 container.register('emailVerificationRepository', new EmailVerificationRepository(prisma));
-container.register('systemConfigRepository', new SystemConfigRepository(prisma));
 container.register('profileRepository', new ProfileRepository(prisma));
 container.register('addressRepository', new AddressRepository(prisma));
+container.register('followRepository', new FollowRepository(prisma));
+container.register('userActivityRepository', new UserActivityRepository(prisma));
+container.register('systemConfigRepository', new SystemConfigRepository(prisma));
 container.register('artisanProfileRepository', new ArtisanProfileRepository(prisma));
 container.register('upgradeRequestRepository', new UpgradeRequestRepository(prisma));
-container.register('followRepository', new FollowRepository(prisma));
 container.register('postRepository', new PostRepository(prisma));
 container.register('likeRepository', new LikeRepository(prisma));
 container.register('commentRepository', new CommentRepository(prisma));
@@ -63,11 +66,10 @@ container.register('reviewRepository', new ReviewRepository(prisma));
 container.register('postAnalyticsRepository', new PostAnalyticsRepository(prisma));
 
 // Import services
-import { AuthService } from '../../modules/user/services/AuthService';
+import { AuthService } from '../../modules/auth/services/AuthService';
 import { UserService } from '../../modules/user/services/UserService';
 import { SystemConfigService } from '../../modules/system/services/SystemConfigService';
-import { ArtisanProfileService } from '../../modules/artisanProfile/services/ArtisanProfileService';
-import { ProfileService } from '../../modules/profile/services/ProfileService';
+import { ArtisanProfileService } from '../../modules/artisan/services/ArtisanProfileService';
 import { FollowService } from '../../modules/social/services/FollowService';
 import { SavedPostService } from '../../modules/social/services/SavedPostService';
 import { PostService } from '../../modules/post/services/PostService';
@@ -85,7 +87,6 @@ import { PostAnalyticsService } from '../../modules/analytics/services/PostAnaly
 container.register('authService', new AuthService());
 container.register('userService', new UserService());
 container.register('systemConfigService', new SystemConfigService());
-container.register('profileService', new ProfileService());
 container.register('artisanProfileService', new ArtisanProfileService());
 container.register('followService', new FollowService());
 container.register('savedPostService', new SavedPostService());

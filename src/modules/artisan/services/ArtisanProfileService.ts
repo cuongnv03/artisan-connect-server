@@ -1,0 +1,591 @@
+import { IArtisanProfileService } from './ArtisanProfileService.interface';
+import {
+  ArtisanProfile,
+  ArtisanProfileWithUser,
+  CreateArtisanProfileDto,
+  UpdateArtisanProfileDto,
+  ArtisanSearchFilters,
+  TemplateCustomizationDto,
+  TemplateResult,
+} from '../models/ArtisanProfile';
+import {
+  ArtisanUpgradeRequest,
+  ArtisanUpgradeRequestWithUser,
+  CreateUpgradeRequestDto,
+} from '../models/ArtisanUpgradeRequest';
+import { UpgradeRequestStatus } from '../models/ArtisanEnums';
+import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
+import { IArtisanProfileRepository } from '../repositories/ArtisanProfileRepository.interface';
+import { IUpgradeRequestRepository } from '../repositories/UpgradeRequestRepository.interface';
+import { IUserRepository } from '../../auth';
+import { CloudinaryService } from '../../../core/infrastructure/storage/CloudinaryService';
+import { AppError } from '../../../core/errors/AppError';
+import { Logger } from '../../../core/logging/Logger';
+import { UserRole } from '../../auth';
+import container from '../../../core/di/container';
+
+export class ArtisanProfileService implements IArtisanProfileService {
+  private artisanProfileRepository: IArtisanProfileRepository;
+  private upgradeRequestRepository: IUpgradeRequestRepository;
+  private userRepository: IUserRepository;
+  private cloudinaryService: CloudinaryService;
+  private logger = Logger.getInstance();
+
+  constructor() {
+    this.artisanProfileRepository = container.resolve<IArtisanProfileRepository>(
+      'artisanProfileRepository',
+    );
+    this.upgradeRequestRepository = container.resolve<IUpgradeRequestRepository>(
+      'upgradeRequestRepository',
+    );
+    this.userRepository = container.resolve<IUserRepository>('userRepository');
+    this.cloudinaryService = container.resolve<CloudinaryService>('cloudinaryService');
+  }
+
+  // Artisan Profile Management
+  async createArtisanProfile(
+    userId: string,
+    data: CreateArtisanProfileDto,
+  ): Promise<ArtisanProfileWithUser> {
+    try {
+      // Check if user exists and is eligible
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw AppError.notFound('User not found');
+      }
+
+      // Check if user is already an artisan
+      if (user.role === UserRole.ARTISAN) {
+        throw AppError.conflict('User is already an artisan');
+      }
+
+      // Check if profile already exists
+      const existingProfile = await this.artisanProfileRepository.findByUserId(userId);
+      if (existingProfile) {
+        throw AppError.conflict('User already has an artisan profile');
+      }
+
+      // Create profile
+      const profile = await this.artisanProfileRepository.createProfile(userId, data);
+
+      // Update user role
+      await this.userRepository.updateUserRole(userId, UserRole.ARTISAN);
+
+      this.logger.info(`Artisan profile created for user ${userId}`);
+
+      return profile;
+    } catch (error) {
+      this.logger.error(`Error creating artisan profile: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to create artisan profile', 'SERVICE_ERROR');
+    }
+  }
+
+  async updateArtisanProfile(
+    userId: string,
+    data: UpdateArtisanProfileDto,
+  ): Promise<ArtisanProfileWithUser> {
+    try {
+      // Check if profile exists
+      const existingProfile = await this.artisanProfileRepository.findByUserId(userId);
+      if (!existingProfile) {
+        throw AppError.notFound('Artisan profile not found');
+      }
+
+      // Handle image updates (delete old images if new ones provided)
+      if (
+        data.shopLogoUrl &&
+        existingProfile.shopLogoUrl &&
+        existingProfile.shopLogoUrl !== data.shopLogoUrl
+      ) {
+        await this.deleteOldImage(existingProfile.shopLogoUrl);
+      }
+
+      if (
+        data.shopBannerUrl &&
+        existingProfile.shopBannerUrl &&
+        existingProfile.shopBannerUrl !== data.shopBannerUrl
+      ) {
+        await this.deleteOldImage(existingProfile.shopBannerUrl);
+      }
+
+      // Update profile
+      const updatedProfile = await this.artisanProfileRepository.updateProfile(userId, data);
+
+      this.logger.info(`Artisan profile updated for user ${userId}`);
+
+      return updatedProfile;
+    } catch (error) {
+      this.logger.error(`Error updating artisan profile: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to update artisan profile', 'SERVICE_ERROR');
+    }
+  }
+
+  async getArtisanProfileById(id: string): Promise<ArtisanProfileWithUser | null> {
+    try {
+      return await this.artisanProfileRepository.findByIdWithUser(id);
+    } catch (error) {
+      this.logger.error(`Error getting artisan profile by ID: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get artisan profile', 'SERVICE_ERROR');
+    }
+  }
+
+  async getArtisanProfileByUserId(userId: string): Promise<ArtisanProfileWithUser | null> {
+    try {
+      return await this.artisanProfileRepository.findByUserId(userId);
+    } catch (error) {
+      this.logger.error(`Error getting artisan profile by user ID: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get artisan profile', 'SERVICE_ERROR');
+    }
+  }
+
+  async getMyArtisanProfile(userId: string): Promise<ArtisanProfileWithUser> {
+    try {
+      const profile = await this.artisanProfileRepository.findByUserId(userId);
+      if (!profile) {
+        throw AppError.notFound('Artisan profile not found for this user');
+      }
+      return profile;
+    } catch (error) {
+      this.logger.error(`Error getting own artisan profile: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get artisan profile', 'SERVICE_ERROR');
+    }
+  }
+
+  async deleteArtisanProfile(userId: string): Promise<boolean> {
+    try {
+      // Get profile first to clean up images
+      const profile = await this.artisanProfileRepository.findByUserId(userId);
+      if (!profile) {
+        throw AppError.notFound('Artisan profile not found');
+      }
+
+      // Delete associated images
+      if (profile.shopLogoUrl) {
+        await this.deleteOldImage(profile.shopLogoUrl);
+      }
+      if (profile.shopBannerUrl) {
+        await this.deleteOldImage(profile.shopBannerUrl);
+      }
+
+      // Delete profile
+      await this.artisanProfileRepository.delete(profile.id);
+
+      // Update user role back to customer
+      await this.userRepository.updateUserRole(userId, UserRole.CUSTOMER);
+
+      this.logger.info(`Artisan profile deleted for user ${userId}`);
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting artisan profile: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to delete artisan profile', 'SERVICE_ERROR');
+    }
+  }
+
+  // Artisan Discovery
+  async searchArtisans(
+    filters: ArtisanSearchFilters,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResult<ArtisanProfileWithUser>> {
+    try {
+      return await this.artisanProfileRepository.searchArtisans(filters, page, limit);
+    } catch (error) {
+      this.logger.error(`Error searching artisans: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to search artisans', 'SERVICE_ERROR');
+    }
+  }
+
+  async getTopArtisans(limit: number = 10): Promise<ArtisanProfileWithUser[]> {
+    try {
+      return await this.artisanProfileRepository.getTopArtisans(limit);
+    } catch (error) {
+      this.logger.error(`Error getting top artisans: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get top artisans', 'SERVICE_ERROR');
+    }
+  }
+
+  async getArtisansBySpecialty(
+    specialty: string,
+    limit: number = 10,
+  ): Promise<ArtisanProfileWithUser[]> {
+    try {
+      return await this.artisanProfileRepository.getArtisansBySpecialty(specialty, limit);
+    } catch (error) {
+      this.logger.error(`Error getting artisans by specialty: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get artisans by specialty', 'SERVICE_ERROR');
+    }
+  }
+
+  async getFeaturedArtisans(): Promise<ArtisanProfileWithUser[]> {
+    try {
+      // Get a mix of top-rated and recently joined verified artisans
+      const topRated = await this.artisanProfileRepository.getTopArtisans(5);
+
+      // You could add more logic here to mix different types of featured artisans
+      return topRated;
+    } catch (error) {
+      this.logger.error(`Error getting featured artisans: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get featured artisans', 'SERVICE_ERROR');
+    }
+  }
+
+  // Template Management
+  async getAvailableTemplates(): Promise<any[]> {
+    try {
+      // Return predefined templates
+      return [
+        {
+          id: 'modern',
+          name: 'Modern',
+          description: 'Clean and contemporary design',
+          previewUrl: '/templates/previews/modern.jpg',
+          features: ['Responsive', 'Gallery', 'Contact Form'],
+        },
+        {
+          id: 'vintage',
+          name: 'Vintage',
+          description: 'Classic and timeless look',
+          previewUrl: '/templates/previews/vintage.jpg',
+          features: ['Elegant Typography', 'Photo Gallery', 'About Section'],
+        },
+        {
+          id: 'minimalist',
+          name: 'Minimalist',
+          description: 'Simple and focused design',
+          previewUrl: '/templates/previews/minimalist.jpg',
+          features: ['Clean Layout', 'Portfolio Grid', 'Simple Navigation'],
+        },
+        {
+          id: 'artistic',
+          name: 'Artistic',
+          description: 'Creative and expressive layout',
+          previewUrl: '/templates/previews/artistic.jpg',
+          features: ['Creative Layout', 'Image Showcase', 'Custom Colors'],
+        },
+      ];
+    } catch (error) {
+      this.logger.error(`Error getting available templates: ${error}`);
+      throw AppError.internal('Failed to get available templates', 'SERVICE_ERROR');
+    }
+  }
+
+  async customizeTemplate(userId: string, data: TemplateCustomizationDto): Promise<TemplateResult> {
+    try {
+      // Get artisan profile
+      const profile = await this.artisanProfileRepository.findByUserId(userId);
+      if (!profile) {
+        throw AppError.notFound('Artisan profile not found');
+      }
+
+      // Generate template data
+      const templateData = {
+        templateId: data.templateId,
+        colorScheme: data.colorScheme || 'default',
+        fontFamily: data.fontFamily || 'Inter',
+        layout: data.layout || 'standard',
+        customCss: data.customCss || '',
+        showSections: data.showSections || ['about', 'gallery', 'contact'],
+        customizedAt: new Date(),
+      };
+
+      // Update profile with template data
+      await this.artisanProfileRepository.updateProfile(userId, {
+        templateId: data.templateId,
+        templateData,
+      });
+
+      // Generate preview URL (in a real implementation, this would generate actual preview)
+      const previewUrl = `/artisan/${profile.id}/preview?template=${data.templateId}`;
+
+      this.logger.info(`Template customized for artisan ${userId}`);
+
+      return {
+        templateId: data.templateId,
+        templateData,
+        previewUrl,
+      };
+    } catch (error) {
+      this.logger.error(`Error customizing template: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to customize template', 'SERVICE_ERROR');
+    }
+  }
+
+  async getTemplatePreview(templateId: string, customData: any): Promise<string> {
+    try {
+      // In a real implementation, this would generate actual HTML preview
+      return `<div>Preview for template ${templateId} with custom data</div>`;
+    } catch (error) {
+      this.logger.error(`Error generating template preview: ${error}`);
+      throw AppError.internal('Failed to generate template preview', 'SERVICE_ERROR');
+    }
+  }
+
+  // Upgrade Request Management
+  async requestUpgrade(
+    userId: string,
+    data: CreateUpgradeRequestDto,
+  ): Promise<ArtisanUpgradeRequest> {
+    try {
+      // Check if user exists
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw AppError.notFound('User not found');
+      }
+
+      // Check if user is already an artisan
+      if (user.role === UserRole.ARTISAN) {
+        throw AppError.conflict('User is already an artisan');
+      }
+
+      // Check for existing request
+      const existingRequest = await this.upgradeRequestRepository.findByUserId(userId);
+
+      if (existingRequest) {
+        if (existingRequest.status === UpgradeRequestStatus.PENDING) {
+          throw AppError.conflict('You already have a pending upgrade request');
+        } else if (existingRequest.status === UpgradeRequestStatus.REJECTED) {
+          // Update existing rejected request
+          return await this.upgradeRequestRepository.updateRequest(existingRequest.id, {
+            ...data,
+            status: UpgradeRequestStatus.PENDING,
+            adminNotes: null,
+            reviewedBy: null,
+            reviewedAt: null,
+          });
+        }
+      }
+
+      // Create new upgrade request
+      const request = await this.upgradeRequestRepository.createRequest(userId, data);
+
+      this.logger.info(`Upgrade request created for user ${userId}`);
+
+      return request;
+    } catch (error) {
+      this.logger.error(`Error creating upgrade request: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to create upgrade request', 'SERVICE_ERROR');
+    }
+  }
+
+  async getUpgradeRequestStatus(userId: string): Promise<any> {
+    try {
+      const request = await this.upgradeRequestRepository.findByUserId(userId);
+
+      if (!request) {
+        return { hasRequest: false };
+      }
+
+      return {
+        hasRequest: true,
+        status: request.status,
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+        adminNotes: request.adminNotes,
+        reviewedAt: request.reviewedAt,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting upgrade request status: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get upgrade request status', 'SERVICE_ERROR');
+    }
+  }
+
+  async updateUpgradeRequest(
+    userId: string,
+    data: CreateUpgradeRequestDto,
+  ): Promise<ArtisanUpgradeRequest> {
+    try {
+      const existingRequest = await this.upgradeRequestRepository.findByUserId(userId);
+      if (!existingRequest) {
+        throw AppError.notFound('Upgrade request not found');
+      }
+
+      if (existingRequest.status !== UpgradeRequestStatus.PENDING) {
+        throw AppError.badRequest('Can only update pending requests');
+      }
+
+      return await this.upgradeRequestRepository.updateRequest(existingRequest.id, {
+        ...data,
+        updatedAt: new Date(),
+      });
+    } catch (error) {
+      this.logger.error(`Error updating upgrade request: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to update upgrade request', 'SERVICE_ERROR');
+    }
+  }
+
+  // Admin Functions
+  async getUpgradeRequests(
+    status?: UpgradeRequestStatus,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResult<ArtisanUpgradeRequestWithUser>> {
+    try {
+      return await this.upgradeRequestRepository.getRequests(status, page, limit);
+    } catch (error) {
+      this.logger.error(`Error getting upgrade requests: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get upgrade requests', 'SERVICE_ERROR');
+    }
+  }
+
+  async approveUpgradeRequest(
+    requestId: string,
+    adminId: string,
+    adminNotes?: string,
+  ): Promise<ArtisanUpgradeRequest> {
+    try {
+      const request = await this.upgradeRequestRepository.findById(requestId);
+      if (!request) {
+        throw AppError.notFound('Upgrade request not found');
+      }
+
+      if (request.status !== UpgradeRequestStatus.PENDING) {
+        throw AppError.badRequest('Request has already been processed');
+      }
+
+      const updatedRequest = await this.upgradeRequestRepository.approveRequest(
+        requestId,
+        adminId,
+        adminNotes,
+      );
+
+      this.logger.info(`Upgrade request ${requestId} approved by admin ${adminId}`);
+
+      return updatedRequest;
+    } catch (error) {
+      this.logger.error(`Error approving upgrade request: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to approve upgrade request', 'SERVICE_ERROR');
+    }
+  }
+
+  async rejectUpgradeRequest(
+    requestId: string,
+    adminId: string,
+    adminNotes: string,
+  ): Promise<ArtisanUpgradeRequest> {
+    try {
+      const request = await this.upgradeRequestRepository.findById(requestId);
+      if (!request) {
+        throw AppError.notFound('Upgrade request not found');
+      }
+
+      if (request.status !== UpgradeRequestStatus.PENDING) {
+        throw AppError.badRequest('Request has already been processed');
+      }
+
+      const updatedRequest = await this.upgradeRequestRepository.rejectRequest(
+        requestId,
+        adminId,
+        adminNotes,
+      );
+
+      this.logger.info(`Upgrade request ${requestId} rejected by admin ${adminId}`);
+
+      return updatedRequest;
+    } catch (error) {
+      this.logger.error(`Error rejecting upgrade request: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to reject upgrade request', 'SERVICE_ERROR');
+    }
+  }
+
+  async verifyArtisan(profileId: string, isVerified: boolean): Promise<ArtisanProfile> {
+    try {
+      const profile = await this.artisanProfileRepository.verifyArtisan(profileId, isVerified);
+
+      this.logger.info(`Artisan profile ${profileId} verification status changed to ${isVerified}`);
+
+      return profile;
+    } catch (error) {
+      this.logger.error(`Error verifying artisan: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to verify artisan', 'SERVICE_ERROR');
+    }
+  }
+
+  // Analytics
+  async getArtisanStats(userId: string): Promise<any> {
+    try {
+      const profile = await this.artisanProfileRepository.findByUserId(userId);
+      if (!profile) {
+        throw AppError.notFound('Artisan profile not found');
+      }
+
+      // In a real implementation, this would aggregate various statistics
+      return {
+        profileViews: 0, // Would come from analytics service
+        productCount: 0, // Would come from product service
+        orderCount: 0, // Would come from order service
+        totalRevenue: 0, // Would come from order service
+        rating: profile.rating,
+        reviewCount: profile.reviewCount,
+        followerCount: profile.user.followerCount,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting artisan stats: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get artisan stats', 'SERVICE_ERROR');
+    }
+  }
+
+  async updateArtisanRating(
+    profileId: string,
+    newRating: number,
+    reviewCount: number,
+  ): Promise<void> {
+    try {
+      await this.artisanProfileRepository.updateRating(profileId, newRating, reviewCount);
+    } catch (error) {
+      this.logger.error(`Error updating artisan rating: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to update artisan rating', 'SERVICE_ERROR');
+    }
+  }
+
+  // Helper Methods
+  private async deleteOldImage(imageUrl: string): Promise<void> {
+    try {
+      if (imageUrl && imageUrl.includes('cloudinary')) {
+        const publicId = this.extractPublicIdFromUrl(imageUrl);
+        if (publicId) {
+          await this.cloudinaryService.deleteFile(publicId);
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error deleting old image: ${error}`);
+      // Don't throw error, just log it
+    }
+  }
+
+  private extractPublicIdFromUrl(url: string): string | null {
+    if (!url || !url.includes('cloudinary.com')) {
+      return null;
+    }
+
+    const parts = url.split('/upload/');
+    if (parts.length < 2) return null;
+
+    const afterUpload = parts[1];
+    const withoutParams = afterUpload.split('/').pop();
+    if (!withoutParams) return null;
+
+    const publicId = withoutParams.split('.')[0];
+    return publicId;
+  }
+}

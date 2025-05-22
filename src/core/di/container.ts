@@ -1,12 +1,12 @@
 /**
  * Dependency Injection Container
  *
- * Quản lý tất cả dependencies trong ứng dụng
+ * Manages all dependencies in the application
  */
-
 export class Container {
   private static instance: Container;
   private dependencies = new Map<string, any>();
+  private factories = new Map<string, () => any>();
 
   private constructor() {}
 
@@ -18,35 +18,70 @@ export class Container {
   }
 
   /**
-   * Đăng ký một dependency
+   * Register a dependency instance
    */
   register<T>(token: string, dependency: T): void {
     this.dependencies.set(token, dependency);
   }
 
   /**
-   * Đăng ký một factory function để tạo dependency
+   * Register a factory function to create dependency
    */
   registerFactory<T>(token: string, factory: () => T): void {
-    this.dependencies.set(token, factory);
+    this.factories.set(token, factory);
   }
 
   /**
-   * Lấy một dependency từ container
+   * Register a singleton factory (created once and cached)
+   */
+  registerSingleton<T>(token: string, factory: () => T): void {
+    let instance: T;
+    this.factories.set(token, () => {
+      if (!instance) {
+        instance = factory();
+      }
+      return instance;
+    });
+  }
+
+  /**
+   * Get a dependency from container
    */
   resolve<T>(token: string): T {
-    const dependency = this.dependencies.get(token);
-
-    if (!dependency) {
-      throw new Error(`Dependency ${token} not found in container`);
+    // Check if it's a registered instance
+    if (this.dependencies.has(token)) {
+      return this.dependencies.get(token) as T;
     }
 
-    // Nếu là factory function thì thực thi để lấy instance
-    if (typeof dependency === 'function' && !Object.getPrototypeOf(dependency).name) {
-      return dependency();
+    // Check if it's a factory
+    if (this.factories.has(token)) {
+      const factory = this.factories.get(token)!;
+      return factory() as T;
     }
 
-    return dependency as T;
+    throw new Error(`Dependency ${token} not found in container`);
+  }
+
+  /**
+   * Check if a dependency is registered
+   */
+  has(token: string): boolean {
+    return this.dependencies.has(token) || this.factories.has(token);
+  }
+
+  /**
+   * Clear all dependencies (useful for testing)
+   */
+  clear(): void {
+    this.dependencies.clear();
+    this.factories.clear();
+  }
+
+  /**
+   * Get all registered dependency tokens
+   */
+  getRegisteredTokens(): string[] {
+    return [...Array.from(this.dependencies.keys()), ...Array.from(this.factories.keys())];
   }
 }
 

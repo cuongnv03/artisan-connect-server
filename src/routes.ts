@@ -3,12 +3,10 @@ import { Config } from './config/config';
 import { Logger } from './core/logging/Logger';
 
 // Import router modules
-import authRoutes from './modules/user/interface/routes/auth.routes';
+import authRoutes from './modules/auth/interface/routes/auth.routes';
 import userRoutes from './modules/user/interface/routes/user.routes';
+import artisanRoutes from './modules/artisan/interface/routes/artisan.routes';
 import systemConfigRoutes from './modules/system/interface/routes/system-config.routes';
-import profileRoutes from './modules/profile/interface/routes/profile.routes';
-import artisansRoutes from './modules/artisanProfile/interface/routes/artisans.routes';
-import artisanProfileRoutes from './modules/artisanProfile/interface/routes/artisanProfile.routes';
 import postRoutes from './modules/post/interface/routes/post.routes';
 import socialRoutes from './modules/social/interface/routes/social.routes';
 import analyticsRoutes from './modules/analytics/interface/routes/analytics.routes';
@@ -23,24 +21,48 @@ const logger = Logger.getInstance();
 const apiPrefix = Config.API_PREFIX;
 
 export const registerRoutes = (app: Express) => {
-  // API routes với prefix
-  app.use(`${apiPrefix}/auth`, authRoutes);
-  app.use(`${apiPrefix}/users`, userRoutes);
-  app.use(`${apiPrefix}/config`, systemConfigRoutes);
-  app.use(`${apiPrefix}/profiles`, profileRoutes);
-  app.use(`${apiPrefix}/artisans`, artisansRoutes);
-  app.use(`${apiPrefix}/artisan-profiles`, artisanProfileRoutes);
-  app.use(`${apiPrefix}/posts`, postRoutes);
-  app.use(`${apiPrefix}/social`, socialRoutes);
-  app.use(`${apiPrefix}/saved-posts`, socialRoutes);
-  app.use(`${apiPrefix}/analytics`, analyticsRoutes);
-  app.use(`${apiPrefix}/products`, productRoutes);
-  app.use(`${apiPrefix}/categories`, categoryRoutes);
-  app.use(`${apiPrefix}/cart`, cartRoutes);
-  app.use(`${apiPrefix}/quotes`, quoteRoutes);
-  app.use(`${apiPrefix}/orders`, orderRoutes);
-  app.use(`${apiPrefix}/reviews`, reviewRoutes);
-  // Thêm routes khác
+  try {
+    // API routes với prefix
+    app.use(`${apiPrefix}/auth`, authRoutes);
+    app.use(`${apiPrefix}/users`, userRoutes);
+    app.use(`${apiPrefix}/artisans`, artisanRoutes);
+    app.use(`${apiPrefix}/config`, systemConfigRoutes);
+    app.use(`${apiPrefix}/posts`, postRoutes);
+    app.use(`${apiPrefix}/social`, socialRoutes);
+    app.use(`${apiPrefix}/saved-posts`, socialRoutes);
+    app.use(`${apiPrefix}/analytics`, analyticsRoutes);
+    app.use(`${apiPrefix}/products`, productRoutes);
+    app.use(`${apiPrefix}/categories`, categoryRoutes);
+    app.use(`${apiPrefix}/cart`, cartRoutes);
+    app.use(`${apiPrefix}/quotes`, quoteRoutes);
+    app.use(`${apiPrefix}/orders`, orderRoutes);
+    app.use(`${apiPrefix}/reviews`, reviewRoutes);
+    // Thêm routes khác
 
-  logger.info('Routes registered');
+    // API documentation route
+    app.get(`${apiPrefix}`, (req, res) => {
+      res.json({
+        name: 'Artisan Connect API',
+        version: '1.0.0',
+        description: 'Social commerce platform for artisans and handmade products',
+        endpoints: {
+          auth: `${apiPrefix}/auth`,
+          users: `${apiPrefix}/users`,
+          artisans: `${apiPrefix}/artisans`,
+          // posts: `${apiPrefix}/posts`,
+          // products: `${apiPrefix}/products`,
+          // orders: `${apiPrefix}/orders`,
+          // cart: `${apiPrefix}/cart`,
+          // messages: `${apiPrefix}/messages`,
+          // notifications: `${apiPrefix}/notifications`,
+        },
+        documentation: `${apiPrefix}/docs`,
+      });
+    });
+
+    logger.info('Routes registered');
+  } catch (error) {
+    logger.error(`Error registering routes: ${error}`);
+    throw error;
+  }
 };

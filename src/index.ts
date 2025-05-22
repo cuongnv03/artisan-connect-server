@@ -1,68 +1,82 @@
-import app from './app';
 import { Config } from './config/config';
 import { Logger } from './core/logging/Logger';
 import { PrismaClientManager } from './core/database/PrismaClient';
-import './core/di/injection'; // Load dependency injection
 
-const appInstance = app as any;
-
-if (typeof appInstance.setupRoutes === 'function') {
-  appInstance.setupRoutes();
-} else {
-  app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
-  const { registerRoutes } = require('./routes');
-  registerRoutes(app);
-}
-
+// Initialize configuration and logging
 const logger = Logger.getInstance();
 const { port, env } = Config.getServerConfig();
 
-// Start the server
-const server = app.listen(Number(port), '0.0.0.0', () => {
-  logger.info(`Server running in ${env} mode on port ${port}`);
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:');
-  logger.error(error.stack || error.message);
-  // Graceful shutdown
-  shutdown(1);
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Promise Rejection:');
-  logger.error(`Promise: ${promise}`);
-  logger.error(`Reason: ${reason}`);
-});
-
-// Graceful shutdown
-const shutdown = async (code: number) => {
-  logger.info('Shutting down server...');
-
-  // Close server
-  server.close(() => {
-    logger.info('HTTP server closed');
-  });
-
-  // Disconnect from database
+async function bootstrap() {
   try {
-    await PrismaClientManager.disconnect();
-    logger.info('Database connection closed');
+    // Validate configuration
+    Config.validate();
+    logger.info('Configuration validated successfully');
+
+    // Initialize dependency injection
+    await import('./core/di/injection');
+    logger.info('Dependency injection initialized');
+
+    // Test database connection
+    const prisma = PrismaClientManager.getClient();
+    await prisma.$connect();
+    logger.info('Database connection established');
+
+    // Initialize application
+    const appInstance = (await import('./app')).default;
+
+    // Setup routes
+    appInstance.setupRoutes();
+
+    // Start server
+    const server = appInstance.app.listen(Number(port), '0.0.0.0', () => {
+      logger.info(`🚀 Server running in ${env} mode on port ${port}`);
+      logger.info(`📚 API Documentation: http://localhost:${port}${Config.API_PREFIX}`);
+      logger.info(`🏥 Health Check: http://localhost:${port}/health`);
+    });
+
+    // Graceful shutdown handlers
+    const gracefulShutdown = async (signal: string) => {
+      logger.info(`Received ${signal}. Starting graceful shutdown...`);
+
+      server.close(async () => {
+        logger.info('HTTP server closed');
+
+        try {
+          await appInstance.shutdown();
+          process.exit(0);
+        } catch (error) {
+          logger.error(`Error during shutdown: ${error}`);
+          process.exit(1);
+        }
+      });
+
+      // Force shutdown after 30 seconds
+      setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 30000);
+    };
+
+    // Handle shutdown signals
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      logger.error(`Uncaught Exception: ${error}`);
+      gracefulShutdown('uncaughtException');
+    });
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      logger.error(`Unhandled Promise Rejection: ${reason}`);
+      gracefulShutdown('unhandledRejection');
+    });
   } catch (error) {
-    logger.error('Error during database disconnection');
+    logger.error(`Failed to start application: ${error}`);
+    process.exit(1);
   }
+}
 
-  // Exit process
-  setTimeout(() => {
-    logger.info('Process terminated');
-    process.exit(code);
-  }, 1000);
-};
-
-// Handle graceful shutdown signals
-process.on('SIGTERM', () => shutdown(0));
-process.on('SIGINT', () => shutdown(0));
+// Start the application
+bootstrap();

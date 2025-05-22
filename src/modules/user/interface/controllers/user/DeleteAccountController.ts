@@ -4,9 +4,6 @@ import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
 import { IUserService } from '../../../services/UserService.interface';
 import container from '../../../../../core/di/container';
 
-/**
- * Delete account controller
- */
 export class DeleteAccountController extends BaseController {
   private userService: IUserService;
 
@@ -15,9 +12,6 @@ export class DeleteAccountController extends BaseController {
     this.userService = container.resolve<IUserService>('userService');
   }
 
-  /**
-   * Handle delete account request
-   */
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       this.validateAuth(req);

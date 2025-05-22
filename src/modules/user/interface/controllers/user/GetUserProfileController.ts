@@ -5,9 +5,6 @@ import { IUserService } from '../../../services/UserService.interface';
 import { AppError } from '../../../../../core/errors/AppError';
 import container from '../../../../../core/di/container';
 
-/**
- * Get user profile controller
- */
 export class GetUserProfileController extends BaseController {
   private userService: IUserService;
 
@@ -16,9 +13,6 @@ export class GetUserProfileController extends BaseController {
     this.userService = container.resolve<IUserService>('userService');
   }
 
-  /**
-   * Handle get user profile request
-   */
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
@@ -27,6 +21,16 @@ export class GetUserProfileController extends BaseController {
 
       if (!user) {
         throw AppError.notFound('User not found');
+      }
+
+      // Track profile view if authenticated and not own profile
+      if (req.user && req.user.id !== id) {
+        await this.userService.trackActivity({
+          userId: req.user.id,
+          activityType: 'profile_view',
+          entityId: id,
+          entityType: 'user',
+        });
       }
 
       ApiResponse.success(res, user, 'User profile retrieved successfully');

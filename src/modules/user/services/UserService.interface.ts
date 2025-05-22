@@ -1,47 +1,36 @@
-import { User, UserUpdateAttributes, SafeUser } from '../models/User';
-import { UserStatus } from '../models/UserEnums';
+import { User, SafeUser, UserUpdateAttributes } from '../../auth';
+import { UserStatus } from '../../auth';
+import { UserProfileDto, UserListDto, UserSearchDto } from '../models/UserDto';
+import { Profile, ProfileWithUser, UpdateProfileDto } from '../models/Profile';
+import { Address, CreateAddressDto, UpdateAddressDto } from '../models/Address';
+import { Follow, FollowStatsDto } from '../models/Follow';
+import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
-/**
- * User service interface
- */
 export interface IUserService {
-  /**
-   * Get user by ID
-   */
-  getUserById(id: string): Promise<SafeUser | null>;
-
-  /**
-   * Update user profile
-   */
+  // User management
+  getUserById(id: string): Promise<UserProfileDto | null>;
   updateProfile(id: string, data: UserUpdateAttributes): Promise<SafeUser>;
-
-  /**
-   * Change user status
-   */
   changeStatus(id: string, status: UserStatus): Promise<SafeUser>;
-
-  /**
-   * Delete user account
-   */
   deleteAccount(id: string): Promise<boolean>;
-
-  /**
-   * Search users
-   */
-  searchUsers(
-    query: string,
-    page: number,
-    limit: number,
-  ): Promise<{
-    users: SafeUser[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  }>;
-
-  /**
-   * Update last seen
-   */
+  searchUsers(searchDto: UserSearchDto): Promise<UserListDto>;
   updateLastSeen(id: string): Promise<void>;
+
+  // Profile management
+  getProfileByUserId(userId: string): Promise<ProfileWithUser | null>;
+  updateUserProfile(userId: string, data: UpdateProfileDto): Promise<ProfileWithUser>;
+
+  // Address management
+  getAddressesByUserId(userId: string): Promise<Address[]>;
+  createAddress(userId: string, data: CreateAddressDto): Promise<Address>;
+  updateAddress(id: string, userId: string, data: UpdateAddressDto): Promise<Address>;
+  deleteAddress(id: string, userId: string): Promise<boolean>;
+  setAddressAsDefault(id: string, userId: string): Promise<Address>;
+  getDefaultAddress(userId: string): Promise<Address | null>;
+
+  // Follow management
+  followUser(followerId: string, followingId: string): Promise<Follow>;
+  unfollowUser(followerId: string, followingId: string): Promise<boolean>;
+  getFollowers(userId: string, page: number, limit: number): Promise<PaginatedResult<any>>;
+  getFollowing(userId: string, page: number, limit: number): Promise<PaginatedResult<any>>;
+  getFollowStats(userId: string, currentUserId?: string): Promise<FollowStatsDto>;
 }

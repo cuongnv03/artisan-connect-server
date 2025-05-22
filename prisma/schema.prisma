@@ -1,4 +1,4 @@
-// schema.prisma
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -44,28 +44,38 @@ model User {
   deletedAt      DateTime?
 
   // Relations
-  profile            Profile?
-  artisanProfile     ArtisanProfile?
-  upgradeRequest     ArtisanUpgradeRequest?
-  posts              Post[]
-  products           Product[]
-  followers          Follow[]               @relation("following")
-  following          Follow[]               @relation("follower")
-  likes              Like[]
-  comments           Comment[]
-  cartItems          CartItem[]
-  orders             Order[]                @relation("CustomerOrders")
-  sellerOrders       OrderItem[]            @relation("SellerOrderItems")
-  reviews            Review[]
-  quoteRequests      QuoteRequest[]         @relation("CustomerQuotes")
-  artisanQuotes      QuoteRequest[]         @relation("ArtisanQuotes")
-  sessions           Session[]
-  refreshTokens      RefreshToken[]
-  savedPosts         SavedPost[]
-  activities         UserActivity[]
-  passwordResets     PasswordReset[]
-  emailVerifications EmailVerification[]
-  ReviewHelpful      ReviewHelpful[]
+  profile             Profile?
+  artisanProfile      ArtisanProfile?
+  upgradeRequest      ArtisanUpgradeRequest?
+  posts               Post[]
+  products            Product[]
+  followers           Follow[]               @relation("Following")
+  following           Follow[]               @relation("Follower")
+  likes               Like[]
+  comments            Comment[]
+  cartItems           CartItem[]
+  orders              Order[]                @relation("CustomerOrders")
+  sellerOrders        OrderItem[]            @relation("SellerOrderItems")
+  reviews             Review[]
+  quoteRequests       QuoteRequest[]         @relation("CustomerQuotes")
+  artisanQuotes       QuoteRequest[]         @relation("ArtisanQuotes")
+  sessions            Session[]
+  refreshTokens       RefreshToken[]
+  savedPosts          SavedPost[]
+  activities          UserActivity[]
+  passwordResets      PasswordReset[]
+  emailVerifications  EmailVerification[]
+  reviewHelpful       ReviewHelpful[]
+  sentMessages        Message[]              @relation("MessageSender")
+  receivedMessages    Message[]              @relation("MessageReceiver")
+  conversationMembers ConversationMember[]
+  notifications       Notification[]         @relation("NotificationRecipient")
+  sentNotifications   Notification[]         @relation("NotificationSender")
+  paymentMethods      PaymentMethod[]
+  paymentTransactions PaymentTransaction[]
+  Payment             Payment[]
+  Wishlist            Wishlist[]
+  CouponUsage         CouponUsage[]
 
   @@index([email])
   @@index([username])
@@ -91,6 +101,8 @@ model Profile {
   // Relations
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   addresses Address[]
+
+  @@index([userId])
 }
 
 model Address {
@@ -193,6 +205,7 @@ model ArtisanProfile {
   isVerified      Boolean  @default(false)
   rating          Float?
   reviewCount     Int      @default(0)
+  totalSales      Decimal  @default(0) @db.Decimal(12, 2)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -201,6 +214,8 @@ model ArtisanProfile {
 
   @@index([shopName])
   @@index([isVerified])
+  @@index([rating])
+  @@index([specialties])
 }
 
 enum UpgradeRequestStatus {
@@ -222,6 +237,7 @@ model ArtisanUpgradeRequest {
   status          UpgradeRequestStatus @default(PENDING)
   adminNotes      String?              @db.Text
   reviewedBy      String? // Admin user ID who reviewed this request
+  reviewedAt      DateTime?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -242,8 +258,8 @@ model Follow {
   createdAt      DateTime @default(now())
 
   // Relations
-  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@index([followerId])
@@ -257,6 +273,7 @@ enum PostType {
   PRODUCT_SHOWCASE // Featured product content
   BEHIND_THE_SCENES // Workshop/process content
   EVENT // Event announcements
+  GENERAL // General posts
 }
 
 enum PostStatus {
@@ -274,13 +291,11 @@ model Post {
   summary      String?    @db.Text
   content      Json // Structured content with blocks
   contentText  String?    @db.Text // Plain text extraction for search
-  type         PostType   @default(STORY)
+  type         PostType   @default(GENERAL)
   status       PostStatus @default(DRAFT)
   thumbnailUrl String?
   coverImage   String?
   mediaUrls    String[] // Array of media URLs used in content
-  templateId   String? // Blog template reference 
-  templateData Json? // Template-specific data
   tags         String[]
   viewCount    Int        @default(0)
   likeCount    Int        @default(0)
@@ -305,6 +320,7 @@ model Post {
   @@index([publishedAt])
   @@index([createdAt])
   @@index([deletedAt])
+  @@index([tags])
 }
 
 model Comment {
@@ -399,6 +415,7 @@ model Product {
   avgRating      Float?
   reviewCount    Int           @default(0)
   viewCount      Int           @default(0)
+  salesCount     Int           @default(0)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
@@ -412,6 +429,7 @@ model Product {
   orderItems      OrderItem[]
   quoteRequests   QuoteRequest[]
   productMentions ProductMention[]
+  Wishlist        Wishlist[]
 
   @@index([sellerId])
   @@index([status])
@@ -419,6 +437,7 @@ model Product {
   @@index([isCustomizable])
   @@index([createdAt])
   @@index([deletedAt])
+  @@index([tags])
 }
 
 model Category {
@@ -430,6 +449,7 @@ model Category {
   parentId    String?
   level       Int      @default(0) // For hierarchical navigation
   sortOrder   Int      @default(0) // For custom ordering
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -441,6 +461,7 @@ model Category {
   @@index([parentId])
   @@index([level])
   @@index([sortOrder])
+  @@index([isActive])
 }
 
 model CategoryProduct {
@@ -529,6 +550,7 @@ model CartItem {
   userId    String
   productId String
   quantity  Int
+  price     Decimal  @db.Decimal(10, 2) // Price at time of adding to cart
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -560,7 +582,7 @@ model QuoteRequest {
   status         QuoteStatus @default(PENDING)
   counterOffer   Decimal?    @db.Decimal(10, 2)
   finalPrice     Decimal?    @db.Decimal(10, 2)
-  messages       Json? // Array of message objects
+  messages       Json? // Array of message objects for quote negotiation
   expiresAt      DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -579,8 +601,10 @@ model QuoteRequest {
   @@index([expiresAt])
 }
 
+//------------- ORDER & PAYMENT MODELS -------------//
 enum OrderStatus {
   PENDING
+  CONFIRMED
   PAID
   PROCESSING
   SHIPPED
@@ -589,10 +613,20 @@ enum OrderStatus {
   REFUNDED
 }
 
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
 enum PaymentMethod {
   CREDIT_CARD
+  DEBIT_CARD
   BANK_TRANSFER
-  PAYPAL
+  DIGITAL_WALLET
   CASH_ON_DELIVERY
 }
 
@@ -602,33 +636,36 @@ model Order {
   userId            String
   addressId         String? // Shipping address
   status            OrderStatus    @default(PENDING)
+  paymentStatus     PaymentStatus  @default(PENDING)
   totalAmount       Decimal        @db.Decimal(10, 2)
   subtotal          Decimal        @db.Decimal(10, 2)
   tax               Decimal        @default(0) @db.Decimal(10, 2)
   shippingCost      Decimal        @default(0) @db.Decimal(10, 2)
   discount          Decimal        @default(0) @db.Decimal(10, 2)
   paymentMethod     PaymentMethod?
-  paymentStatus     Boolean        @default(false)
-  paymentIntentId   String? // Payment processor reference
+  paymentReference  String? // Reference for payment tracking
   quoteRequestId    String?        @unique // If order came from a quote
   notes             String?
   trackingNumber    String?
   trackingUrl       String?
   estimatedDelivery DateTime?
+  deliveredAt       DateTime?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
   // Relations
-  customer        User                 @relation("CustomerOrders", fields: [userId], references: [id])
-  shippingAddress Address?             @relation("ShippingAddress", fields: [addressId], references: [id])
-  items           OrderItem[]
-  quoteRequest    QuoteRequest?        @relation(fields: [quoteRequestId], references: [id])
-  statusHistory   OrderStatusHistory[]
+  customer            User                 @relation("CustomerOrders", fields: [userId], references: [id])
+  shippingAddress     Address?             @relation("ShippingAddress", fields: [addressId], references: [id])
+  items               OrderItem[]
+  quoteRequest        QuoteRequest?        @relation(fields: [quoteRequestId], references: [id])
+  statusHistory       OrderStatusHistory[]
+  paymentTransactions PaymentTransaction[]
+  CouponUsage         CouponUsage[]
 
   @@index([userId])
   @@index([status])
-  @@index([orderNumber])
   @@index([paymentStatus])
+  @@index([orderNumber])
   @@index([quoteRequestId])
   @@index([createdAt])
 }
@@ -666,6 +703,174 @@ model OrderStatusHistory {
 
   @@index([orderId])
   @@index([status])
+  @@index([createdAt])
+}
+
+// Payment System Models (Simulated)
+model Payment {
+  id           String        @id @default(uuid())
+  userId       String
+  type         PaymentMethod
+  isDefault    Boolean       @default(false)
+  cardLast4    String? // Last 4 digits for cards
+  cardBrand    String? // Visa, Mastercard, etc.
+  expiryMonth  Int?
+  expiryYear   Int?
+  holderName   String?
+  bankName     String? // For bank transfers
+  accountLast4 String? // Last 4 digits of account
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions PaymentTransaction[]
+
+  @@index([userId])
+  @@index([isDefault])
+  @@index([isActive])
+}
+
+model PaymentTransaction {
+  id                String        @id @default(uuid())
+  orderId           String
+  userId            String
+  paymentMethodId   String?
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("USD")
+  status            PaymentStatus @default(PENDING)
+  paymentMethod     PaymentMethod
+  reference         String        @unique // Internal reference
+  externalReference String? // External payment processor reference
+  failureReason     String?
+  processedAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment Payment? @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@index([reference])
+  @@index([createdAt])
+}
+
+//------------- MESSAGING & COMMUNICATION MODELS -------------//
+model Conversation {
+  id            String    @id @default(uuid())
+  title         String?
+  isGroup       Boolean   @default(false)
+  lastMessage   String?
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  members  ConversationMember[]
+  messages Message[]
+
+  @@index([lastMessageAt])
+  @@index([createdAt])
+}
+
+model ConversationMember {
+  id             String    @id @default(uuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime  @default(now())
+  leftAt         DateTime?
+  isAdmin        Boolean   @default(false)
+  lastReadAt     DateTime?
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  CUSTOM_ORDER
+  QUOTE_REQUEST
+  SYSTEM
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  senderId       String
+  receiverId     String? // For direct messages
+  content        String      @db.Text
+  type           MessageType @default(TEXT)
+  metadata       Json? // Additional data for custom orders, quotes, etc.
+  attachments    String[] // URLs to attachments
+  isRead         Boolean     @default(false)
+  isEdited       Boolean     @default(false)
+  replyToId      String? // For reply messages
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver     User?        @relation("MessageReceiver", fields: [receiverId], references: [id])
+  replyTo      Message?     @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies      Message[]    @relation("MessageReplies")
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+  @@index([isRead])
+  @@index([deletedAt])
+}
+
+//------------- NOTIFICATION MODELS -------------//
+enum NotificationType {
+  LIKE
+  COMMENT
+  FOLLOW
+  MENTION
+  ORDER_UPDATE
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  QUOTE_REQUEST
+  QUOTE_RESPONSE
+  CUSTOM_ORDER
+  MESSAGE
+  SYSTEM
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String
+  senderId    String?
+  type        NotificationType
+  title       String
+  message     String           @db.Text
+  data        Json? // Additional data related to the notification
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  // Relations
+  recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender    User? @relation("NotificationSender", fields: [senderId], references: [id])
+
+  @@index([recipientId])
+  @@index([senderId])
+  @@index([type])
+  @@index([isRead])
   @@index([createdAt])
 }
 
@@ -712,9 +917,77 @@ model SystemConfig {
   key         String   @unique
   value       Json
   description String?
+  category    String? // For grouping configs
+  isPublic    Boolean  @default(false) // Whether this config can be accessed by non-admins
   updatedBy   String? // Admin user ID who updated this setting
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([key])
+  @@index([category])
+  @@index([isPublic])
+}
+
+//------------- ADDITIONAL FEATURES -------------//
+// Wishlist/Favorites
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+}
+
+// Coupons/Discounts
+model Coupon {
+  id           String    @id @default(uuid())
+  code         String    @unique
+  name         String
+  description  String?
+  type         String // PERCENTAGE, FIXED_AMOUNT, FREE_SHIPPING
+  value        Decimal   @db.Decimal(10, 2)
+  minAmount    Decimal?  @db.Decimal(10, 2) // Minimum order amount
+  maxDiscount  Decimal?  @db.Decimal(10, 2) // Maximum discount amount
+  usageLimit   Int? // Total usage limit
+  usageCount   Int       @default(0)
+  perUserLimit Int? // Usage limit per user
+  isActive     Boolean   @default(true)
+  startsAt     DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  orders CouponUsage[]
+
+  @@index([code])
+  @@index([isActive])
+  @@index([startsAt])
+  @@index([expiresAt])
+}
+
+model CouponUsage {
+  id       String   @id @default(uuid())
+  couponId String
+  orderId  String
+  userId   String
+  discount Decimal  @db.Decimal(10, 2)
+  usedAt   DateTime @default(now())
+
+  // Relations
+  coupon Coupon @relation(fields: [couponId], references: [id])
+  order  Order  @relation(fields: [orderId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([couponId, orderId])
+  @@index([couponId])
+  @@index([orderId])
+  @@index([userId])
 }

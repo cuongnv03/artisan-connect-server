@@ -38,3 +38,31 @@ export const trimRequestBody = (req: Request, res: Response, next: NextFunction)
   }
   next();
 };
+
+// Activity tracking middleware
+export const trackUserActivity = (activityType: string) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (req.user) {
+        // Import here to avoid circular dependency
+        const { ActivityTrackingService } = await import(
+          '../../modules/user/services/ActivityTrackingService'
+        );
+        const activityService = new ActivityTrackingService();
+
+        await activityService.trackActivity({
+          userId: req.user.id,
+          activityType,
+          entityId: req.params.id || req.params.userId,
+          entityType: 'user',
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+        });
+      }
+    } catch (error) {
+      // Don't break the request if activity tracking fails
+      console.error('Activity tracking failed:', error);
+    }
+    next();
+  };
+};
