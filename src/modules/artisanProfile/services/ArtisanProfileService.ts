@@ -21,6 +21,7 @@ import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 import { UserRole } from '../../user/models/UserEnums';
 import container from '../../../core/di/container';
+import { PaginationUtils } from '../../../shared/utils/PaginationUtils';
 
 /**
  * Artisan Profile service implementation
@@ -118,6 +119,37 @@ export class ArtisanProfileService implements IArtisanProfileService {
       return updatedProfile;
     } catch (error) {
       this.logger.error(`Error updating artisan profile: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get artisan profiles with pagination
+   */
+  async getArtisanProfilesWithPagination(
+    page: number = 1,
+    limit: number = 10,
+    filters: Record<string, any> = {},
+  ): Promise<PaginatedResult<any>> {
+    try {
+      // Implement pagination and filtering logic using your repositories
+      const skip = PaginationUtils.calculateSkip(page, limit);
+
+      // Get artisan profiles with users
+      const artisanProfiles = await this.artisanProfileRepository.findAllWithUsers({
+        skip,
+        take: limit,
+        where: this.buildWhereClause(filters),
+        orderBy: this.buildOrderByClause(filters),
+      });
+
+      // Count total matching profiles
+      const total = await this.artisanProfileRepository.count(this.buildWhereClause(filters));
+
+      // Return paginated result
+      return PaginationUtils.createPaginatedResult(artisanProfiles, total, page, limit);
+    } catch (error) {
+      this.logger.error(`Error getting artisan profiles with pagination: ${error}`);
       throw error;
     }
   }
@@ -608,5 +640,59 @@ export class ArtisanProfileService implements IArtisanProfileService {
 
     const publicId = withoutParams.split('.')[0];
     return publicId;
+  }
+
+  /**
+   * Build where clause for filtering
+   */
+  private buildWhereClause(filters: Record<string, any>): Record<string, any> {
+    const where: Record<string, any> = {};
+
+    if (filters.search) {
+      where.OR = [
+        { shopName: { contains: filters.search, mode: 'insensitive' } },
+        { shopDescription: { contains: filters.search, mode: 'insensitive' } },
+        {
+          user: {
+            OR: [
+              { firstName: { contains: filters.search, mode: 'insensitive' } },
+              { lastName: { contains: filters.search, mode: 'insensitive' } },
+            ],
+          },
+        },
+      ];
+    }
+
+    if (filters.categoryId) {
+      // Implement category filtering if needed
+    }
+
+    if (filters.specialties && Array.isArray(filters.specialties)) {
+      where.specialties = { hasSome: filters.specialties };
+    } else if (filters.specialties) {
+      where.specialties = { hasSome: [filters.specialties] };
+    }
+
+    if (filters.isVerified !== undefined) {
+      where.isVerified = filters.isVerified;
+    }
+
+    return where;
+  }
+
+  /**
+   * Build order by clause for sorting
+   */
+  private buildOrderByClause(filters: Record<string, any>): Record<string, any> {
+    const { sortBy, sortOrder = 'desc' } = filters;
+
+    if (sortBy === 'rating') {
+      return { rating: sortOrder };
+    } else if (sortBy === 'createdAt') {
+      return { createdAt: sortOrder };
+    }
+
+    // Default sorting
+    return { createdAt: 'desc' };
   }
 }

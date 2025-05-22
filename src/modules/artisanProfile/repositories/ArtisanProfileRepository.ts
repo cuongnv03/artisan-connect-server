@@ -95,6 +95,30 @@ export class ArtisanProfileRepository
   }
 
   /**
+   * Find all profiles with user details
+   */
+  async findAllWithUsers(options?: Record<string, any>): Promise<ArtisanProfileWithUser[]> {
+    const profiles = await this.prisma.artisanProfile.findMany({
+      ...options,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatarUrl: true,
+            followerCount: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    return profiles as ArtisanProfileWithUser[];
+  }
+
+  /**
    * Find profile by ID with user details
    */
   async findByIdWithUser(id: string): Promise<ArtisanProfileWithUser | null> {

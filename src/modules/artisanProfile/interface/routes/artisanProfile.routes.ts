@@ -14,6 +14,7 @@ import {
 import { CreateArtisanProfileController } from '../controllers/CreateArtisanProfileController';
 import { UpdateArtisanProfileController } from '../controllers/UpdateArtisanProfileController';
 import { GetArtisanProfileController } from '../controllers/GetArtisanProfileController';
+import { GetArtisansController } from '../controllers/GetArtisansController';
 import { GetMyArtisanProfileController } from '../controllers/GetMyArtisanProfileController';
 import { GetArtisanProfileByUserIdController } from '../controllers/GetArtisanProfileByUserIdController';
 import { GenerateTemplateController } from '../controllers/GenerateTemplateController';
@@ -32,6 +33,7 @@ const approveUpgradeRequestController = new ApproveUpgradeRequestController();
 const rejectUpgradeRequestController = new RejectUpgradeRequestController();
 const createArtisanProfileController = new CreateArtisanProfileController();
 const updateArtisanProfileController = new UpdateArtisanProfileController();
+const getArtisansController = new GetArtisansController();
 const getArtisanProfileController = new GetArtisanProfileController();
 const getMyArtisanProfileController = new GetMyArtisanProfileController();
 const getArtisanProfileByUserIdController = new GetArtisanProfileByUserIdController();

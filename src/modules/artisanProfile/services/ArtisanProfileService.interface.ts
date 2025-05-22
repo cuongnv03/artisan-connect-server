@@ -11,6 +11,7 @@ import {
   ArtisanUpgradeRequestWithUser,
 } from '../models/ArtisanUpgradeRequest';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
+import { UserWithArtisanProfile } from '../../../modules/user';
 
 export interface IArtisanProfileService {
   /**
@@ -28,6 +29,15 @@ export interface IArtisanProfileService {
     userId: string,
     data: UpdateArtisanProfileDto,
   ): Promise<ArtisanProfileWithUser>;
+
+  /**
+   * Get artisan profiles with pagination
+   */
+  getArtisanProfilesWithPagination(
+    page?: number,
+    limit?: number,
+    filters?: Record<string, any>,
+  ): Promise<PaginatedResult<UserWithArtisanProfile>>;
 
   /**
    * Get artisan profile by ID

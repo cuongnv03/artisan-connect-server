@@ -30,6 +30,15 @@ export interface User {
 }
 
 /**
+ * User with artisan profile
+ *
+ * Represents a user along with their associated artisan profile
+ */
+export interface UserWithArtisanProfile extends User {
+  artisanProfile: ArtisanProfile | null;
+}
+
+/**
  * User creation attributes
  */
 export interface UserCreationAttributes {

@@ -16,7 +16,7 @@ export class Config {
   // JWT configuration
   static JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'access-secret-key';
   static JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'refresh-secret-key';
-  static JWT_ACCESS_EXPIRATION = process.env.JWT_ACCESS_EXPIRATION || '15m';
+  static JWT_ACCESS_EXPIRATION = process.env.JWT_ACCESS_EXPIRATION || '24h';
   static JWT_REFRESH_EXPIRATION = process.env.JWT_REFRESH_EXPIRATION || '7d';
 
   // Cookie configuration

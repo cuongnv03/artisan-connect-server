@@ -22,6 +22,8 @@ export interface IArtisanProfileRepository extends BaseRepository<ArtisanProfile
    */
   updateProfile(userId: string, data: UpdateArtisanProfileDto): Promise<ArtisanProfileWithUser>;
 
+  findAllWithUsers(options?: Record<string, any>): Promise<ArtisanProfileWithUser[]>;
+
   /**
    * Find profile by ID with user details
    */
