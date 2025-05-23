@@ -4,7 +4,7 @@ import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { ICartService } from '../../services/CartService.interface';
 import container from '../../../../core/di/container';
 
-export class UpdateCartItemController extends BaseController {
+export class SyncCartPricesController extends BaseController {
   private cartService: ICartService;
 
   constructor() {
@@ -16,10 +16,14 @@ export class UpdateCartItemController extends BaseController {
     try {
       this.validateAuth(req);
 
-      const { productId } = req.params;
-      const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
+      const syncResult = await this.cartService.syncCartPrices(req.user!.id);
 
-      ApiResponse.success(res, cartItem, 'Cart item updated successfully');
+      const message =
+        syncResult.updatedItems > 0
+          ? `Synced prices for ${syncResult.updatedItems} items`
+          : 'All prices are up to date';
+
+      ApiResponse.success(res, syncResult, message);
     } catch (error) {
       next(error);
     }

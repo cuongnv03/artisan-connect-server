@@ -4,7 +4,7 @@ import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { ICartService } from '../../services/CartService.interface';
 import container from '../../../../core/di/container';
 
-export class UpdateCartItemController extends BaseController {
+export class MergeGuestCartController extends BaseController {
   private cartService: ICartService;
 
   constructor() {
@@ -16,10 +16,14 @@ export class UpdateCartItemController extends BaseController {
     try {
       this.validateAuth(req);
 
-      const { productId } = req.params;
-      const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
+      const mergeResult = await this.cartService.mergeGuestCart(req.user!.id, req.body);
 
-      ApiResponse.success(res, cartItem, 'Cart item updated successfully');
+      const message =
+        mergeResult.skippedItems.length > 0
+          ? `Cart merged successfully. ${mergeResult.skippedItems.length} items were skipped.`
+          : 'Guest cart merged successfully';
+
+      ApiResponse.success(res, mergeResult, message);
     } catch (error) {
       next(error);
     }

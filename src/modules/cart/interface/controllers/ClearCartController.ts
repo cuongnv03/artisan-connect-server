@@ -16,9 +16,13 @@ export class ClearCartController extends BaseController {
     try {
       this.validateAuth(req);
 
-      await this.cartService.clearCart(req.user!.id);
+      const result = await this.cartService.clearCart(req.user!.id);
 
-      ApiResponse.success(res, null, 'Cart cleared successfully');
+      if (result) {
+        ApiResponse.success(res, null, 'Cart cleared successfully');
+      } else {
+        ApiResponse.badRequest(res, 'Failed to clear cart');
+      }
     } catch (error) {
       next(error);
     }

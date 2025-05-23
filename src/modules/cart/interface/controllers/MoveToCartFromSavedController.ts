@@ -4,7 +4,7 @@ import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { ICartService } from '../../services/CartService.interface';
 import container from '../../../../core/di/container';
 
-export class UpdateCartItemController extends BaseController {
+export class MoveToCartFromSavedController extends BaseController {
   private cartService: ICartService;
 
   constructor() {
@@ -17,9 +17,15 @@ export class UpdateCartItemController extends BaseController {
       this.validateAuth(req);
 
       const { productId } = req.params;
-      const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
+      const { quantity = 1 } = req.body;
 
-      ApiResponse.success(res, cartItem, 'Cart item updated successfully');
+      const cartItem = await this.cartService.moveToCartFromSaved(
+        req.user!.id,
+        productId,
+        quantity,
+      );
+
+      ApiResponse.success(res, cartItem, 'Item moved to cart successfully');
     } catch (error) {
       next(error);
     }

@@ -4,7 +4,7 @@ import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { ICartService } from '../../services/CartService.interface';
 import container from '../../../../core/di/container';
 
-export class UpdateCartItemController extends BaseController {
+export class CheckPriceChangesController extends BaseController {
   private cartService: ICartService;
 
   constructor() {
@@ -16,10 +16,14 @@ export class UpdateCartItemController extends BaseController {
     try {
       this.validateAuth(req);
 
-      const { productId } = req.params;
-      const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
+      const priceChanges = await this.cartService.checkPriceChanges(req.user!.id);
 
-      ApiResponse.success(res, cartItem, 'Cart item updated successfully');
+      const message =
+        priceChanges.length > 0
+          ? `Found ${priceChanges.length} price changes`
+          : 'No price changes detected';
+
+      ApiResponse.success(res, { priceChanges }, message);
     } catch (error) {
       next(error);
     }

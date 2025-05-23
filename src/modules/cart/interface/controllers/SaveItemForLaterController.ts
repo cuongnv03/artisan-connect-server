@@ -4,7 +4,7 @@ import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { ICartService } from '../../services/CartService.interface';
 import container from '../../../../core/di/container';
 
-export class UpdateCartItemController extends BaseController {
+export class SaveItemForLaterController extends BaseController {
   private cartService: ICartService;
 
   constructor() {
@@ -17,9 +17,13 @@ export class UpdateCartItemController extends BaseController {
       this.validateAuth(req);
 
       const { productId } = req.params;
-      const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
+      const result = await this.cartService.saveItemForLater(req.user!.id, productId);
 
-      ApiResponse.success(res, cartItem, 'Cart item updated successfully');
+      if (result) {
+        ApiResponse.success(res, null, 'Item saved for later successfully');
+      } else {
+        ApiResponse.badRequest(res, 'Failed to save item for later');
+      }
     } catch (error) {
       next(error);
     }

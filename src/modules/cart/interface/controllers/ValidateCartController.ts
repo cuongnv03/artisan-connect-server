@@ -16,14 +16,25 @@ export class ValidateCartController extends BaseController {
     try {
       this.validateAuth(req);
 
-      const validationResult = await this.cartService.validateCartForCheckout(req.user!.id);
+      const validationType = (req.query.type as string) || 'basic';
 
-      if (!validationResult.valid) {
-        ApiResponse.badRequest(res, validationResult.message || 'Cart validation failed');
-        return;
+      if (validationType === 'checkout') {
+        const validation = await this.cartService.validateForCheckout(req.user!.id);
+
+        if (validation.isValid) {
+          ApiResponse.success(res, validation, 'Cart is valid for checkout');
+        } else {
+          ApiResponse.badRequest(
+            res,
+            validation.errors.join(', ') || 'Cart validation failed',
+            'CART_VALIDATION_FAILED',
+          );
+        }
+      } else {
+        const validation = await this.cartService.validateCart(req.user!.id);
+
+        ApiResponse.success(res, validation, 'Cart validation completed');
       }
-
-      ApiResponse.success(res, { valid: true }, 'Cart is valid for checkout');
     } catch (error) {
       next(error);
     }

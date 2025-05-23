@@ -16,9 +16,15 @@ export class GetCartController extends BaseController {
     try {
       this.validateAuth(req);
 
-      const cart = await this.cartService.getCartWithTotals(req.user!.id);
+      const includeDetails = req.query.details === 'true';
 
-      ApiResponse.success(res, cart, 'Cart retrieved successfully');
+      if (includeDetails) {
+        const cartSummary = await this.cartService.getCartSummary(req.user!.id);
+        ApiResponse.success(res, cartSummary, 'Cart summary retrieved successfully');
+      } else {
+        const cartItems = await this.cartService.getCartItems(req.user!.id);
+        ApiResponse.success(res, { items: cartItems }, 'Cart items retrieved successfully');
+      }
     } catch (error) {
       next(error);
     }

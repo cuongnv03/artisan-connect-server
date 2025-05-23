@@ -4,7 +4,7 @@ import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { ICartService } from '../../services/CartService.interface';
 import container from '../../../../core/di/container';
 
-export class UpdateCartItemController extends BaseController {
+export class BulkRemoveFromCartController extends BaseController {
   private cartService: ICartService;
 
   constructor() {
@@ -16,10 +16,14 @@ export class UpdateCartItemController extends BaseController {
     try {
       this.validateAuth(req);
 
-      const { productId } = req.params;
-      const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
+      const { productIds } = req.body;
+      const result = await this.cartService.bulkRemoveFromCart(req.user!.id, productIds);
 
-      ApiResponse.success(res, cartItem, 'Cart item updated successfully');
+      if (result) {
+        ApiResponse.success(res, null, 'Items removed from cart successfully');
+      } else {
+        ApiResponse.badRequest(res, 'Failed to remove items from cart');
+      }
     } catch (error) {
       next(error);
     }
