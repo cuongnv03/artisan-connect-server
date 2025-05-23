@@ -15,13 +15,20 @@ import container from '../../../core/di/container';
 
 export class NotificationService implements INotificationService {
   private notificationRepository: INotificationRepository;
-  private socketService: ISocketService;
+  private _socketService?: ISocketService;
   private logger = Logger.getInstance();
 
   constructor() {
     this.notificationRepository =
       container.resolve<INotificationRepository>('notificationRepository');
-    this.socketService = container.resolve<ISocketService>('socketService');
+  }
+
+  // Lazy getter for socketService
+  private get socketService(): ISocketService {
+    if (!this._socketService) {
+      this._socketService = container.resolve<ISocketService>('socketService');
+    }
+    return this._socketService;
   }
 
   async createNotification(data: CreateNotificationDto): Promise<Notification> {

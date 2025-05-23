@@ -8,25 +8,31 @@ CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED');
 CREATE TYPE "UpgradeRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
 -- CreateEnum
-CREATE TYPE "PostType" AS ENUM ('STORY', 'TUTORIAL', 'PRODUCT_SHOWCASE', 'BEHIND_THE_SCENES', 'EVENT');
+CREATE TYPE "PostType" AS ENUM ('STORY', 'TUTORIAL', 'PRODUCT_SHOWCASE', 'BEHIND_THE_SCENES', 'EVENT', 'GENERAL');
 
 -- CreateEnum
 CREATE TYPE "PostStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED', 'DELETED');
 
 -- CreateEnum
-CREATE TYPE "ProductStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'OUT_OF_STOCK', 'DISCONTINUED', 'DELETED');
+CREATE TYPE "ProductStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'OUT_OF_STOCK', 'DELETED');
 
 -- CreateEnum
-CREATE TYPE "QuoteStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REJECTED', 'COUNTER_OFFERED', 'COMPLETED', 'EXPIRED');
+CREATE TYPE "OrderStatus" AS ENUM ('PENDING', 'CONFIRMED', 'PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED');
 
 -- CreateEnum
-CREATE TYPE "OrderStatus" AS ENUM ('PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED');
+CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REFUNDED');
 
 -- CreateEnum
-CREATE TYPE "PaymentMethod" AS ENUM ('CREDIT_CARD', 'BANK_TRANSFER', 'PAYPAL', 'CASH_ON_DELIVERY');
+CREATE TYPE "PaymentMethod" AS ENUM ('CREDIT_CARD', 'DEBIT_CARD', 'BANK_TRANSFER', 'DIGITAL_WALLET', 'CASH_ON_DELIVERY');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('LIKE', 'COMMENT', 'FOLLOW', 'MENTION', 'QUOTE_REQUEST', 'QUOTE_RESPONSE', 'ORDER_STATUS', 'MESSAGE', 'REVIEW', 'SYSTEM');
+CREATE TYPE "QuoteStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REJECTED', 'COUNTER_OFFERED', 'EXPIRED');
+
+-- CreateEnum
+CREATE TYPE "MessageType" AS ENUM ('TEXT', 'IMAGE', 'CUSTOM_ORDER', 'QUOTE_DISCUSSION');
+
+-- CreateEnum
+CREATE TYPE "NotificationType" AS ENUM ('LIKE', 'COMMENT', 'FOLLOW', 'MENTION', 'ORDER_UPDATE', 'PAYMENT_SUCCESS', 'PAYMENT_FAILED', 'QUOTE_REQUEST', 'QUOTE_RESPONSE', 'CUSTOM_ORDER', 'MESSAGE', 'SYSTEM');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -49,6 +55,7 @@ CREATE TABLE "User" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
+    "paymentMethods" "PaymentMethod"[],
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -115,6 +122,28 @@ CREATE TABLE "RefreshToken" (
 );
 
 -- CreateTable
+CREATE TABLE "PasswordReset" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PasswordReset_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EmailVerification" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmailVerification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "ArtisanProfile" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -128,11 +157,10 @@ CREATE TABLE "ArtisanProfile" (
     "contactEmail" TEXT,
     "contactPhone" TEXT,
     "socialMedia" JSONB,
-    "templateId" TEXT,
-    "templateData" JSONB,
     "isVerified" BOOLEAN NOT NULL DEFAULT false,
     "rating" DOUBLE PRECISION,
     "reviewCount" INTEGER NOT NULL DEFAULT 0,
+    "totalSales" DECIMAL(12,2) NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -153,6 +181,7 @@ CREATE TABLE "ArtisanUpgradeRequest" (
     "status" "UpgradeRequestStatus" NOT NULL DEFAULT 'PENDING',
     "adminNotes" TEXT,
     "reviewedBy" TEXT,
+    "reviewedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -180,13 +209,11 @@ CREATE TABLE "Post" (
     "summary" TEXT,
     "content" JSONB NOT NULL,
     "contentText" TEXT,
-    "type" "PostType" NOT NULL DEFAULT 'STORY',
+    "type" "PostType" NOT NULL DEFAULT 'GENERAL',
     "status" "PostStatus" NOT NULL DEFAULT 'DRAFT',
     "thumbnailUrl" TEXT,
     "coverImage" TEXT,
     "mediaUrls" TEXT[],
-    "templateId" TEXT,
-    "templateData" JSONB,
     "tags" TEXT[],
     "viewCount" INTEGER NOT NULL DEFAULT 0,
     "likeCount" INTEGER NOT NULL DEFAULT 0,
@@ -250,17 +277,14 @@ CREATE TABLE "Product" (
     "price" DECIMAL(10,2) NOT NULL,
     "discountPrice" DECIMAL(10,2),
     "quantity" INTEGER NOT NULL DEFAULT 0,
-    "sku" TEXT,
-    "weight" DOUBLE PRECISION,
-    "dimensions" JSONB,
     "status" "ProductStatus" NOT NULL DEFAULT 'DRAFT',
     "images" TEXT[],
     "tags" TEXT[],
-    "attributes" JSONB,
     "isCustomizable" BOOLEAN NOT NULL DEFAULT false,
     "avgRating" DOUBLE PRECISION,
     "reviewCount" INTEGER NOT NULL DEFAULT 0,
     "viewCount" INTEGER NOT NULL DEFAULT 0,
+    "salesCount" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -278,6 +302,7 @@ CREATE TABLE "Category" (
     "parentId" TEXT,
     "level" INTEGER NOT NULL DEFAULT 0,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -298,7 +323,6 @@ CREATE TABLE "PriceHistory" (
     "productId" TEXT NOT NULL,
     "price" DECIMAL(10,2) NOT NULL,
     "changeNote" TEXT,
-    "changedBy" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "PriceHistory_pkey" PRIMARY KEY ("id")
@@ -324,7 +348,6 @@ CREATE TABLE "Review" (
     "title" TEXT,
     "comment" TEXT,
     "images" TEXT[],
-    "helpfulCount" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -337,6 +360,7 @@ CREATE TABLE "CartItem" (
     "userId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
+    "price" DECIMAL(10,2) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -344,22 +368,14 @@ CREATE TABLE "CartItem" (
 );
 
 -- CreateTable
-CREATE TABLE "QuoteRequest" (
+CREATE TABLE "Wishlist" (
     "id" TEXT NOT NULL,
-    "productId" TEXT NOT NULL,
-    "customerId" TEXT NOT NULL,
-    "artisanId" TEXT NOT NULL,
-    "requestedPrice" DECIMAL(10,2),
-    "specifications" TEXT,
-    "status" "QuoteStatus" NOT NULL DEFAULT 'PENDING',
-    "counterOffer" DECIMAL(10,2),
-    "finalPrice" DECIMAL(10,2),
-    "messages" JSONB,
-    "expiresAt" TIMESTAMP(3),
+    "userId" TEXT NOT NULL,
+    "productId" TEXT,
+    "postId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "QuoteRequest_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Wishlist_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -369,19 +385,16 @@ CREATE TABLE "Order" (
     "userId" TEXT NOT NULL,
     "addressId" TEXT,
     "status" "OrderStatus" NOT NULL DEFAULT 'PENDING',
+    "paymentStatus" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
     "totalAmount" DECIMAL(10,2) NOT NULL,
     "subtotal" DECIMAL(10,2) NOT NULL,
-    "tax" DECIMAL(10,2) NOT NULL DEFAULT 0,
     "shippingCost" DECIMAL(10,2) NOT NULL DEFAULT 0,
-    "discount" DECIMAL(10,2) NOT NULL DEFAULT 0,
     "paymentMethod" "PaymentMethod",
-    "paymentStatus" BOOLEAN NOT NULL DEFAULT false,
-    "paymentIntentId" TEXT,
-    "quoteRequestId" TEXT,
+    "paymentReference" TEXT,
     "notes" TEXT,
     "trackingNumber" TEXT,
-    "trackingUrl" TEXT,
     "estimatedDelivery" TIMESTAMP(3),
+    "deliveredAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -396,34 +409,97 @@ CREATE TABLE "OrderItem" (
     "sellerId" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
     "price" DECIMAL(10,2) NOT NULL,
-    "productData" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "OrderItem_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "OrderStatusHistory" (
+CREATE TABLE "Payment" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "type" "PaymentMethod" NOT NULL,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "cardLast4" TEXT,
+    "cardBrand" TEXT,
+    "expiryMonth" INTEGER,
+    "expiryYear" INTEGER,
+    "holderName" TEXT,
+    "bankName" TEXT,
+    "accountLast4" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PaymentTransaction" (
     "id" TEXT NOT NULL,
     "orderId" TEXT NOT NULL,
-    "status" "OrderStatus" NOT NULL,
-    "note" TEXT,
-    "createdBy" TEXT,
+    "userId" TEXT NOT NULL,
+    "paymentMethodId" TEXT,
+    "amount" DECIMAL(10,2) NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'USD',
+    "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
+    "paymentMethod" "PaymentMethod" NOT NULL,
+    "reference" TEXT NOT NULL,
+    "externalReference" TEXT,
+    "failureReason" TEXT,
+    "processedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "OrderStatusHistory_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "PaymentTransaction_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "QuoteRequest" (
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "artisanId" TEXT NOT NULL,
+    "requestedPrice" DECIMAL(10,2),
+    "specifications" TEXT,
+    "status" "QuoteStatus" NOT NULL DEFAULT 'PENDING',
+    "counterOffer" DECIMAL(10,2),
+    "finalPrice" DECIMAL(10,2),
+    "customerMessage" TEXT,
+    "artisanMessage" TEXT,
+    "expiresAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "QuoteRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "QuoteNegotiation" (
+    "id" TEXT NOT NULL,
+    "quoteId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "actor" TEXT NOT NULL,
+    "previousPrice" DECIMAL(10,2),
+    "newPrice" DECIMAL(10,2),
+    "message" TEXT,
+    "metadata" JSONB,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "QuoteNegotiation_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Message" (
     "id" TEXT NOT NULL,
     "senderId" TEXT NOT NULL,
-    "recipientId" TEXT NOT NULL,
+    "receiverId" TEXT NOT NULL,
     "content" TEXT NOT NULL,
-    "attachments" TEXT[],
+    "type" "MessageType" NOT NULL DEFAULT 'TEXT',
+    "metadata" JSONB,
     "isRead" BOOLEAN NOT NULL DEFAULT false,
-    "readAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
 );
@@ -431,16 +507,13 @@ CREATE TABLE "Message" (
 -- CreateTable
 CREATE TABLE "Notification" (
     "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "recipientId" TEXT NOT NULL,
+    "senderId" TEXT,
     "type" "NotificationType" NOT NULL,
     "title" TEXT NOT NULL,
-    "content" TEXT NOT NULL,
-    "isRead" BOOLEAN NOT NULL DEFAULT false,
+    "message" TEXT NOT NULL,
     "data" JSONB,
-    "relatedUserId" TEXT,
-    "relatedEntityId" TEXT,
-    "relatedEntityType" TEXT,
-    "readAt" TIMESTAMP(3),
+    "isRead" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
@@ -453,7 +526,6 @@ CREATE TABLE "PostAnalytics" (
     "viewCount" INTEGER NOT NULL DEFAULT 0,
     "uniqueViewers" INTEGER NOT NULL DEFAULT 0,
     "avgReadTime" DOUBLE PRECISION,
-    "bounceRate" DOUBLE PRECISION,
     "conversionCount" INTEGER NOT NULL DEFAULT 0,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -475,19 +547,6 @@ CREATE TABLE "UserActivity" (
     CONSTRAINT "UserActivity_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "SystemConfig" (
-    "id" TEXT NOT NULL,
-    "key" TEXT NOT NULL,
-    "value" JSONB NOT NULL,
-    "description" TEXT,
-    "updatedBy" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "SystemConfig_pkey" PRIMARY KEY ("id")
-);
-
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -507,13 +566,13 @@ CREATE INDEX "User_role_idx" ON "User"("role");
 CREATE INDEX "User_status_idx" ON "User"("status");
 
 -- CreateIndex
-CREATE INDEX "User_lastSeenAt_idx" ON "User"("lastSeenAt");
-
--- CreateIndex
 CREATE INDEX "User_deletedAt_idx" ON "User"("deletedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Profile_userId_key" ON "Profile"("userId");
+
+-- CreateIndex
+CREATE INDEX "Profile_userId_idx" ON "Profile"("userId");
 
 -- CreateIndex
 CREATE INDEX "Address_profileId_idx" ON "Address"("profileId");
@@ -540,7 +599,22 @@ CREATE INDEX "RefreshToken_userId_idx" ON "RefreshToken"("userId");
 CREATE INDEX "RefreshToken_token_idx" ON "RefreshToken"("token");
 
 -- CreateIndex
-CREATE INDEX "RefreshToken_expiresAt_idx" ON "RefreshToken"("expiresAt");
+CREATE UNIQUE INDEX "PasswordReset_token_key" ON "PasswordReset"("token");
+
+-- CreateIndex
+CREATE INDEX "PasswordReset_token_idx" ON "PasswordReset"("token");
+
+-- CreateIndex
+CREATE INDEX "PasswordReset_userId_idx" ON "PasswordReset"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EmailVerification_token_key" ON "EmailVerification"("token");
+
+-- CreateIndex
+CREATE INDEX "EmailVerification_token_idx" ON "EmailVerification"("token");
+
+-- CreateIndex
+CREATE INDEX "EmailVerification_userId_idx" ON "EmailVerification"("userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ArtisanProfile_userId_key" ON "ArtisanProfile"("userId");
@@ -550,6 +624,9 @@ CREATE INDEX "ArtisanProfile_shopName_idx" ON "ArtisanProfile"("shopName");
 
 -- CreateIndex
 CREATE INDEX "ArtisanProfile_isVerified_idx" ON "ArtisanProfile"("isVerified");
+
+-- CreateIndex
+CREATE INDEX "ArtisanProfile_rating_idx" ON "ArtisanProfile"("rating");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ArtisanUpgradeRequest_userId_key" ON "ArtisanUpgradeRequest"("userId");
@@ -565,9 +642,6 @@ CREATE INDEX "Follow_followerId_idx" ON "Follow"("followerId");
 
 -- CreateIndex
 CREATE INDEX "Follow_followingId_idx" ON "Follow"("followingId");
-
--- CreateIndex
-CREATE INDEX "Follow_status_idx" ON "Follow"("status");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Follow_followerId_followingId_key" ON "Follow"("followerId", "followingId");
@@ -588,10 +662,10 @@ CREATE INDEX "Post_status_idx" ON "Post"("status");
 CREATE INDEX "Post_publishedAt_idx" ON "Post"("publishedAt");
 
 -- CreateIndex
-CREATE INDEX "Post_createdAt_idx" ON "Post"("createdAt");
+CREATE INDEX "Post_deletedAt_idx" ON "Post"("deletedAt");
 
 -- CreateIndex
-CREATE INDEX "Post_deletedAt_idx" ON "Post"("deletedAt");
+CREATE INDEX "Post_tags_idx" ON "Post"("tags");
 
 -- CreateIndex
 CREATE INDEX "Comment_postId_idx" ON "Comment"("postId");
@@ -603,9 +677,6 @@ CREATE INDEX "Comment_userId_idx" ON "Comment"("userId");
 CREATE INDEX "Comment_parentId_idx" ON "Comment"("parentId");
 
 -- CreateIndex
-CREATE INDEX "Comment_createdAt_idx" ON "Comment"("createdAt");
-
--- CreateIndex
 CREATE INDEX "Comment_deletedAt_idx" ON "Comment"("deletedAt");
 
 -- CreateIndex
@@ -613,9 +684,6 @@ CREATE INDEX "Like_postId_idx" ON "Like"("postId");
 
 -- CreateIndex
 CREATE INDEX "Like_commentId_idx" ON "Like"("commentId");
-
--- CreateIndex
-CREATE INDEX "Like_createdAt_idx" ON "Like"("createdAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Like_userId_postId_key" ON "Like"("userId", "postId");
@@ -642,16 +710,16 @@ CREATE INDEX "Product_sellerId_idx" ON "Product"("sellerId");
 CREATE INDEX "Product_status_idx" ON "Product"("status");
 
 -- CreateIndex
-CREATE INDEX "Product_price_idx" ON "Product"("price");
-
--- CreateIndex
-CREATE INDEX "Product_isCustomizable_idx" ON "Product"("isCustomizable");
+CREATE INDEX "Product_avgRating_idx" ON "Product"("avgRating");
 
 -- CreateIndex
 CREATE INDEX "Product_createdAt_idx" ON "Product"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "Product_deletedAt_idx" ON "Product"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "Product_tags_idx" ON "Product"("tags");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Category_name_key" ON "Category"("name");
@@ -666,13 +734,7 @@ CREATE INDEX "Category_parentId_idx" ON "Category"("parentId");
 CREATE INDEX "Category_level_idx" ON "Category"("level");
 
 -- CreateIndex
-CREATE INDEX "Category_sortOrder_idx" ON "Category"("sortOrder");
-
--- CreateIndex
-CREATE INDEX "CategoryProduct_categoryId_idx" ON "CategoryProduct"("categoryId");
-
--- CreateIndex
-CREATE INDEX "CategoryProduct_productId_idx" ON "CategoryProduct"("productId");
+CREATE INDEX "Category_isActive_idx" ON "Category"("isActive");
 
 -- CreateIndex
 CREATE INDEX "PriceHistory_productId_idx" ON "PriceHistory"("productId");
@@ -702,10 +764,58 @@ CREATE UNIQUE INDEX "Review_userId_productId_key" ON "Review"("userId", "product
 CREATE INDEX "CartItem_userId_idx" ON "CartItem"("userId");
 
 -- CreateIndex
-CREATE INDEX "CartItem_productId_idx" ON "CartItem"("productId");
+CREATE UNIQUE INDEX "CartItem_userId_productId_key" ON "CartItem"("userId", "productId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "CartItem_userId_productId_key" ON "CartItem"("userId", "productId");
+CREATE INDEX "Wishlist_userId_idx" ON "Wishlist"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Wishlist_userId_productId_key" ON "Wishlist"("userId", "productId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Wishlist_userId_postId_key" ON "Wishlist"("userId", "postId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Order_orderNumber_key" ON "Order"("orderNumber");
+
+-- CreateIndex
+CREATE INDEX "Order_userId_idx" ON "Order"("userId");
+
+-- CreateIndex
+CREATE INDEX "Order_status_idx" ON "Order"("status");
+
+-- CreateIndex
+CREATE INDEX "Order_paymentStatus_idx" ON "Order"("paymentStatus");
+
+-- CreateIndex
+CREATE INDEX "Order_orderNumber_idx" ON "Order"("orderNumber");
+
+-- CreateIndex
+CREATE INDEX "OrderItem_orderId_idx" ON "OrderItem"("orderId");
+
+-- CreateIndex
+CREATE INDEX "OrderItem_sellerId_idx" ON "OrderItem"("sellerId");
+
+-- CreateIndex
+CREATE INDEX "Payment_userId_idx" ON "Payment"("userId");
+
+-- CreateIndex
+CREATE INDEX "Payment_isDefault_idx" ON "Payment"("isDefault");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PaymentTransaction_reference_key" ON "PaymentTransaction"("reference");
+
+-- CreateIndex
+CREATE INDEX "PaymentTransaction_orderId_idx" ON "PaymentTransaction"("orderId");
+
+-- CreateIndex
+CREATE INDEX "PaymentTransaction_userId_idx" ON "PaymentTransaction"("userId");
+
+-- CreateIndex
+CREATE INDEX "PaymentTransaction_status_idx" ON "PaymentTransaction"("status");
+
+-- CreateIndex
+CREATE INDEX "PaymentTransaction_reference_idx" ON "PaymentTransaction"("reference");
 
 -- CreateIndex
 CREATE INDEX "QuoteRequest_productId_idx" ON "QuoteRequest"("productId");
@@ -720,67 +830,25 @@ CREATE INDEX "QuoteRequest_artisanId_idx" ON "QuoteRequest"("artisanId");
 CREATE INDEX "QuoteRequest_status_idx" ON "QuoteRequest"("status");
 
 -- CreateIndex
-CREATE INDEX "QuoteRequest_createdAt_idx" ON "QuoteRequest"("createdAt");
+CREATE INDEX "QuoteNegotiation_quoteId_idx" ON "QuoteNegotiation"("quoteId");
 
 -- CreateIndex
-CREATE INDEX "QuoteRequest_expiresAt_idx" ON "QuoteRequest"("expiresAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Order_orderNumber_key" ON "Order"("orderNumber");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Order_quoteRequestId_key" ON "Order"("quoteRequestId");
-
--- CreateIndex
-CREATE INDEX "Order_userId_idx" ON "Order"("userId");
-
--- CreateIndex
-CREATE INDEX "Order_status_idx" ON "Order"("status");
-
--- CreateIndex
-CREATE INDEX "Order_orderNumber_idx" ON "Order"("orderNumber");
-
--- CreateIndex
-CREATE INDEX "Order_paymentStatus_idx" ON "Order"("paymentStatus");
-
--- CreateIndex
-CREATE INDEX "Order_quoteRequestId_idx" ON "Order"("quoteRequestId");
-
--- CreateIndex
-CREATE INDEX "Order_createdAt_idx" ON "Order"("createdAt");
-
--- CreateIndex
-CREATE INDEX "OrderItem_orderId_idx" ON "OrderItem"("orderId");
-
--- CreateIndex
-CREATE INDEX "OrderItem_productId_idx" ON "OrderItem"("productId");
-
--- CreateIndex
-CREATE INDEX "OrderItem_sellerId_idx" ON "OrderItem"("sellerId");
-
--- CreateIndex
-CREATE INDEX "OrderStatusHistory_orderId_idx" ON "OrderStatusHistory"("orderId");
-
--- CreateIndex
-CREATE INDEX "OrderStatusHistory_status_idx" ON "OrderStatusHistory"("status");
-
--- CreateIndex
-CREATE INDEX "OrderStatusHistory_createdAt_idx" ON "OrderStatusHistory"("createdAt");
+CREATE INDEX "QuoteNegotiation_timestamp_idx" ON "QuoteNegotiation"("timestamp");
 
 -- CreateIndex
 CREATE INDEX "Message_senderId_idx" ON "Message"("senderId");
 
 -- CreateIndex
-CREATE INDEX "Message_recipientId_idx" ON "Message"("recipientId");
-
--- CreateIndex
-CREATE INDEX "Message_isRead_idx" ON "Message"("isRead");
+CREATE INDEX "Message_receiverId_idx" ON "Message"("receiverId");
 
 -- CreateIndex
 CREATE INDEX "Message_createdAt_idx" ON "Message"("createdAt");
 
 -- CreateIndex
-CREATE INDEX "Notification_userId_idx" ON "Notification"("userId");
+CREATE INDEX "Message_isRead_idx" ON "Message"("isRead");
+
+-- CreateIndex
+CREATE INDEX "Notification_recipientId_idx" ON "Notification"("recipientId");
 
 -- CreateIndex
 CREATE INDEX "Notification_type_idx" ON "Notification"("type");
@@ -809,12 +877,6 @@ CREATE INDEX "UserActivity_entityId_idx" ON "UserActivity"("entityId");
 -- CreateIndex
 CREATE INDEX "UserActivity_createdAt_idx" ON "UserActivity"("createdAt");
 
--- CreateIndex
-CREATE UNIQUE INDEX "SystemConfig_key_key" ON "SystemConfig"("key");
-
--- CreateIndex
-CREATE INDEX "SystemConfig_key_idx" ON "SystemConfig"("key");
-
 -- AddForeignKey
 ALTER TABLE "Profile" ADD CONSTRAINT "Profile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -826,6 +888,12 @@ ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId"
 
 -- AddForeignKey
 ALTER TABLE "RefreshToken" ADD CONSTRAINT "RefreshToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PasswordReset" ADD CONSTRAINT "PasswordReset_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmailVerification" ADD CONSTRAINT "EmailVerification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ArtisanProfile" ADD CONSTRAINT "ArtisanProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -900,22 +968,19 @@ ALTER TABLE "CartItem" ADD CONSTRAINT "CartItem_userId_fkey" FOREIGN KEY ("userI
 ALTER TABLE "CartItem" ADD CONSTRAINT "CartItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "QuoteRequest" ADD CONSTRAINT "QuoteRequest_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Wishlist" ADD CONSTRAINT "Wishlist_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "QuoteRequest" ADD CONSTRAINT "QuoteRequest_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Wishlist" ADD CONSTRAINT "Wishlist_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "QuoteRequest" ADD CONSTRAINT "QuoteRequest_artisanId_fkey" FOREIGN KEY ("artisanId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Wishlist" ADD CONSTRAINT "Wishlist_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Order" ADD CONSTRAINT "Order_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Order" ADD CONSTRAINT "Order_addressId_fkey" FOREIGN KEY ("addressId") REFERENCES "Address"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Order" ADD CONSTRAINT "Order_quoteRequestId_fkey" FOREIGN KEY ("quoteRequestId") REFERENCES "QuoteRequest"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -927,16 +992,40 @@ ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_productId_fkey" FOREIGN KEY ("
 ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_sellerId_fkey" FOREIGN KEY ("sellerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "OrderStatusHistory" ADD CONSTRAINT "OrderStatusHistory_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PaymentTransaction" ADD CONSTRAINT "PaymentTransaction_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PaymentTransaction" ADD CONSTRAINT "PaymentTransaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PaymentTransaction" ADD CONSTRAINT "PaymentTransaction_paymentMethodId_fkey" FOREIGN KEY ("paymentMethodId") REFERENCES "Payment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuoteRequest" ADD CONSTRAINT "QuoteRequest_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuoteRequest" ADD CONSTRAINT "QuoteRequest_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuoteRequest" ADD CONSTRAINT "QuoteRequest_artisanId_fkey" FOREIGN KEY ("artisanId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuoteNegotiation" ADD CONSTRAINT "QuoteNegotiation_quoteId_fkey" FOREIGN KEY ("quoteId") REFERENCES "QuoteRequest"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Message" ADD CONSTRAINT "Message_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Message" ADD CONSTRAINT "Message_recipientId_fkey" FOREIGN KEY ("recipientId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Message" ADD CONSTRAINT "Message_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_recipientId_fkey" FOREIGN KEY ("recipientId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "PostAnalytics" ADD CONSTRAINT "PostAnalytics_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post"("id") ON DELETE CASCADE ON UPDATE CASCADE;

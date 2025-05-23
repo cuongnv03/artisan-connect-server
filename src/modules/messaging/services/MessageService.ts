@@ -20,14 +20,21 @@ export class MessageService implements IMessageService {
   private messageRepository: IMessageRepository;
   private userRepository: IUserRepository;
   private notificationService: INotificationService;
-  private socketService: ISocketService;
+  private _socketService?: ISocketService;
   private logger = Logger.getInstance();
 
   constructor() {
     this.messageRepository = container.resolve<IMessageRepository>('messageRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
     this.notificationService = container.resolve<INotificationService>('notificationService');
-    this.socketService = container.resolve<ISocketService>('socketService');
+  }
+
+  // Lazy getter for socketService
+  private get socketService(): ISocketService {
+    if (!this._socketService) {
+      this._socketService = container.resolve<ISocketService>('socketService');
+    }
+    return this._socketService;
   }
 
   async sendMessage(senderId: string, data: CreateMessageDto): Promise<MessageWithUsers> {
