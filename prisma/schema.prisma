@@ -703,14 +703,32 @@ model QuoteRequest {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  product  Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  customer User    @relation("CustomerQuotes", fields: [customerId], references: [id], onDelete: Cascade)
-  artisan  User    @relation("ArtisanQuotes", fields: [artisanId], references: [id])
+  product            Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer           User               @relation("CustomerQuotes", fields: [customerId], references: [id], onDelete: Cascade)
+  artisan            User               @relation("ArtisanQuotes", fields: [artisanId], references: [id])
+  negotiationHistory QuoteNegotiation[] @relation("QuoteNegotiationHistory")
 
   @@index([productId])
   @@index([customerId])
   @@index([artisanId])
   @@index([status])
+}
+
+model QuoteNegotiation {
+  id            String   @id @default(uuid())
+  quoteId       String
+  action        String // REQUEST, ACCEPT, REJECT, COUNTER, MESSAGE
+  actor         String // customer, artisan
+  previousPrice Decimal? @db.Decimal(10, 2)
+  newPrice      Decimal? @db.Decimal(10, 2)
+  message       String?  @db.Text
+  metadata      Json? // Additional data like specifications, etc.
+  timestamp     DateTime @default(now())
+
+  quote QuoteRequest @relation("QuoteNegotiationHistory", fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+  @@index([timestamp])
 }
 
 // === MESSAGING ===

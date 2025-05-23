@@ -13,6 +13,10 @@ import {
   QuoteStats,
 } from '../models/Quote';
 import { QuoteStatus, QuoteAction } from '../models/QuoteEnums';
+import {
+  CreateNegotiationEntryDto,
+  QuoteNegotiationHistory,
+} from '../models/QuoteNegotiationHistory';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
@@ -108,9 +112,15 @@ export class QuoteRepository
         });
 
         // Add initial negotiation entry
-        await this.addNegotiationEntry(quote.id, QuoteAction.REQUEST, 'customer', {
-          requestedPrice: data.requestedPrice,
+        await this.createNegotiationEntry(quote.id, {
+          action: QuoteAction.REQUEST,
+          actor: 'customer',
+          newPrice: data.requestedPrice,
           message: data.message,
+          metadata: {
+            specifications: data.specifications,
+            expiresAt: expiresAt.toISOString(),
+          },
         });
 
         return (await this.findByIdWithDetails(quote.id)) as QuoteRequestWithDetails;
@@ -209,11 +219,21 @@ export class QuoteRepository
           data: updateData,
         });
 
-        // Add negotiation entry
-        await this.addNegotiationEntry(id, data.action, 'artisan', {
-          counterOffer: data.counterOffer,
-          finalPrice,
+        // Add negotiation entry with proper data
+        await this.createNegotiationEntry(id, {
+          action: data.action,
+          actor: 'artisan',
+          previousPrice: quote.counterOffer
+            ? Number(quote.counterOffer)
+            : quote.requestedPrice
+              ? Number(quote.requestedPrice)
+              : undefined,
+          newPrice: data.action === QuoteAction.COUNTER ? data.counterOffer : finalPrice,
           message: data.message,
+          metadata: {
+            oldStatus: quote.status,
+            newStatus: newStatus,
+          },
         });
 
         return (await this.findByIdWithDetails(id)) as QuoteRequestWithDetails;
@@ -273,8 +293,16 @@ export class QuoteRepository
 
       if (!quote) return null;
 
-      // Get negotiation history
-      const negotiationHistory = await this.getNegotiationHistory(id);
+      // Transform negotiation history
+      const negotiationHistory: QuoteNegotiation[] = quote.negotiationHistory.map((entry) => ({
+        id: entry.id,
+        action: entry.action as QuoteAction,
+        actor: entry.actor as 'customer' | 'artisan',
+        previousPrice: entry.previousPrice ? Number(entry.previousPrice) : undefined,
+        newPrice: entry.newPrice ? Number(entry.newPrice) : undefined,
+        message: entry.message,
+        timestamp: entry.timestamp,
+      }));
 
       return {
         ...quote,
@@ -429,14 +457,11 @@ export class QuoteRepository
       });
 
       // Add negotiation entry
-      await this.addNegotiationEntry(
-        id,
-        QuoteAction.MESSAGE,
-        data.isCustomerMessage ? 'customer' : 'artisan',
-        {
-          message: data.message,
-        },
-      );
+      await this.createNegotiationEntry(id, {
+        action: QuoteAction.MESSAGE,
+        actor: data.isCustomerMessage ? 'customer' : 'artisan',
+        message: data.message,
+      });
 
       return (await this.findByIdWithDetails(id)) as QuoteRequestWithDetails;
     } catch (error) {
@@ -447,78 +472,58 @@ export class QuoteRepository
 
   async getNegotiationHistory(id: string): Promise<QuoteNegotiation[]> {
     try {
-      // For simplicity, we'll reconstruct negotiation history from the quote data
-      // In a real implementation, you might want a separate table for this
-      const quote = await this.prisma.quoteRequest.findUnique({
-        where: { id },
-        include: {
-          product: { select: { price: true } },
-        },
+      const entries = await this.prisma.quoteNegotiation.findMany({
+        where: { quoteId: id },
+        orderBy: { timestamp: 'asc' },
       });
 
-      if (!quote) return [];
-
-      const history: QuoteNegotiation[] = [];
-
-      // Initial request
-      history.push({
-        id: `${id}_initial`,
-        action: QuoteAction.REQUEST,
-        actor: 'customer',
-        newPrice: quote.requestedPrice ? Number(quote.requestedPrice) : undefined,
-        message: quote.customerMessage,
-        timestamp: quote.createdAt,
-      });
-
-      // If there's a counter offer, add it
-      if (quote.counterOffer && quote.status === QuoteStatus.COUNTER_OFFERED) {
-        history.push({
-          id: `${id}_counter`,
-          action: QuoteAction.COUNTER,
-          actor: 'artisan',
-          previousPrice: quote.requestedPrice ? Number(quote.requestedPrice) : undefined,
-          newPrice: Number(quote.counterOffer),
-          message: quote.artisanMessage,
-          timestamp: quote.updatedAt,
-        });
-      }
-
-      // If accepted or rejected
-      if ([QuoteStatus.ACCEPTED, QuoteStatus.REJECTED].includes(quote.status as QuoteStatus)) {
-        history.push({
-          id: `${id}_final`,
-          action: quote.status === QuoteStatus.ACCEPTED ? QuoteAction.ACCEPT : QuoteAction.REJECT,
-          actor: 'artisan',
-          newPrice: quote.finalPrice ? Number(quote.finalPrice) : undefined,
-          message: quote.artisanMessage,
-          timestamp: quote.updatedAt,
-        });
-      }
-
-      return history.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      return entries.map((entry) => ({
+        id: entry.id,
+        action: entry.action as QuoteAction,
+        actor: entry.actor as 'customer' | 'artisan',
+        previousPrice: entry.previousPrice ? Number(entry.previousPrice) : undefined,
+        newPrice: entry.newPrice ? Number(entry.newPrice) : undefined,
+        message: entry.message,
+        timestamp: entry.timestamp,
+      }));
     } catch (error) {
       this.logger.error(`Error getting negotiation history: ${error}`);
       return [];
     }
   }
 
-  async addNegotiationEntry(
+  async createNegotiationEntry(
     quoteId: string,
-    action: QuoteAction,
-    actor: 'customer' | 'artisan',
-    data?: any,
-  ): Promise<QuoteNegotiation> {
-    // This is a simplified implementation
-    // In a real app, you might want to store this in a separate table
-    return {
-      id: `${quoteId}_${action}_${Date.now()}`,
-      action,
-      actor,
-      previousPrice: data?.previousPrice,
-      newPrice: data?.newPrice || data?.requestedPrice || data?.counterOffer || data?.finalPrice,
-      message: data?.message,
-      timestamp: new Date(),
-    };
+    data: CreateNegotiationEntryDto,
+  ): Promise<QuoteNegotiationHistory> {
+    try {
+      const entry = await this.prisma.quoteNegotiation.create({
+        data: {
+          quoteId,
+          action: data.action,
+          actor: data.actor,
+          previousPrice: data.previousPrice,
+          newPrice: data.newPrice,
+          message: data.message,
+          metadata: data.metadata,
+        },
+      });
+
+      return {
+        id: entry.id,
+        quoteId: entry.quoteId,
+        action: entry.action,
+        actor: entry.actor as 'customer' | 'artisan',
+        previousPrice: entry.previousPrice ? Number(entry.previousPrice) : undefined,
+        newPrice: entry.newPrice ? Number(entry.newPrice) : undefined,
+        message: entry.message,
+        metadata: entry.metadata as Record<string, any>,
+        timestamp: entry.timestamp,
+      };
+    } catch (error) {
+      this.logger.error(`Error creating negotiation entry: ${error}`);
+      throw new AppError('Failed to create negotiation entry', 500, 'NEGOTIATION_ENTRY_FAILED');
+    }
   }
 
   async updateQuoteStatus(

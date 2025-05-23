@@ -11,6 +11,10 @@ import {
   QuoteStats,
 } from '../models/Quote';
 import { QuoteStatus, QuoteAction } from '../models/QuoteEnums';
+import {
+  CreateNegotiationEntryDto,
+  QuoteNegotiationHistory,
+} from '../models/QuoteNegotiationHistory';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IQuoteRepository extends BaseRepository<QuoteRequest, string> {
@@ -40,12 +44,10 @@ export interface IQuoteRepository extends BaseRepository<QuoteRequest, string> {
   // Quote messaging & negotiation
   addMessage(id: string, data: AddQuoteMessageDto): Promise<QuoteRequestWithDetails>;
   getNegotiationHistory(id: string): Promise<QuoteNegotiation[]>;
-  addNegotiationEntry(
+  createNegotiationEntry(
     quoteId: string,
-    action: QuoteAction,
-    actor: 'customer' | 'artisan',
-    data?: any,
-  ): Promise<QuoteNegotiation>;
+    data: CreateNegotiationEntryDto,
+  ): Promise<QuoteNegotiationHistory>;
 
   // Quote status management
   updateQuoteStatus(
