@@ -35,7 +35,6 @@ export class QuoteTaskService {
    * Setup recurring task (if using cron or scheduler)
    */
   setupRecurringTasks(): void {
-    // Example with node-cron (if you decide to use it)
     cron.schedule('0 * * * *', () => {
       // Every hour
       this.expireOldQuotes();

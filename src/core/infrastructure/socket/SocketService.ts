@@ -10,13 +10,20 @@ export class SocketService implements ISocketService {
   private io: SocketIOServer;
   private userSockets: Map<string, Set<string>> = new Map(); // userId -> Set of socketIds
   private socketUsers: Map<string, string> = new Map(); // socketId -> userId
+  private sessionViews: Map<string, { views: Set<string>; lastAccess: number }> = new Map();
   private logger = Logger.getInstance();
   private jwtService: JwtService;
+
+  // Cleanup intervals
+  private readonly SESSION_CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
+  private readonly SESSION_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+  private cleanupTimer?: NodeJS.Timeout;
 
   constructor(io: SocketIOServer) {
     this.io = io;
     this.jwtService = container.resolve<JwtService>('jwtService');
     this.setupSocketServer();
+    this.startCleanupScheduler();
   }
 
   private setupSocketServer(): void {
@@ -44,6 +51,48 @@ export class SocketService implements ISocketService {
     this.io.on('connection', (socket: Socket) => {
       this.handleConnection(socket);
     });
+  }
+
+  private startCleanupScheduler(): void {
+    // Run cleanup every 30 minutes
+    this.cleanupTimer = setInterval(() => {
+      this.cleanupExpiredSessions();
+    }, this.SESSION_CLEANUP_INTERVAL);
+  }
+
+  private cleanupExpiredSessions(): void {
+    const now = Date.now();
+    let cleanedCount = 0;
+
+    // Cleanup session views
+    for (const [sessionId, sessionData] of this.sessionViews.entries()) {
+      if (now - sessionData.lastAccess > this.SESSION_MAX_AGE) {
+        this.sessionViews.delete(sessionId);
+        cleanedCount++;
+      }
+    }
+
+    // Cleanup inactive socket mappings
+    for (const [socketId, userId] of this.socketUsers.entries()) {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (!socket) {
+        // Socket không tồn tại, cleanup
+        this.socketUsers.delete(socketId);
+
+        const userSockets = this.userSockets.get(userId);
+        if (userSockets) {
+          userSockets.delete(socketId);
+          if (userSockets.size === 0) {
+            this.userSockets.delete(userId);
+          }
+        }
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      this.logger.info(`Cleaned up ${cleanedCount} expired sessions/sockets`);
+    }
   }
 
   handleConnection(socket: Socket): void {
@@ -131,6 +180,28 @@ export class SocketService implements ISocketService {
     return socketSet ? Array.from(socketSet) : [];
   }
 
+  // Enhanced session tracking with TTL-like behavior
+  trackSessionView(sessionId: string, postId: string): boolean {
+    const now = Date.now();
+
+    if (!this.sessionViews.has(sessionId)) {
+      this.sessionViews.set(sessionId, {
+        views: new Set(),
+        lastAccess: now,
+      });
+    }
+
+    const sessionData = this.sessionViews.get(sessionId)!;
+    sessionData.lastAccess = now;
+
+    const isUnique = !sessionData.views.has(postId);
+    if (isUnique) {
+      sessionData.views.add(postId);
+    }
+
+    return isUnique;
+  }
+
   async sendNotification(userId: string, notification: Notification): Promise<void> {
     try {
       await this.broadcastToUser(userId, 'notification', notification);
@@ -215,5 +286,15 @@ export class SocketService implements ISocketService {
         socket.emit(event, data);
       }
     });
+  }
+
+  // Cleanup on shutdown
+  public async shutdown(): Promise<void> {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+    }
+    this.userSockets.clear();
+    this.socketUsers.clear();
+    this.sessionViews.clear();
   }
 }

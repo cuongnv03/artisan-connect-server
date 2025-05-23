@@ -16,8 +16,9 @@ export class PostAnalyticsService implements IPostAnalyticsService {
   private postAnalyticsRepository: IPostAnalyticsRepository;
   private postRepository: IPostRepository;
   private logger = Logger.getInstance();
-  private sessionViews: Map<string, Set<string>> = new Map(); // sessionId -> Set of viewed postIds
-  private readonly SESSION_CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+  private sessionViews: Map<string, { views: Set<string>; lastAccess: number }> = new Map();
+  private readonly SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
+  private readonly SESSION_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
   private lastCleanup = Date.now();
 
   constructor() {
@@ -51,58 +52,37 @@ export class PostAnalyticsService implements IPostAnalyticsService {
    */
   async trackViewEvent(data: TrackViewEventDto): Promise<void> {
     try {
-      const { postId, userId, sessionId, timeSpent, referrer, userAgent, ipAddress } = data;
+      const { postId, sessionId, timeSpent } = data;
+      const now = Date.now();
 
-      // Validate post exists
-      const post = await this.postRepository.findById(postId);
-      if (!post) {
-        this.logger.warn(`Attempted to track view for non-existent post: ${postId}`);
-        return;
+      // Get or create session data
+      if (!this.sessionViews.has(sessionId)) {
+        this.sessionViews.set(sessionId, {
+          views: new Set(),
+          lastAccess: now,
+        });
       }
 
-      // Check if this is a unique view for this session
-      let sessionViewedPosts = this.sessionViews.get(sessionId);
-      if (!sessionViewedPosts) {
-        sessionViewedPosts = new Set();
-        this.sessionViews.set(sessionId, sessionViewedPosts);
-      }
+      const sessionData = this.sessionViews.get(sessionId)!;
+      sessionData.lastAccess = now;
 
-      const isUniqueView = !sessionViewedPosts.has(postId);
+      const isUniqueView = !sessionData.views.has(postId);
       if (isUniqueView) {
-        sessionViewedPosts.add(postId);
-        this.logger.debug(`Unique view for post ${postId} from session ${sessionId}`);
-      } else {
-        this.logger.debug(`Repeat view for post ${postId} from session ${sessionId}`);
+        sessionData.views.add(postId);
       }
 
       // Track the view
       await this.postAnalyticsRepository.trackView(postId, isUniqueView);
 
-      // If time spent is provided, update average read time
+      // Update read time
       if (timeSpent && timeSpent > 0) {
         await this.postAnalyticsRepository.updateAvgReadTime(postId, timeSpent);
-        this.logger.debug(`Updated read time for post ${postId}: ${timeSpent}s`);
       }
 
-      // Log additional details
-      const logData = {
-        postId,
-        userId: userId || 'anonymous',
-        sessionId,
-        isUnique: isUniqueView,
-        timeSpent: timeSpent || 'unknown',
-        referrer: referrer || 'direct',
-        userAgent: userAgent ? userAgent.substring(0, 50) : 'unknown',
-        ipAddress: ipAddress || 'unknown',
-      };
-
-      this.logger.info(`View tracked: ${JSON.stringify(logData)}`);
-
-      // Periodically clean up old sessions
-      this.cleanupSessions();
+      // Periodic cleanup
+      this.cleanupExpiredSessions();
     } catch (error) {
       this.logger.error(`Error tracking view event: ${error}`);
-      // Non-critical operation, just log the error
     }
   }
 
@@ -272,28 +252,48 @@ export class PostAnalyticsService implements IPostAnalyticsService {
   /**
    * Clean up old sessions to prevent memory leaks
    */
-  private cleanupSessions(): void {
+  private cleanupExpiredSessions(): void {
     const now = Date.now();
 
-    // Only cleanup if enough time has passed
+    // Only cleanup if interval has passed
     if (now - this.lastCleanup < this.SESSION_CLEANUP_INTERVAL) {
       return;
     }
 
-    try {
-      // Simple cleanup - clear all sessions if we have too many
-      // In production, you'd use Redis with TTL
-      if (this.sessionViews.size > 10000) {
-        this.logger.info(
-          `Cleaning up session views cache, current size: ${this.sessionViews.size}`,
-        );
-        this.sessionViews.clear();
-        this.logger.info('Session views cache cleared');
-      }
+    let cleanedCount = 0;
+    const maxSessions = 10000; // Limit memory usage
 
-      this.lastCleanup = now;
-    } catch (error) {
-      this.logger.error(`Error cleaning up sessions: ${error}`);
+    // If too many sessions, clean oldest ones
+    if (this.sessionViews.size > maxSessions) {
+      const sortedSessions = Array.from(this.sessionViews.entries()).sort(
+        (a, b) => a[1].lastAccess - b[1].lastAccess,
+      );
+
+      const toDelete = sortedSessions.slice(0, this.sessionViews.size - maxSessions);
+      toDelete.forEach(([sessionId]) => {
+        this.sessionViews.delete(sessionId);
+        cleanedCount++;
+      });
     }
+
+    // Clean expired sessions
+    for (const [sessionId, sessionData] of this.sessionViews.entries()) {
+      if (now - sessionData.lastAccess > this.SESSION_MAX_AGE) {
+        this.sessionViews.delete(sessionId);
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      this.logger.info(`Cleaned up ${cleanedCount} expired analytics sessions`);
+    }
+
+    this.lastCleanup = now;
+  }
+
+  // Public method to force cleanup
+  public cleanupSessions(): void {
+    this.lastCleanup = 0; // Force cleanup
+    this.cleanupExpiredSessions();
   }
 }
