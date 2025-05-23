@@ -22,8 +22,6 @@ import { RefreshTokenRepository } from '../../modules/auth/repositories/RefreshT
 import { PasswordResetRepository } from '../../modules/auth/repositories/PasswordResetRepository';
 import { EmailVerificationRepository } from '../../modules/auth/repositories/EmailVerificationRepository';
 
-import { SystemConfigRepository } from '../../modules/system/repositories/SystemConfigRepository';
-
 import { ProfileRepository } from '../../modules/user/repositories/ProfileRepository';
 import { AddressRepository } from '../../modules/user/repositories/AddressRepository';
 import { FollowRepository } from '../../modules/user/repositories/FollowRepository';
@@ -53,8 +51,6 @@ container.register('refreshTokenRepository', new RefreshTokenRepository(prisma))
 container.register('passwordResetRepository', new PasswordResetRepository(prisma));
 container.register('emailVerificationRepository', new EmailVerificationRepository(prisma));
 
-container.register('systemConfigRepository', new SystemConfigRepository(prisma));
-
 container.register('profileRepository', new ProfileRepository(prisma));
 container.register('addressRepository', new AddressRepository(prisma));
 container.register('followRepository', new FollowRepository(prisma));
@@ -81,8 +77,6 @@ container.register('postAnalyticsRepository', new PostAnalyticsRepository(prisma
 // Import services
 import { AuthService } from '../../modules/auth/services/AuthService';
 
-import { SystemConfigService } from '../../modules/system/services/SystemConfigService';
-
 import { UserService } from '../../modules/user/services/UserService';
 
 import { ArtisanProfileService } from '../../modules/artisan/services/ArtisanProfileService';
@@ -105,8 +99,6 @@ import { PostAnalyticsService } from '../../modules/analytics/services/PostAnaly
 // Register services
 container.register('authService', new AuthService());
 
-container.register('systemConfigService', new SystemConfigService());
-
 container.register('userService', new UserService());
 
 container.register('artisanProfileService', new ArtisanProfileService());
@@ -125,11 +117,5 @@ container.register('quoteService', new QuoteService());
 container.register('orderService', new OrderService());
 container.register('reviewService', new ReviewService());
 container.register('postAnalyticsService', new PostAnalyticsService());
-
-// // Initialize system config
-// const systemConfigService = container.resolve<SystemConfigService>('systemConfigService');
-// systemConfigService.initDefaultConfigs().catch((err) => {
-//   console.error('Failed to initialize default configs:', err);
-// });
 
 console.log('Dependency injection initialized');

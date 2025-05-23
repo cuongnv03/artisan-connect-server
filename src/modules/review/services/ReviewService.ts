@@ -10,7 +10,7 @@ import {
 } from '../models/Review';
 import { IReviewRepository } from '../repositories/ReviewRepository.interface';
 import { IOrderRepository } from '../../order/repositories/OrderRepository.interface';
-import { IUserRepository } from '../../user/repositories/UserRepository.interface';
+import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { IProductRepository } from '../../product/repositories/ProductRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
