@@ -1,15 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IReviewService } from '../../services/ReviewService.interface';
+import { IMessageService } from '../../services/MessageService.interface';
 import container from '../../../../core/di/container';
 
-export class MarkReviewHelpfulController extends BaseController {
-  private reviewService: IReviewService;
+export class MarkAsReadController extends BaseController {
+  private messageService: IMessageService;
 
   constructor() {
     super();
-    this.reviewService = container.resolve<IReviewService>('reviewService');
+    this.messageService = container.resolve<IMessageService>('messageService');
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -17,13 +17,13 @@ export class MarkReviewHelpfulController extends BaseController {
       this.validateAuth(req);
 
       const { id } = req.params;
-      const review = await this.reviewService.markReviewHelpful(id, req.user!.id, req.body);
+      const result = await this.messageService.markAsRead(id, req.user!.id);
 
-      ApiResponse.success(
-        res,
-        review,
-        req.body.helpful ? 'Review marked as helpful' : 'Review unmarked as helpful',
-      );
+      if (result) {
+        ApiResponse.success(res, null, 'Message marked as read');
+      } else {
+        ApiResponse.notFound(res, 'Message not found or already read');
+      }
     } catch (error) {
       next(error);
     }

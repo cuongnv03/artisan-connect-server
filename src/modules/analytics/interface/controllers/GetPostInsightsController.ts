@@ -24,7 +24,7 @@ export class GetPostInsightsController extends BaseController {
       const days = parseInt(req.query.days as string) || 30;
 
       // Verify post exists and user has permission
-      const post = await this.postRepository.findByIdWithUser(postId);
+      const post = await this.postRepository.findById(postId);
       if (!post) {
         throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
       }

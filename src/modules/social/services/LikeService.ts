@@ -4,6 +4,7 @@ import { ILikeRepository } from '../repositories/LikeRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { IPostRepository } from '../../post/repositories/PostRepository.interface';
 import { ICommentRepository } from '../repositories/CommentRepository.interface';
+import { INotificationService } from '@/modules/notification';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import container from '../../../core/di/container';
@@ -46,6 +47,15 @@ export class LikeService implements ILikeService {
   async addLike(userId: string, data: { postId?: string; commentId?: string }): Promise<Like> {
     try {
       const like = await this.likeRepository.createLike(userId, data);
+
+      if (data.postId) {
+        const post = await this.postRepository.findById(data.postId);
+        if (post && post.userId !== userId) {
+          const notificationService =
+            container.resolve<INotificationService>('notificationService');
+          await notificationService.notifyLike(data.postId, userId, post.userId);
+        }
+      }
 
       this.logger.info(
         `User ${userId} liked ${data.postId ? 'post' : 'comment'} ${data.postId || data.commentId}`,

@@ -1,25 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IReviewService } from '../../services/ReviewService.interface';
+import { INotificationService } from '../../services/NotificationService.interface';
 import container from '../../../../core/di/container';
 
-export class GetReviewHelpfulStatusController extends BaseController {
-  private reviewService: IReviewService;
+export class GetUnreadCountController extends BaseController {
+  private notificationService: INotificationService;
 
   constructor() {
     super();
-    this.reviewService = container.resolve<IReviewService>('reviewService');
+    this.notificationService = container.resolve<INotificationService>('notificationService');
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       this.validateAuth(req);
 
-      const { id } = req.params;
-      const hasMarked = await this.reviewService.hasMarkedReviewHelpful(id, req.user!.id);
+      const count = await this.notificationService.getUnreadCount(req.user!.id);
 
-      ApiResponse.success(res, { hasMarked }, 'Review helpful status retrieved successfully');
+      ApiResponse.success(res, { unreadCount: count }, 'Unread count retrieved successfully');
     } catch (error) {
       next(error);
     }

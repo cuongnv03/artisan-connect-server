@@ -5,7 +5,6 @@ import {
   UpdateReviewDto,
   ReviewStatistics,
   ReviewFilterOptions,
-  MarkReviewHelpfulDto,
 } from '../models/Review';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
@@ -44,16 +43,6 @@ export interface IReviewService {
    * Get product review statistics
    */
   getProductReviewStatistics(productId: string): Promise<ReviewStatistics>;
-
-  /**
-   * Mark review as helpful or unhelpful
-   */
-  markReviewHelpful(reviewId: string, userId: string, data: MarkReviewHelpfulDto): Promise<Review>;
-
-  /**
-   * Check if user has marked review as helpful
-   */
-  hasMarkedReviewHelpful(reviewId: string, userId: string): Promise<boolean>;
 
   /**
    * Get products that can be reviewed by user

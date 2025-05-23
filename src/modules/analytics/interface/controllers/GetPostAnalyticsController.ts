@@ -23,7 +23,7 @@ export class GetPostAnalyticsController extends BaseController {
       const { postId } = req.params;
 
       // Verify post exists and user has permission
-      const post = await this.postRepository.findByIdWithUser(postId);
+      const post = await this.postRepository.findById(postId);
       if (!post) {
         throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
       }
@@ -37,7 +37,12 @@ export class GetPostAnalyticsController extends BaseController {
 
       ApiResponse.success(
         res,
-        analytics || { viewCount: 0, uniqueViewers: 0 },
+        analytics || {
+          viewCount: 0,
+          uniqueViewers: 0,
+          avgReadTime: null,
+          conversionCount: 0,
+        },
         'Post analytics retrieved successfully',
       );
     } catch (error) {

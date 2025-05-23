@@ -28,7 +28,7 @@ export interface IReviewRepository extends BaseRepository<Review, string> {
    */
   createReview(
     userId: string,
-    data: Omit<Review, 'id' | 'userId' | 'helpfulCount' | 'createdAt' | 'updatedAt'>,
+    data: Omit<Review, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
   ): Promise<ReviewWithDetails>;
 
   /**
@@ -42,16 +42,6 @@ export interface IReviewRepository extends BaseRepository<Review, string> {
   deleteReview(id: string, userId: string): Promise<boolean>;
 
   /**
-   * Mark review as helpful or unhelpful
-   */
-  markReviewHelpful(reviewId: string, userId: string, helpful: boolean): Promise<Review>;
-
-  /**
-   * Check if user has marked review as helpful
-   */
-  hasMarkedReviewHelpful(reviewId: string, userId: string): Promise<boolean>;
-
-  /**
    * Get products purchased by user that can be reviewed
    */
   getReviewableProducts(
@@ -62,4 +52,9 @@ export interface IReviewRepository extends BaseRepository<Review, string> {
    * Update product rating and review count
    */
   updateProductRatingAndReviewCount(productId: string): Promise<void>;
+
+  /**
+   * Check if user has purchased product
+   */
+  hasUserPurchasedProduct(userId: string, productId: string): Promise<boolean>;
 }

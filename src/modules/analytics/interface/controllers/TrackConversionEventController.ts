@@ -21,7 +21,7 @@ export class TrackConversionEventController extends BaseController {
         console.error('Error tracking conversion event:', err);
       });
 
-      ApiResponse.success(res, { tracked: true }, 'Conversion event tracked');
+      ApiResponse.success(res, { tracked: true }, 'Conversion event tracked successfully');
     } catch (error) {
       next(error);
     }

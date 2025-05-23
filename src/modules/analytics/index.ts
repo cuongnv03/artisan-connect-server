@@ -22,6 +22,16 @@ export function registerAnalyticsModule() {
 
   return {
     name: 'analytics',
-    description: 'Analytics tracking and reporting module',
+    description: 'Post analytics tracking and reporting module',
+    version: '2.0.0',
+    features: [
+      'View tracking with unique user detection',
+      'Conversion tracking',
+      'Read time analytics',
+      'Trending posts detection',
+      'User analytics summaries',
+      'Performance insights',
+      'Session-based analytics',
+    ],
   };
 }

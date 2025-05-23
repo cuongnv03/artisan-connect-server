@@ -10,6 +10,7 @@ import {
 import { ICommentRepository } from '../repositories/CommentRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { IPostRepository } from '../../post/repositories/PostRepository.interface';
+import { INotificationService } from '@/modules/notification';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import container from '../../../core/di/container';
@@ -29,6 +30,12 @@ export class CommentService implements ICommentService {
   async createComment(userId: string, data: CreateCommentDto): Promise<CommentWithUser> {
     try {
       const comment = await this.commentRepository.createComment(userId, data);
+
+      const post = await this.postRepository.findById(data.postId);
+      if (post && post.userId !== userId) {
+        const notificationService = container.resolve<INotificationService>('notificationService');
+        await notificationService.notifyComment(data.postId, userId, post.userId);
+      }
 
       this.logger.info(
         `User ${userId} ${data.parentId ? 'replied to comment' : 'commented on post'} ${data.parentId || data.postId}`,

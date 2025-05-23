@@ -15,6 +15,8 @@ import cartRoutes from './modules/cart/interface/routes/cart.routes';
 import quoteRoutes from './modules/quote/interface/routes/quote.routes';
 import orderRoutes from './modules/order/interface/routes/order.routes';
 import reviewRoutes from './modules/review/interface/routes/review.routes';
+import notificationRoutes from './modules/notification/interface/routes/notification.routes';
+import messageRoutes from './modules/messaging/interface/routes/message.routes';
 
 const logger = Logger.getInstance();
 const apiPrefix = Config.API_PREFIX;
@@ -28,14 +30,17 @@ export const registerRoutes = (app: Express) => {
 
     app.use(`${apiPrefix}/posts`, postRoutes);
     app.use(`${apiPrefix}/social`, socialRoutes);
-
     app.use(`${apiPrefix}/analytics`, analyticsRoutes);
+
     app.use(`${apiPrefix}/products`, productRoutes);
     app.use(`${apiPrefix}/categories`, categoryRoutes);
     app.use(`${apiPrefix}/cart`, cartRoutes);
     app.use(`${apiPrefix}/quotes`, quoteRoutes);
     app.use(`${apiPrefix}/orders`, orderRoutes);
     app.use(`${apiPrefix}/reviews`, reviewRoutes);
+
+    app.use(`${apiPrefix}/notifications`, notificationRoutes);
+    app.use(`${apiPrefix}/messages`, messageRoutes);
     // Thêm routes khác
 
     // API documentation route
@@ -53,9 +58,14 @@ export const registerRoutes = (app: Express) => {
           products: `${apiPrefix}/products`,
           orders: `${apiPrefix}/orders`,
           cart: `${apiPrefix}/cart`,
+          quotes: `${apiPrefix}/quotes`,
+          reviews: `${apiPrefix}/reviews`,
           analytics: `${apiPrefix}/analytics`,
+          notifications: `${apiPrefix}/notifications`,
+          messages: `${apiPrefix}/messages`,
         },
         documentation: `${apiPrefix}/docs`,
+        socketio: '/socket.io',
       });
     });
 

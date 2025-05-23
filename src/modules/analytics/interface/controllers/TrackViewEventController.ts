@@ -18,6 +18,10 @@ export class TrackViewEventController extends BaseController {
       const { postId, sessionId = uuidv4(), referrer, timeSpent } = req.body;
       const userId = req.user?.id;
 
+      // Get additional data from request
+      const userAgent = req.get('User-Agent');
+      const ipAddress = req.ip;
+
       // Track asynchronously - don't wait for completion
       this.postAnalyticsService
         .trackViewEvent({
@@ -26,12 +30,14 @@ export class TrackViewEventController extends BaseController {
           sessionId,
           referrer,
           timeSpent,
+          userAgent,
+          ipAddress,
         })
         .catch((err) => {
           console.error('Error tracking view event:', err);
         });
 
-      ApiResponse.success(res, { tracked: true }, 'View event tracked');
+      ApiResponse.success(res, { tracked: true }, 'View event tracked successfully');
     } catch (error) {
       next(error);
     }

@@ -31,7 +31,10 @@ export class GetReviewableProductsController extends BaseController {
             product: {
               id: product.id,
               name: product.name,
+              slug: product.slug,
               images: product.images,
+              price: product.price,
+              discountPrice: product.discountPrice,
             },
           });
         }

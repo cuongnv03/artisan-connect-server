@@ -18,22 +18,21 @@ export class GetTrendingPostsController extends BaseController {
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
+      const days = parseInt(req.query.days as string) || 7;
       const requestUserId = req.user?.id;
 
-      // Get trending post IDs
-      const trendingPostIds = await this.postAnalyticsService.getTrendingPosts(limit);
+      // Get trending post data
+      const trendingData = await this.postAnalyticsService.getTrendingPosts(limit, days);
 
       // If no trending posts found
-      if (trendingPostIds.length === 0) {
-        // Fallback to regular posts
+      if (trendingData.length === 0) {
+        // Fallback to recent posts
         const regularPosts = await this.postService.getPosts(
           {
             status: 'PUBLISHED',
-            sortBy: 'createdAt',
+            sortBy: 'publishedAt',
             sortOrder: 'desc',
             limit,
-            includeLikeStatus: !!requestUserId,
-            includeSaveStatus: !!requestUserId,
           },
           requestUserId,
         );
@@ -44,10 +43,13 @@ export class GetTrendingPostsController extends BaseController {
 
       // Get full post details for each trending post
       const trendingPosts = await Promise.all(
-        trendingPostIds.map((id) => this.postService.getPostById(id, requestUserId)),
+        trendingData.map(async (data) => {
+          const post = await this.postService.getPostById(data.postId, requestUserId);
+          return post ? { ...post, trendingData: data } : null;
+        }),
       );
 
-      // Filter out null values (posts that might have been deleted or are no longer accessible)
+      // Filter out null values
       const validPosts = trendingPosts.filter((post) => post !== null);
 
       ApiResponse.success(
@@ -57,6 +59,7 @@ export class GetTrendingPostsController extends BaseController {
           meta: {
             total: validPosts.length,
             trending: true,
+            days,
           },
         },
         'Trending posts retrieved successfully',

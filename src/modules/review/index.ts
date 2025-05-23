@@ -23,5 +23,13 @@ export function registerReviewModule() {
   return {
     name: 'review',
     description: 'Product review management module',
+    version: '2.0.0',
+    features: [
+      'Create, update, delete reviews',
+      'Review filtering and pagination',
+      'Product review statistics',
+      'Purchase verification',
+      'Review analytics',
+    ],
   };
 }

@@ -27,11 +27,12 @@ async function bootstrap() {
     // Setup routes
     appInstance.setupRoutes();
 
-    // Start server
-    const server = appInstance.app.listen(Number(port), '0.0.0.0', () => {
+    // Start server (using server instead of app for Socket.io support)
+    const server = appInstance.server.listen(Number(port), '0.0.0.0', () => {
       logger.info(`🚀 Server running in ${env} mode on port ${port}`);
       logger.info(`📚 API Documentation: http://localhost:${port}${Config.API_PREFIX}`);
       logger.info(`🏥 Health Check: http://localhost:${port}/health`);
+      logger.info(`🔌 Socket.IO ready for connections`);
     });
 
     // Graceful shutdown handlers

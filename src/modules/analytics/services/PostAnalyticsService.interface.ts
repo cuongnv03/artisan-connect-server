@@ -1,4 +1,10 @@
-import { PostAnalytics, PostInsightsDto, TrackViewEventDto } from '../models/PostAnalytics';
+import {
+  PostAnalytics,
+  PostInsightsDto,
+  TrackViewEventDto,
+  AnalyticsSummaryDto,
+  TrendingPostData,
+} from '../models/PostAnalytics';
 
 export interface IPostAnalyticsService {
   /**
@@ -24,5 +30,25 @@ export interface IPostAnalyticsService {
   /**
    * Get trending posts
    */
-  getTrendingPosts(limit?: number): Promise<string[]>;
+  getTrendingPosts(limit?: number, days?: number): Promise<TrendingPostData[]>;
+
+  /**
+   * Get user's analytics summary
+   */
+  getUserAnalyticsSummary(userId: string): Promise<AnalyticsSummaryDto>;
+
+  /**
+   * Bulk get analytics for posts
+   */
+  getBulkPostAnalytics(postIds: string[]): Promise<PostAnalytics[]>;
+
+  /**
+   * Initialize analytics for a new post
+   */
+  initializePostAnalytics(postId: string): Promise<PostAnalytics>;
+
+  /**
+   * Clean up old analytics data
+   */
+  cleanupOldData(daysToKeep?: number): Promise<number>;
 }

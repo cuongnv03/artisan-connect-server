@@ -12,6 +12,7 @@ import { IProfileRepository } from '../repositories/ProfileRepository.interface'
 import { IAddressRepository } from '../repositories/AddressRepository.interface';
 import { IFollowRepository } from '../repositories/FollowRepository.interface';
 import { IUserActivityRepository } from '../repositories/UserActivityRepository.interface';
+import { INotificationService } from '@/modules/notification';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import container from '../../../core/di/container';
@@ -399,6 +400,9 @@ export class UserService implements IUserService {
 
       // Create follow relationship
       const follow = await this.followRepository.createFollow(followerId, followingId);
+
+      const notificationService = container.resolve<INotificationService>('notificationService');
+      await notificationService.notifyFollow(followerId, followingId);
 
       // Track activity for both users
       await Promise.all([

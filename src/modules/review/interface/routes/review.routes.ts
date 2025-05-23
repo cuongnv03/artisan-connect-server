@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { validate } from '../../../../shared/middlewares/validate.middleware';
 import { authenticate } from '../../../../shared/middlewares/auth.middleware';
+import { validateIdParam } from '../../../../shared/middlewares/request-validation.middleware';
 
 // Controllers
 import { CreateReviewController } from '../controllers/CreateReviewController';
@@ -11,15 +12,12 @@ import { GetReviewsController } from '../controllers/GetReviewsController';
 import { GetProductReviewsController } from '../controllers/GetProductReviewsController';
 import { GetUserReviewsController } from '../controllers/GetUserReviewsController';
 import { GetProductReviewStatisticsController } from '../controllers/GetProductReviewStatisticsController';
-import { MarkReviewHelpfulController } from '../controllers/MarkReviewHelpfulController';
-import { GetReviewHelpfulStatusController } from '../controllers/GetReviewHelpfulStatusController';
 import { GetReviewableProductsController } from '../controllers/GetReviewableProductsController';
 
 // Validators
 import {
   createReviewSchema,
   updateReviewSchema,
-  markReviewHelpfulSchema,
   getReviewsSchema,
 } from '../validators/review.validator';
 
@@ -34,25 +32,50 @@ const getReviewsController = new GetReviewsController();
 const getProductReviewsController = new GetProductReviewsController();
 const getUserReviewsController = new GetUserReviewsController();
 const getProductReviewStatisticsController = new GetProductReviewStatisticsController();
-const markReviewHelpfulController = new MarkReviewHelpfulController();
-const getReviewHelpfulStatusController = new GetReviewHelpfulStatusController();
 const getReviewableProductsController = new GetReviewableProductsController();
 
-// Public routes
-router.get('/:id', getReviewController.execute);
-router.get('/', validate(getReviewsSchema, 'query'), getReviewsController.execute);
-router.get('/product/:productId', getProductReviewsController.execute);
-router.get('/product/:productId/statistics', getProductReviewStatisticsController.execute);
+// === PUBLIC ROUTES ===
+// Get review by ID
+router.get('/:id', validateIdParam(), getReviewController.execute);
 
-// Authenticated routes
+// Get reviews with filtering
+router.get('/', validate(getReviewsSchema, 'query'), getReviewsController.execute);
+
+// Get product reviews
+router.get(
+  '/product/:productId',
+  validateIdParam('productId'),
+  getProductReviewsController.execute,
+);
+
+// Get product review statistics
+router.get(
+  '/product/:productId/statistics',
+  validateIdParam('productId'),
+  getProductReviewStatisticsController.execute,
+);
+
+// === AUTHENTICATED ROUTES ===
 router.use(authenticate);
 
+// Create review
 router.post('/', validate(createReviewSchema), createReviewController.execute);
-router.patch('/:id', validate(updateReviewSchema), updateReviewController.execute);
-router.delete('/:id', deleteReviewController.execute);
+
+// Update review
+router.patch(
+  '/:id',
+  validateIdParam(),
+  validate(updateReviewSchema),
+  updateReviewController.execute,
+);
+
+// Delete review
+router.delete('/:id', validateIdParam(), deleteReviewController.execute);
+
+// Get user's reviews
 router.get('/user/me', getUserReviewsController.execute);
-router.post('/:id/helpful', validate(markReviewHelpfulSchema), markReviewHelpfulController.execute);
-router.get('/:id/helpful', getReviewHelpfulStatusController.execute);
+
+// Get reviewable products
 router.get('/user/reviewable-products', getReviewableProductsController.execute);
 
 export default router;

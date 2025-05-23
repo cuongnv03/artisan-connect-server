@@ -9,7 +9,6 @@ export interface Review {
   title?: string | null;
   comment?: string | null;
   images: string[];
-  helpfulCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,7 +26,10 @@ export interface ReviewWithDetails extends Review {
   product: {
     id: string;
     name: string;
+    slug?: string | null;
     images: string[];
+    price: number;
+    discountPrice?: number | null;
   };
 }
 
@@ -53,13 +55,6 @@ export interface UpdateReviewDto {
 }
 
 /**
- * Mark review helpful DTO
- */
-export interface MarkReviewHelpfulDto {
-  helpful: boolean;
-}
-
-/**
  * Review statistics
  */
 export interface ReviewStatistics {
@@ -81,18 +76,8 @@ export interface ReviewFilterOptions {
   productId?: string;
   userId?: string;
   rating?: number;
-  sortBy?: 'createdAt' | 'rating' | 'helpful';
+  sortBy?: 'createdAt' | 'rating' | 'updatedAt';
   sortOrder?: 'asc' | 'desc';
   page?: number;
   limit?: number;
-}
-
-/**
- * Review helpful record
- */
-export interface ReviewHelpful {
-  id: string;
-  reviewId: string;
-  userId: string;
-  createdAt: Date;
 }

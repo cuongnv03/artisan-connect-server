@@ -37,13 +37,25 @@ export class ReviewRepository
             select: {
               id: true,
               name: true,
+              slug: true,
               images: true,
+              price: true,
+              discountPrice: true,
             },
           },
         },
       });
 
-      return review as unknown as ReviewWithDetails;
+      if (!review) return null;
+
+      return {
+        ...review,
+        product: {
+          ...review.product,
+          price: Number(review.product.price),
+          discountPrice: review.product.discountPrice ? Number(review.product.discountPrice) : null,
+        },
+      } as ReviewWithDetails;
     } catch (error) {
       this.logger.error(`Error finding review by ID: ${error}`);
       return null;
@@ -75,13 +87,25 @@ export class ReviewRepository
             select: {
               id: true,
               name: true,
+              slug: true,
               images: true,
+              price: true,
+              discountPrice: true,
             },
           },
         },
       });
 
-      return review as unknown as ReviewWithDetails;
+      if (!review) return null;
+
+      return {
+        ...review,
+        product: {
+          ...review.product,
+          price: Number(review.product.price),
+          discountPrice: review.product.discountPrice ? Number(review.product.discountPrice) : null,
+        },
+      } as ReviewWithDetails;
     } catch (error) {
       this.logger.error(`Error finding review by user and product: ${error}`);
       return null;
@@ -121,23 +145,11 @@ export class ReviewRepository
       // Count total reviews
       const total = await this.prisma.review.count({ where });
 
-      // Calculate total pages
-      const totalPages = Math.ceil(total / limit);
+      // Calculate skip
+      const skip = (page - 1) * limit;
 
       // Build order by
-      let orderBy: any = {};
-
-      switch (sortBy) {
-        case 'rating':
-          orderBy.rating = sortOrder;
-          break;
-        case 'helpful':
-          orderBy.helpfulCount = sortOrder;
-          break;
-        case 'createdAt':
-        default:
-          orderBy.createdAt = sortOrder;
-      }
+      const orderBy = { [sortBy]: sortOrder };
 
       // Get reviews
       const reviews = await this.prisma.review.findMany({
@@ -155,22 +167,34 @@ export class ReviewRepository
             select: {
               id: true,
               name: true,
+              slug: true,
               images: true,
+              price: true,
+              discountPrice: true,
             },
           },
         },
         orderBy,
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
       });
 
+      const transformedReviews = reviews.map((review) => ({
+        ...review,
+        product: {
+          ...review.product,
+          price: Number(review.product.price),
+          discountPrice: review.product.discountPrice ? Number(review.product.discountPrice) : null,
+        },
+      })) as ReviewWithDetails[];
+
       return {
-        data: reviews as unknown as ReviewWithDetails[],
+        data: transformedReviews,
         meta: {
           total,
           page,
           limit,
-          totalPages,
+          totalPages: Math.ceil(total / limit),
         },
       };
     } catch (error) {
@@ -226,7 +250,7 @@ export class ReviewRepository
    */
   async createReview(
     userId: string,
-    data: Omit<Review, 'id' | 'userId' | 'helpfulCount' | 'createdAt' | 'updatedAt'>,
+    data: Omit<Review, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
   ): Promise<ReviewWithDetails> {
     try {
       const { productId, rating, title, comment, images } = data;
@@ -258,7 +282,6 @@ export class ReviewRepository
             title,
             comment,
             images: images || [],
-            helpfulCount: 0,
           },
           include: {
             user: {
@@ -273,7 +296,10 @@ export class ReviewRepository
               select: {
                 id: true,
                 name: true,
+                slug: true,
                 images: true,
+                price: true,
+                discountPrice: true,
               },
             },
           },
@@ -285,7 +311,16 @@ export class ReviewRepository
         return review;
       });
 
-      return newReview as unknown as ReviewWithDetails;
+      return {
+        ...newReview,
+        product: {
+          ...newReview.product,
+          price: Number(newReview.product.price),
+          discountPrice: newReview.product.discountPrice
+            ? Number(newReview.product.discountPrice)
+            : null,
+        },
+      } as ReviewWithDetails;
     } catch (error) {
       this.logger.error(`Error creating review: ${error}`);
       if (error instanceof AppError) throw error;
@@ -325,6 +360,7 @@ export class ReviewRepository
             title: data.title,
             comment: data.comment,
             images: data.images,
+            updatedAt: new Date(),
           },
           include: {
             user: {
@@ -339,7 +375,10 @@ export class ReviewRepository
               select: {
                 id: true,
                 name: true,
+                slug: true,
                 images: true,
+                price: true,
+                discountPrice: true,
               },
             },
           },
@@ -353,7 +392,16 @@ export class ReviewRepository
         return updated;
       });
 
-      return updatedReview as unknown as ReviewWithDetails;
+      return {
+        ...updatedReview,
+        product: {
+          ...updatedReview.product,
+          price: Number(updatedReview.product.price),
+          discountPrice: updatedReview.product.discountPrice
+            ? Number(updatedReview.product.discountPrice)
+            : null,
+        },
+      } as ReviewWithDetails;
     } catch (error) {
       this.logger.error(`Error updating review: ${error}`);
       if (error instanceof AppError) throw error;
@@ -386,11 +434,6 @@ export class ReviewRepository
           where: { id },
         });
 
-        // Delete helpful marks for this review
-        await tx.reviewHelpful.deleteMany({
-          where: { reviewId: id },
-        });
-
         // Update product avg rating and review count
         await this.updateProductRatingAndReviewCount(review.productId);
       });
@@ -400,113 +443,6 @@ export class ReviewRepository
       this.logger.error(`Error deleting review: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to delete review', 500, 'DATABASE_ERROR');
-    }
-  }
-
-  /**
-   * Mark review as helpful or unhelpful
-   */
-  async markReviewHelpful(reviewId: string, userId: string, helpful: boolean): Promise<Review> {
-    try {
-      // Verify review exists
-      const review = await this.prisma.review.findUnique({
-        where: { id: reviewId },
-      });
-
-      if (!review) {
-        throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
-      }
-
-      // Prevent user from marking their own review as helpful
-      if (review.userId === userId) {
-        throw new AppError('You cannot mark your own review as helpful', 400, 'INVALID_ACTION');
-      }
-
-      // Check if user already marked this review
-      const existingMark = await this.prisma.reviewHelpful.findUnique({
-        where: {
-          reviewId_userId: {
-            reviewId,
-            userId,
-          },
-        },
-      });
-
-      // Update in a transaction
-      return (await this.prisma.$transaction(async (tx) => {
-        if (helpful) {
-          // Add helpful mark if it doesn't exist yet
-          if (!existingMark) {
-            await tx.reviewHelpful.create({
-              data: {
-                reviewId,
-                userId,
-              },
-            });
-
-            // Increment helpful count
-            return await tx.review.update({
-              where: { id: reviewId },
-              data: {
-                helpfulCount: {
-                  increment: 1,
-                },
-              },
-            });
-          }
-          // Already marked as helpful
-          return review;
-        } else {
-          // Remove helpful mark if it exists
-          if (existingMark) {
-            await tx.reviewHelpful.delete({
-              where: {
-                reviewId_userId: {
-                  reviewId,
-                  userId,
-                },
-              },
-            });
-
-            // Decrement helpful count
-            return await tx.review.update({
-              where: { id: reviewId },
-              data: {
-                helpfulCount: {
-                  decrement: 1,
-                },
-              },
-            });
-          }
-          // Not marked as helpful yet
-          return review;
-        }
-      })) as Review;
-    } catch (error) {
-      this.logger.error(`Error marking review as helpful: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to mark review as helpful', 500, 'DATABASE_ERROR');
-    }
-  }
-
-  /**
-   * Check if user has marked review as helpful
-   */
-  async hasMarkedReviewHelpful(reviewId: string, userId: string): Promise<boolean> {
-    try {
-      const mark = await this.prisma.reviewHelpful.findUnique({
-        where: {
-          reviewId_userId: {
-            reviewId,
-            userId,
-          },
-        },
-      });
-
-      return !!mark;
-    } catch (error) {
-      this.logger.error(`Error checking if user has marked review as helpful: ${error}`);
-      return false;
     }
   }
 
@@ -586,6 +522,28 @@ export class ReviewRepository
     } catch (error) {
       this.logger.error(`Error updating product rating and review count: ${error}`);
       throw new AppError('Failed to update product rating', 500, 'DATABASE_ERROR');
+    }
+  }
+
+  /**
+   * Check if user has purchased product
+   */
+  async hasUserPurchasedProduct(userId: string, productId: string): Promise<boolean> {
+    try {
+      const orderItem = await this.prisma.orderItem.findFirst({
+        where: {
+          productId,
+          order: {
+            userId,
+            status: OrderStatus.DELIVERED,
+          },
+        },
+      });
+
+      return !!orderItem;
+    } catch (error) {
+      this.logger.error(`Error checking if user has purchased product: ${error}`);
+      return false;
     }
   }
 }

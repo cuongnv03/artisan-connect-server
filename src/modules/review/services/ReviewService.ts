@@ -6,28 +6,23 @@ import {
   UpdateReviewDto,
   ReviewStatistics,
   ReviewFilterOptions,
-  MarkReviewHelpfulDto,
 } from '../models/Review';
 import { IReviewRepository } from '../repositories/ReviewRepository.interface';
-import { IOrderRepository } from '../../order/repositories/OrderRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { IProductRepository } from '../../product/repositories/ProductRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
-import { OrderStatus } from '../../order/models/OrderEnums';
 import container from '../../../core/di/container';
 
 export class ReviewService implements IReviewService {
   private reviewRepository: IReviewRepository;
-  private orderRepository: IOrderRepository;
   private userRepository: IUserRepository;
   private productRepository: IProductRepository;
   private logger = Logger.getInstance();
 
   constructor() {
     this.reviewRepository = container.resolve<IReviewRepository>('reviewRepository');
-    this.orderRepository = container.resolve<IOrderRepository>('orderRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
     this.productRepository = container.resolve<IProductRepository>('productRepository');
   }
@@ -44,7 +39,7 @@ export class ReviewService implements IReviewService {
       }
 
       // Validate product
-      const product = await this.productRepository.findByIdWithDetails(data.productId);
+      const product = await this.productRepository.findById(data.productId);
       if (!product) {
         throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
       }
@@ -55,7 +50,10 @@ export class ReviewService implements IReviewService {
       }
 
       // Verify that user has purchased this product
-      const hasPurchased = await this.hasUserPurchasedProduct(userId, data.productId);
+      const hasPurchased = await this.reviewRepository.hasUserPurchasedProduct(
+        userId,
+        data.productId,
+      );
       if (!hasPurchased) {
         throw new AppError('You can only review products you have purchased', 403, 'NOT_PURCHASED');
       }
@@ -222,7 +220,7 @@ export class ReviewService implements IReviewService {
   async getProductReviewStatistics(productId: string): Promise<ReviewStatistics> {
     try {
       // Validate product
-      const product = await this.productRepository.findByIdWithDetails(productId);
+      const product = await this.productRepository.findById(productId);
       if (!product) {
         throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
       }
@@ -232,62 +230,6 @@ export class ReviewService implements IReviewService {
       this.logger.error(`Error getting product review statistics: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to get review statistics', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  /**
-   * Mark review as helpful or unhelpful
-   */
-  async markReviewHelpful(
-    reviewId: string,
-    userId: string,
-    data: MarkReviewHelpfulDto,
-  ): Promise<Review> {
-    try {
-      // Get review for validation and logging
-      const review = await this.reviewRepository.findById(reviewId);
-      if (!review) {
-        throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
-      }
-
-      // Check if user is marking their own review
-      if (review.userId === userId) {
-        throw new AppError('You cannot mark your own review as helpful', 400, 'INVALID_ACTION');
-      }
-
-      // Check current state to log appropriate action
-      const currentState = await this.reviewRepository.hasMarkedReviewHelpful(reviewId, userId);
-
-      const updatedReview = await this.reviewRepository.markReviewHelpful(
-        reviewId,
-        userId,
-        data.helpful,
-      );
-
-      // Log marking action with appropriate action
-      if (data.helpful && !currentState) {
-        this.logger.info(`User ${userId} marked review ${reviewId} as helpful`);
-      } else if (!data.helpful && currentState) {
-        this.logger.info(`User ${userId} unmarked review ${reviewId} as helpful`);
-      }
-
-      return updatedReview;
-    } catch (error) {
-      this.logger.error(`Error marking review as helpful: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to mark review as helpful', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  /**
-   * Check if user has marked review as helpful
-   */
-  async hasMarkedReviewHelpful(reviewId: string, userId: string): Promise<boolean> {
-    try {
-      return await this.reviewRepository.hasMarkedReviewHelpful(reviewId, userId);
-    } catch (error) {
-      this.logger.error(`Error checking if user has marked review as helpful: ${error}`);
-      return false;
     }
   }
 
@@ -303,36 +245,6 @@ export class ReviewService implements IReviewService {
       this.logger.error(`Error getting reviewable products: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to get reviewable products', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  /**
-   * Check if user has purchased the product
-   */
-  private async hasUserPurchasedProduct(userId: string, productId: string): Promise<boolean> {
-    try {
-      // Get user's orders
-      const orders = await this.orderRepository.getOrders({
-        userId,
-        status: OrderStatus.DELIVERED,
-      });
-
-      // Check if any order contains this product
-      for (const order of orders.data) {
-        const orderWithDetails = await this.orderRepository.findByIdWithDetails(order.id);
-        if (orderWithDetails) {
-          for (const item of orderWithDetails.items) {
-            if (item.productId === productId) {
-              return true;
-            }
-          }
-        }
-      }
-
-      return false;
-    } catch (error) {
-      this.logger.error(`Error checking if user has purchased product: ${error}`);
-      return false;
     }
   }
 }

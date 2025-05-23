@@ -45,6 +45,9 @@ import { CartRepository } from '../../modules/cart/repositories/CartRepository';
 import { ReviewRepository } from '../../modules/review/repositories/ReviewRepository';
 import { PostAnalyticsRepository } from '../../modules/analytics/repositories/PostAnalyticsRepository';
 
+import { NotificationRepository } from '../../modules/notification/repositories/NotificationRepository';
+import { MessageRepository } from '../../modules/messaging/repositories/MessageRepository';
+
 // Register repositories
 container.register('userRepository', new UserRepository(prisma));
 container.register('refreshTokenRepository', new RefreshTokenRepository(prisma));
@@ -74,6 +77,9 @@ container.register('orderRepository', new OrderRepository(prisma));
 container.register('reviewRepository', new ReviewRepository(prisma));
 container.register('postAnalyticsRepository', new PostAnalyticsRepository(prisma));
 
+container.register('notificationRepository', new NotificationRepository(prisma));
+container.register('messageRepository', new MessageRepository(prisma));
+
 // Import services
 import { AuthService } from '../../modules/auth/services/AuthService';
 
@@ -96,8 +102,14 @@ import { CartService } from '../../modules/cart/services/CartService';
 import { ReviewService } from '../../modules/review/services/ReviewService';
 import { PostAnalyticsService } from '../../modules/analytics/services/PostAnalyticsService';
 
+import { NotificationService } from '../../modules/notification/services/NotificationService';
+import { MessageService } from '../../modules/messaging/services/MessageService';
+import { CustomOrderNegotiationService } from '../../modules/messaging/services/CustomOrderNegotiationService';
+
 // Register services
 container.register('authService', new AuthService());
+
+container.register('notificationService', new NotificationService());
 
 container.register('userService', new UserService());
 
@@ -118,4 +130,12 @@ container.register('orderService', new OrderService());
 container.register('reviewService', new ReviewService());
 container.register('postAnalyticsService', new PostAnalyticsService());
 
+container.register('messageService', new MessageService());
+container.register('customOrderNegotiationService', new CustomOrderNegotiationService());
+
 console.log('Dependency injection initialized');
+
+export function registerSocketService(socketService: any) {
+  container.register('socketService', socketService);
+  console.log('Socket service registered');
+}
