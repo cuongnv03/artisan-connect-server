@@ -6,7 +6,6 @@ import { Logger } from './core/logging/Logger';
 import authRoutes from './modules/auth/interface/routes/auth.routes';
 import userRoutes from './modules/user/interface/routes/user.routes';
 import artisanRoutes from './modules/artisan/interface/routes/artisan.routes';
-import systemConfigRoutes from './modules/system/interface/routes/system-config.routes';
 import postRoutes from './modules/post/interface/routes/post.routes';
 import socialRoutes from './modules/social/interface/routes/social.routes';
 import analyticsRoutes from './modules/analytics/interface/routes/analytics.routes';
@@ -24,7 +23,6 @@ export const registerRoutes = (app: Express) => {
   try {
     // API routes với prefix
     app.use(`${apiPrefix}/auth`, authRoutes);
-    app.use(`${apiPrefix}/config`, systemConfigRoutes);
     app.use(`${apiPrefix}/users`, userRoutes);
     app.use(`${apiPrefix}/artisans`, artisanRoutes);
 
