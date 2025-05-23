@@ -14,19 +14,14 @@ export class CreateProductController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      // Ensure user is an artisan
-      if (req.user!.role !== 'ARTISAN') {
-        throw AppError.forbidden('Only artisans can create products');
-      }
-
-      const product = await this.productService.createProduct(req.user!.id, req.body);
-
-      ApiResponse.created(res, product, 'Product created successfully');
-    } catch (error) {
-      next(error);
+    if (req.user!.role !== 'ARTISAN') {
+      throw AppError.forbidden('Only artisans can create products');
     }
+
+    const product = await this.productService.createProduct(req.user!.id, req.body);
+
+    ApiResponse.created(res, product, 'Product created successfully');
   }
 }

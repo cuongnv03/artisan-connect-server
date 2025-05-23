@@ -13,19 +13,15 @@ export class RemoveFromCartController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const { productId } = req.params;
-      const result = await this.cartService.removeFromCart(req.user!.id, productId);
+    const { productId } = req.params;
+    const result = await this.cartService.removeFromCart(req.user!.id, productId);
 
-      if (result) {
-        ApiResponse.success(res, null, 'Item removed from cart successfully');
-      } else {
-        ApiResponse.notFound(res, 'Item not found in cart');
-      }
-    } catch (error) {
-      next(error);
+    if (result) {
+      ApiResponse.success(res, null, 'Item removed from cart successfully');
+    } else {
+      ApiResponse.notFound(res, 'Item not found in cart');
     }
   }
 }

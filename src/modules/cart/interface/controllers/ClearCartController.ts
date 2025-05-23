@@ -13,18 +13,14 @@ export class ClearCartController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const result = await this.cartService.clearCart(req.user!.id);
+    const result = await this.cartService.clearCart(req.user!.id);
 
-      if (result) {
-        ApiResponse.success(res, null, 'Cart cleared successfully');
-      } else {
-        ApiResponse.badRequest(res, 'Failed to clear cart');
-      }
-    } catch (error) {
-      next(error);
+    if (result) {
+      ApiResponse.success(res, null, 'Cart cleared successfully');
+    } else {
+      ApiResponse.badRequest(res, 'Failed to clear cart');
     }
   }
 }

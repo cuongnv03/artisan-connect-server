@@ -14,18 +14,14 @@ export class GetProductStatsController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      if (req.user!.role !== 'ARTISAN') {
-        throw AppError.forbidden('Only artisans can view product statistics');
-      }
-
-      const stats = await this.productService.getProductStats(req.user!.id);
-
-      ApiResponse.success(res, stats, 'Product statistics retrieved successfully');
-    } catch (error) {
-      next(error);
+    if (req.user!.role !== 'ARTISAN') {
+      throw AppError.forbidden('Only artisans can view product statistics');
     }
+
+    const stats = await this.productService.getProductStats(req.user!.id);
+
+    ApiResponse.success(res, stats, 'Product statistics retrieved successfully');
   }
 }

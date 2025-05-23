@@ -13,14 +13,10 @@ export class AddToCartController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const cartItem = await this.cartService.addToCart(req.user!.id, req.body);
+    const cartItem = await this.cartService.addToCart(req.user!.id, req.body);
 
-      ApiResponse.success(res, cartItem, 'Item added to cart successfully');
-    } catch (error) {
-      next(error);
-    }
+    ApiResponse.success(res, cartItem, 'Item added to cart successfully');
   }
 }

@@ -13,30 +13,26 @@ export class ValidateCartController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const validationType = (req.query.type as string) || 'basic';
+    const validationType = (req.query.type as string) || 'basic';
 
-      if (validationType === 'checkout') {
-        const validation = await this.cartService.validateForCheckout(req.user!.id);
+    if (validationType === 'checkout') {
+      const validation = await this.cartService.validateForCheckout(req.user!.id);
 
-        if (validation.isValid) {
-          ApiResponse.success(res, validation, 'Cart is valid for checkout');
-        } else {
-          ApiResponse.badRequest(
-            res,
-            validation.errors.join(', ') || 'Cart validation failed',
-            'CART_VALIDATION_FAILED',
-          );
-        }
+      if (validation.isValid) {
+        ApiResponse.success(res, validation, 'Cart is valid for checkout');
       } else {
-        const validation = await this.cartService.validateCart(req.user!.id);
-
-        ApiResponse.success(res, validation, 'Cart validation completed');
+        ApiResponse.badRequest(
+          res,
+          validation.errors.join(', ') || 'Cart validation failed',
+          'CART_VALIDATION_FAILED',
+        );
       }
-    } catch (error) {
-      next(error);
+    } else {
+      const validation = await this.cartService.validateCart(req.user!.id);
+
+      ApiResponse.success(res, validation, 'Cart validation completed');
     }
   }
 }

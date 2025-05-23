@@ -2,20 +2,16 @@ import { IProductService } from './ProductService.interface';
 import {
   Product,
   ProductWithSeller,
-  ProductWithDetails,
   CreateProductDto,
   UpdateProductDto,
-  PriceUpdateDto,
   ProductQueryOptions,
   ProductPaginationResult,
   PriceHistory,
-  ProductStockUpdate,
-  ProductInventoryCheck,
+  ProductStats,
 } from '../models/Product';
 import { IProductRepository } from '../repositories/ProductRepository.interface';
 import { ICategoryRepository } from '../repositories/CategoryRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
-import { CloudinaryService } from '../../../core/infrastructure/storage/CloudinaryService';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -25,17 +21,15 @@ export class ProductService implements IProductService {
   private productRepository: IProductRepository;
   private categoryRepository: ICategoryRepository;
   private userRepository: IUserRepository;
-  private cloudinaryService: CloudinaryService;
   private logger = Logger.getInstance();
 
   constructor() {
     this.productRepository = container.resolve<IProductRepository>('productRepository');
     this.categoryRepository = container.resolve<ICategoryRepository>('categoryRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
-    this.cloudinaryService = container.resolve<CloudinaryService>('cloudinaryService');
   }
 
-  async createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithDetails> {
+  async createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithSeller> {
     try {
       // Validate seller exists and is artisan
       const seller = await this.userRepository.findById(sellerId);
@@ -47,16 +41,16 @@ export class ProductService implements IProductService {
         throw new AppError('Only artisans can create products', 403, 'FORBIDDEN');
       }
 
+      // Validate product data
+      this.validateProductData(data);
+
       // Validate categories if provided
       if (data.categories && data.categories.length > 0) {
-        const validCategories = await this.categoryRepository.validateCategories(data.categories);
+        const validCategories = await this.validateCategories(data.categories);
         if (!validCategories) {
           throw new AppError('One or more categories are invalid', 400, 'INVALID_CATEGORIES');
         }
       }
-
-      // Validate product data
-      this.validateProductData(data);
 
       const product = await this.productRepository.createProduct(sellerId, data);
 
@@ -74,19 +68,19 @@ export class ProductService implements IProductService {
     id: string,
     sellerId: string,
     data: UpdateProductDto,
-  ): Promise<ProductWithDetails> {
+  ): Promise<ProductWithSeller> {
     try {
+      // Validate update data
+      if (data.name || data.price !== undefined) {
+        this.validateProductUpdateData(data);
+      }
+
       // Validate categories if provided
       if (data.categories && data.categories.length > 0) {
-        const validCategories = await this.categoryRepository.validateCategories(data.categories);
+        const validCategories = await this.validateCategories(data.categories);
         if (!validCategories) {
           throw new AppError('One or more categories are invalid', 400, 'INVALID_CATEGORIES');
         }
-      }
-
-      // Validate updated data
-      if (data.name || data.price || data.quantity !== undefined) {
-        this.validateProductUpdateData(data);
       }
 
       const product = await this.productRepository.updateProduct(id, sellerId, data);
@@ -98,24 +92,6 @@ export class ProductService implements IProductService {
       this.logger.error(`Error updating product: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to update product', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async getProductById(id: string, requestUserId?: string): Promise<ProductWithDetails | null> {
-    try {
-      return await this.productRepository.findByIdWithDetails(id, requestUserId);
-    } catch (error) {
-      this.logger.error(`Error getting product by ID: ${error}`);
-      return null;
-    }
-  }
-
-  async getProductBySlug(slug: string, requestUserId?: string): Promise<ProductWithDetails | null> {
-    try {
-      return await this.productRepository.findBySlugWithDetails(slug, requestUserId);
-    } catch (error) {
-      this.logger.error(`Error getting product by slug: ${error}`);
-      return null;
     }
   }
 
@@ -135,12 +111,27 @@ export class ProductService implements IProductService {
     }
   }
 
-  async getProducts(
-    options?: ProductQueryOptions,
-    requestUserId?: string,
-  ): Promise<ProductPaginationResult> {
+  async getProductById(id: string): Promise<ProductWithSeller | null> {
     try {
-      return await this.productRepository.getProducts(options || {}, requestUserId);
+      return await this.productRepository.getProductById(id);
+    } catch (error) {
+      this.logger.error(`Error getting product by ID: ${error}`);
+      return null;
+    }
+  }
+
+  async getProductBySlug(slug: string): Promise<ProductWithSeller | null> {
+    try {
+      return await this.productRepository.getProductBySlug(slug);
+    } catch (error) {
+      this.logger.error(`Error getting product by slug: ${error}`);
+      return null;
+    }
+  }
+
+  async getProducts(options: ProductQueryOptions = {}): Promise<ProductPaginationResult> {
+    try {
+      return await this.productRepository.getProducts(options);
     } catch (error) {
       this.logger.error(`Error getting products: ${error}`);
       if (error instanceof AppError) throw error;
@@ -150,7 +141,7 @@ export class ProductService implements IProductService {
 
   async getMyProducts(
     sellerId: string,
-    options?: Omit<ProductQueryOptions, 'sellerId'>,
+    options: Omit<ProductQueryOptions, 'sellerId'> = {},
   ): Promise<ProductPaginationResult> {
     try {
       return await this.productRepository.getMyProducts(sellerId, options);
@@ -163,9 +154,13 @@ export class ProductService implements IProductService {
 
   async searchProducts(
     query: string,
-    options?: ProductQueryOptions,
+    options: ProductQueryOptions = {},
   ): Promise<ProductPaginationResult> {
     try {
+      if (!query || query.trim().length === 0) {
+        throw new AppError('Search query is required', 400, 'INVALID_QUERY');
+      }
+
       return await this.productRepository.searchProducts(query, options);
     } catch (error) {
       this.logger.error(`Error searching products: ${error}`);
@@ -174,52 +169,20 @@ export class ProductService implements IProductService {
     }
   }
 
-  async getProductsByCategory(
-    categoryId: string,
-    options?: ProductQueryOptions,
-  ): Promise<ProductPaginationResult> {
-    try {
-      return await this.productRepository.getProductsByCategory(categoryId, options);
-    } catch (error) {
-      this.logger.error(`Error getting products by category: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get products by category', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async getFeaturedProducts(limit: number = 10): Promise<ProductWithSeller[]> {
-    try {
-      return await this.productRepository.getFeaturedProducts(limit);
-    } catch (error) {
-      this.logger.error(`Error getting featured products: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get featured products', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async getRelatedProducts(productId: string, limit: number = 5): Promise<ProductWithSeller[]> {
-    try {
-      return await this.productRepository.getRelatedProducts(productId, limit);
-    } catch (error) {
-      this.logger.error(`Error getting related products: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get related products', 500, 'SERVICE_ERROR');
-    }
-  }
-
   async updatePrice(
     id: string,
     sellerId: string,
-    data: PriceUpdateDto,
-  ): Promise<ProductWithDetails> {
+    price: number,
+    note?: string,
+  ): Promise<ProductWithSeller> {
     try {
-      if (data.price <= 0) {
+      if (price <= 0) {
         throw new AppError('Price must be greater than 0', 400, 'INVALID_PRICE');
       }
 
-      const product = await this.productRepository.updatePrice(id, sellerId, data);
+      const product = await this.productRepository.updatePrice(id, sellerId, price, note);
 
-      this.logger.info(`Product price updated: ${id} to ${data.price} by seller ${sellerId}`);
+      this.logger.info(`Product price updated: ${id} to ${price} by seller ${sellerId}`);
 
       return product;
     } catch (error) {
@@ -243,39 +206,7 @@ export class ProductService implements IProductService {
     }
   }
 
-  async updateStock(updates: ProductStockUpdate[]): Promise<boolean> {
-    try {
-      return await this.productRepository.updateStock(updates);
-    } catch (error) {
-      this.logger.error(`Error updating stock: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update stock', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async checkInventory(
-    items: Array<{ productId: string; quantity: number }>,
-  ): Promise<ProductInventoryCheck[]> {
-    try {
-      return await this.productRepository.checkInventory(items);
-    } catch (error) {
-      this.logger.error(`Error checking inventory: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to check inventory', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async getLowStockProducts(sellerId: string, threshold: number = 5): Promise<ProductWithSeller[]> {
-    try {
-      return await this.productRepository.getLowStockProducts(sellerId, threshold);
-    } catch (error) {
-      this.logger.error(`Error getting low stock products: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get low stock products', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async publishProduct(id: string, sellerId: string): Promise<ProductWithDetails> {
+  async publishProduct(id: string, sellerId: string): Promise<ProductWithSeller> {
     try {
       const product = await this.productRepository.publishProduct(id, sellerId);
 
@@ -289,7 +220,7 @@ export class ProductService implements IProductService {
     }
   }
 
-  async unpublishProduct(id: string, sellerId: string): Promise<ProductWithDetails> {
+  async unpublishProduct(id: string, sellerId: string): Promise<ProductWithSeller> {
     try {
       const product = await this.productRepository.unpublishProduct(id, sellerId);
 
@@ -303,95 +234,22 @@ export class ProductService implements IProductService {
     }
   }
 
-  async markOutOfStock(id: string, sellerId: string): Promise<ProductWithDetails> {
-    try {
-      const product = await this.productRepository.markOutOfStock(id, sellerId);
-
-      this.logger.info(`Product marked out of stock: ${id} by seller ${sellerId}`);
-
-      return product;
-    } catch (error) {
-      this.logger.error(`Error marking product out of stock: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to mark product out of stock', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async markInStock(id: string, sellerId: string): Promise<ProductWithDetails> {
-    try {
-      const product = await this.productRepository.markInStock(id, sellerId);
-
-      this.logger.info(`Product marked in stock: ${id} by seller ${sellerId}`);
-
-      return product;
-    } catch (error) {
-      this.logger.error(`Error marking product in stock: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to mark product in stock', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async viewProduct(id: string, userId?: string): Promise<void> {
+  async viewProduct(id: string): Promise<void> {
     try {
       await this.productRepository.incrementViewCount(id);
-
-      if (userId) {
-        this.logger.debug(`Product ${id} viewed by user ${userId}`);
-      } else {
-        this.logger.debug(`Product ${id} viewed by anonymous user`);
-      }
     } catch (error) {
       this.logger.error(`Error viewing product: ${error}`);
       // Don't throw errors for view increments
     }
   }
 
-  async getProductStats(sellerId: string): Promise<{
-    totalProducts: number;
-    publishedProducts: number;
-    outOfStockProducts: number;
-    totalViews: number;
-    totalSales: number;
-  }> {
+  async getProductStats(sellerId: string): Promise<ProductStats> {
     try {
       return await this.productRepository.getProductStats(sellerId);
     } catch (error) {
       this.logger.error(`Error getting product stats: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to get product stats', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async getProductsByIds(productIds: string[]): Promise<ProductWithSeller[]> {
-    try {
-      return await this.productRepository.getProductsByIds(productIds);
-    } catch (error) {
-      this.logger.error(`Error getting products by IDs: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get products by IDs', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async getPopularTags(limit: number = 20): Promise<Array<{ tag: string; count: number }>> {
-    try {
-      return await this.productRepository.getPopularTags(limit);
-    } catch (error) {
-      this.logger.error(`Error getting popular tags: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get popular tags', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async getProductsByTag(
-    tag: string,
-    options?: ProductQueryOptions,
-  ): Promise<ProductPaginationResult> {
-    try {
-      return await this.productRepository.getProductsByTag(tag, options);
-    } catch (error) {
-      this.logger.error(`Error getting products by tag: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get products by tag', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -425,10 +283,6 @@ export class ProductService implements IProductService {
     if (!data.images || data.images.length === 0) {
       throw new AppError('At least one product image is required', 400, 'MISSING_IMAGES');
     }
-
-    if (data.weight !== undefined && data.weight < 0) {
-      throw new AppError('Weight cannot be negative', 400, 'INVALID_WEIGHT');
-    }
   }
 
   private validateProductUpdateData(data: UpdateProductDto): void {
@@ -460,9 +314,20 @@ export class ProductService implements IProductService {
     if (data.images !== undefined && (!data.images || data.images.length === 0)) {
       throw new AppError('At least one product image is required', 400, 'MISSING_IMAGES');
     }
+  }
 
-    if (data.weight !== undefined && data.weight !== null && data.weight < 0) {
-      throw new AppError('Weight cannot be negative', 400, 'INVALID_WEIGHT');
+  private async validateCategories(categoryIds: string[]): Promise<boolean> {
+    try {
+      // Simple validation - check if all categories exist
+      for (const categoryId of categoryIds) {
+        const category = await this.categoryRepository.findById(categoryId);
+        if (!category || !category.isActive) {
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 }

@@ -14,20 +14,15 @@ export class DeleteProductController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      // Ensure user is an artisan
-      if (req.user!.role !== 'ARTISAN') {
-        throw AppError.forbidden('Only artisans can delete products');
-      }
-
-      const { id } = req.params;
-      await this.productService.deleteProduct(id, req.user!.id);
-
-      ApiResponse.success(res, null, 'Product deleted successfully');
-    } catch (error) {
-      next(error);
+    if (req.user!.role !== 'ARTISAN') {
+      throw AppError.forbidden('Only artisans can delete products');
     }
+
+    const { id } = req.params;
+    await this.productService.deleteProduct(id, req.user!.id);
+
+    ApiResponse.success(res, null, 'Product deleted successfully');
   }
 }

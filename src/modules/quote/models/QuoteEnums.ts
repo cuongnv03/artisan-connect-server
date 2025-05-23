@@ -1,11 +1,16 @@
-/**
- * Quote request status enum
- */
 export enum QuoteStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
   COUNTER_OFFERED = 'COUNTER_OFFERED',
-  COMPLETED = 'COMPLETED',
   EXPIRED = 'EXPIRED',
+  COMPLETED = 'COMPLETED', // When converted to order
+}
+
+export enum QuoteAction {
+  REQUEST = 'REQUEST',
+  ACCEPT = 'ACCEPT',
+  REJECT = 'REJECT',
+  COUNTER = 'COUNTER',
+  MESSAGE = 'MESSAGE',
 }

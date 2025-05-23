@@ -1,12 +1,9 @@
 /**
  * Cart Module Exports
- *
- * Centralized exports for the Cart module to simplify imports
  */
 
 // Export models
 export * from './models/CartItem';
-export * from './models/CartEnums';
 
 // Export service interfaces
 export * from './services/CartService.interface';
@@ -23,17 +20,14 @@ export function registerCartModule() {
 
   return {
     name: 'cart',
-    description: 'Shopping cart management module with advanced features',
+    description: 'Simple shopping cart management for artisan marketplace',
     version: '1.0.0',
     features: [
-      'CRUD operations for cart items',
+      'Add/Remove/Update cart items',
       'Cart validation & calculation',
-      'Bulk operations support',
-      'Guest cart merging',
-      'Save for later functionality',
-      'Cart optimization & price sync',
-      'Analytics & recommendations',
       'Multi-seller cart grouping',
+      'Checkout validation',
+      'Stock availability checking',
     ],
   };
 }

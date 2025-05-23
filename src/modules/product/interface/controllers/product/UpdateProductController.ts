@@ -14,20 +14,15 @@ export class UpdateProductController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      // Ensure user is an artisan
-      if (req.user!.role !== 'ARTISAN') {
-        throw AppError.forbidden('Only artisans can update products');
-      }
-
-      const { id } = req.params;
-      const product = await this.productService.updateProduct(id, req.user!.id, req.body);
-
-      ApiResponse.success(res, product, 'Product updated successfully');
-    } catch (error) {
-      next(error);
+    if (req.user!.role !== 'ARTISAN') {
+      throw AppError.forbidden('Only artisans can update products');
     }
+
+    const { id } = req.params;
+    const product = await this.productService.updateProduct(id, req.user!.id, req.body);
+
+    ApiResponse.success(res, product, 'Product updated successfully');
   }
 }

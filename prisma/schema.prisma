@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//------------- USER & AUTHENTICATION MODELS -------------//
+// === ENUMS ===
 enum UserRole {
   ADMIN
   ARTISAN
@@ -22,258 +21,19 @@ enum UserStatus {
   DELETED
 }
 
-model User {
-  id             String     @id @default(uuid())
-  email          String     @unique
-  username       String     @unique
-  password       String
-  firstName      String
-  lastName       String
-  role           UserRole   @default(CUSTOMER)
-  status         UserStatus @default(ACTIVE)
-  bio            String?    @db.Text
-  avatarUrl      String?
-  isVerified     Boolean    @default(false)
-  emailVerified  Boolean    @default(false)
-  phone          String?
-  lastSeenAt     DateTime?
-  followerCount  Int        @default(0)
-  followingCount Int        @default(0)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  deletedAt      DateTime?
-
-  // Relations
-  profile             Profile?
-  artisanProfile      ArtisanProfile?
-  upgradeRequest      ArtisanUpgradeRequest?
-  posts               Post[]
-  products            Product[]
-  followers           Follow[]               @relation("Following")
-  following           Follow[]               @relation("Follower")
-  likes               Like[]
-  comments            Comment[]
-  cartItems           CartItem[]
-  orders              Order[]                @relation("CustomerOrders")
-  sellerOrders        OrderItem[]            @relation("SellerOrderItems")
-  reviews             Review[]
-  quoteRequests       QuoteRequest[]         @relation("CustomerQuotes")
-  artisanQuotes       QuoteRequest[]         @relation("ArtisanQuotes")
-  sessions            Session[]
-  refreshTokens       RefreshToken[]
-  savedPosts          SavedPost[]
-  activities          UserActivity[]
-  passwordResets      PasswordReset[]
-  emailVerifications  EmailVerification[]
-  reviewHelpful       ReviewHelpful[]
-  sentMessages        Message[]              @relation("MessageSender")
-  receivedMessages    Message[]              @relation("MessageReceiver")
-  conversationMembers ConversationMember[]
-  notifications       Notification[]         @relation("NotificationRecipient")
-  sentNotifications   Notification[]         @relation("NotificationSender")
-  paymentMethods      PaymentMethod[]
-  paymentTransactions PaymentTransaction[]
-  Payment             Payment[]
-  Wishlist            Wishlist[]
-  CouponUsage         CouponUsage[]
-
-  @@index([email])
-  @@index([username])
-  @@index([role])
-  @@index([status])
-  @@index([lastSeenAt])
-  @@index([deletedAt])
-}
-
-model Profile {
-  id          String    @id @default(uuid())
-  userId      String    @unique
-  coverUrl    String?
-  location    String?
-  website     String?
-  dateOfBirth DateTime?
-  gender      String?
-  socialLinks Json? // { instagram: "url", facebook: "url", etc. }
-  preferences Json? // User preferences for the platform
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  addresses Address[]
-
-  @@index([userId])
-}
-
-model Address {
-  id        String   @id @default(uuid())
-  profileId String
-  fullName  String
-  phone     String?
-  street    String
-  city      String
-  state     String
-  zipCode   String
-  country   String
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  orders  Order[] @relation("ShippingAddress")
-
-  @@index([profileId])
-}
-
-model Session {
-  id         String   @id @default(uuid())
-  userId     String
-  token      String   @unique
-  userAgent  String?
-  ipAddress  String?
-  lastActive DateTime @default(now())
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([token])
-  @@index([expiresAt])
-}
-
-model RefreshToken {
-  id        String    @id @default(uuid())
-  userId    String
-  token     String    @unique
-  expiresAt DateTime
-  createdAt DateTime  @default(now())
-  revokedAt DateTime?
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([token])
-  @@index([expiresAt])
-}
-
-model PasswordReset {
-  id        String   @id @default(uuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([token])
-  @@index([userId])
-}
-
-model EmailVerification {
-  id        String   @id @default(uuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([token])
-  @@index([userId])
-}
-
-//------------- ARTISAN PROFILE MODELS -------------//
-model ArtisanProfile {
-  id              String   @id @default(uuid())
-  userId          String   @unique
-  shopName        String
-  shopDescription String?  @db.Text
-  shopLogoUrl     String?
-  shopBannerUrl   String?
-  specialties     String[]
-  experience      Int? // Years of experience
-  website         String?
-  contactEmail    String?
-  contactPhone    String?
-  socialMedia     Json? // { instagram: "url", facebook: "url", etc. }
-  templateId      String? // Reference to template used
-  templateData    Json? // Data for rendering the template
-  isVerified      Boolean  @default(false)
-  rating          Float?
-  reviewCount     Int      @default(0)
-  totalSales      Decimal  @default(0) @db.Decimal(12, 2)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([shopName])
-  @@index([isVerified])
-  @@index([rating])
-  @@index([specialties])
-}
-
 enum UpgradeRequestStatus {
   PENDING
   APPROVED
   REJECTED
 }
 
-model ArtisanUpgradeRequest {
-  id              String               @id @default(uuid())
-  userId          String               @unique
-  shopName        String
-  shopDescription String?              @db.Text
-  specialties     String[]
-  experience      Int?
-  website         String?
-  socialMedia     Json?
-  reason          String?              @db.Text
-  status          UpgradeRequestStatus @default(PENDING)
-  adminNotes      String?              @db.Text
-  reviewedBy      String? // Admin user ID who reviewed this request
-  reviewedAt      DateTime?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([status])
-  @@index([createdAt])
-}
-
-//------------- SOCIAL & CONTENT MODELS -------------//
-model Follow {
-  id             String   @id @default(uuid())
-  followerId     String // Who is following
-  followingId    String // Who is being followed
-  status         String   @default("accepted") // "pending", "accepted" for private accounts
-  notifyNewPosts Boolean  @default(true)
-  createdAt      DateTime @default(now())
-
-  // Relations
-  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
-
-  @@unique([followerId, followingId])
-  @@index([followerId])
-  @@index([followingId])
-  @@index([status])
-}
-
 enum PostType {
-  STORY // Detailed artisan journey
-  TUTORIAL // How-to content
-  PRODUCT_SHOWCASE // Featured product content
-  BEHIND_THE_SCENES // Workshop/process content
-  EVENT // Event announcements
-  GENERAL // General posts
+  STORY
+  TUTORIAL
+  PRODUCT_SHOWCASE
+  BEHIND_THE_SCENES
+  EVENT
+  GENERAL
 }
 
 enum PostStatus {
@@ -283,325 +43,13 @@ enum PostStatus {
   DELETED
 }
 
-model Post {
-  id           String     @id @default(uuid())
-  userId       String
-  title        String
-  slug         String?    @unique
-  summary      String?    @db.Text
-  content      Json // Structured content with blocks
-  contentText  String?    @db.Text // Plain text extraction for search
-  type         PostType   @default(GENERAL)
-  status       PostStatus @default(DRAFT)
-  thumbnailUrl String?
-  coverImage   String?
-  mediaUrls    String[] // Array of media URLs used in content
-  tags         String[]
-  viewCount    Int        @default(0)
-  likeCount    Int        @default(0)
-  commentCount Int        @default(0)
-  shareCount   Int        @default(0)
-  publishedAt  DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  deletedAt    DateTime?
-
-  // Relations
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes           Like[]
-  comments        Comment[]
-  productMentions ProductMention[]
-  savedBy         SavedPost[]
-  analytics       PostAnalytics?
-
-  @@index([userId])
-  @@index([type])
-  @@index([status])
-  @@index([publishedAt])
-  @@index([createdAt])
-  @@index([deletedAt])
-  @@index([tags])
-}
-
-model Comment {
-  id         String    @id @default(uuid())
-  postId     String
-  userId     String
-  parentId   String? // For nested comments
-  content    String    @db.Text
-  mediaUrl   String? // Optional media attachment
-  likeCount  Int       @default(0)
-  replyCount Int       @default(0)
-  isEdited   Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-
-  // Relations
-  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies Comment[] @relation("CommentReplies")
-  likes   Like[]    @relation("CommentLikes")
-
-  @@index([postId])
-  @@index([userId])
-  @@index([parentId])
-  @@index([createdAt])
-  @@index([deletedAt])
-}
-
-model Like {
-  id        String   @id @default(uuid())
-  userId    String
-  postId    String?
-  commentId String?
-  reaction  String   @default("like") // For future emoji reactions
-  createdAt DateTime @default(now())
-
-  // Relations
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post    Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
-  comment Comment? @relation("CommentLikes", fields: [commentId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, postId])
-  @@unique([userId, commentId])
-  @@index([postId])
-  @@index([commentId])
-  @@index([createdAt])
-}
-
-model SavedPost {
-  id        String   @id @default(uuid())
-  userId    String
-  postId    String
-  createdAt DateTime @default(now())
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, postId])
-  @@index([userId])
-  @@index([postId])
-}
-
-//------------- PRODUCT & E-COMMERCE MODELS -------------//
 enum ProductStatus {
   DRAFT
   PUBLISHED
   OUT_OF_STOCK
-  DISCONTINUED
   DELETED
 }
 
-model Product {
-  id             String        @id @default(uuid())
-  sellerId       String
-  name           String
-  slug           String?       @unique
-  description    String?       @db.Text
-  price          Decimal       @db.Decimal(10, 2)
-  discountPrice  Decimal?      @db.Decimal(10, 2)
-  quantity       Int           @default(0)
-  sku            String?
-  weight         Float?
-  dimensions     Json? // { length, width, height }
-  status         ProductStatus @default(DRAFT)
-  images         String[]
-  tags           String[]
-  attributes     Json? // Flexible product attributes
-  isCustomizable Boolean       @default(false)
-  avgRating      Float?
-  reviewCount    Int           @default(0)
-  viewCount      Int           @default(0)
-  salesCount     Int           @default(0)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  deletedAt      DateTime?
-
-  // Relations
-  seller          User              @relation(fields: [sellerId], references: [id])
-  categories      CategoryProduct[]
-  priceHistory    PriceHistory[]
-  reviews         Review[]
-  cartItems       CartItem[]
-  orderItems      OrderItem[]
-  quoteRequests   QuoteRequest[]
-  productMentions ProductMention[]
-  Wishlist        Wishlist[]
-
-  @@index([sellerId])
-  @@index([status])
-  @@index([price])
-  @@index([isCustomizable])
-  @@index([createdAt])
-  @@index([deletedAt])
-  @@index([tags])
-}
-
-model Category {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  slug        String   @unique
-  description String?
-  imageUrl    String?
-  parentId    String?
-  level       Int      @default(0) // For hierarchical navigation
-  sortOrder   Int      @default(0) // For custom ordering
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  parent   Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children Category[]        @relation("CategoryHierarchy")
-  products CategoryProduct[]
-
-  @@index([parentId])
-  @@index([level])
-  @@index([sortOrder])
-  @@index([isActive])
-}
-
-model CategoryProduct {
-  categoryId String
-  productId  String
-
-  // Relations
-  category Category @relation(fields: [categoryId], references: [id])
-  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@id([categoryId, productId])
-  @@index([categoryId])
-  @@index([productId])
-}
-
-model PriceHistory {
-  id         String   @id @default(uuid())
-  productId  String
-  price      Decimal  @db.Decimal(10, 2)
-  changeNote String?
-  changedBy  String // User ID who changed the price
-  createdAt  DateTime @default(now())
-
-  // Relations
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@index([productId])
-  @@index([createdAt])
-}
-
-model ProductMention {
-  id          String  @id @default(uuid())
-  postId      String
-  productId   String
-  contextText String? @db.Text
-  position    Int? // Position in the post
-
-  // Relations
-  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
-
-  @@index([postId])
-  @@index([productId])
-}
-
-model ReviewHelpful {
-  id        String   @id @default(uuid())
-  reviewId  String
-  userId    String
-  createdAt DateTime @default(now())
-
-  // Relations
-  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([reviewId, userId])
-  @@index([reviewId])
-  @@index([userId])
-}
-
-model Review {
-  id           String   @id @default(uuid())
-  userId       String
-  productId    String
-  rating       Int // 1-5
-  title        String?
-  comment      String?  @db.Text
-  images       String[]
-  helpfulCount Int      @default(0) // Number of people who found this review helpful
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // Relations
-  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product      Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  helpfulMarks ReviewHelpful[]
-
-  @@unique([userId, productId])
-  @@index([productId])
-  @@index([rating])
-  @@index([createdAt])
-}
-
-model CartItem {
-  id        String   @id @default(uuid())
-  userId    String
-  productId String
-  quantity  Int
-  price     Decimal  @db.Decimal(10, 2) // Price at time of adding to cart
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, productId])
-  @@index([userId])
-  @@index([productId])
-}
-
-enum QuoteStatus {
-  PENDING
-  ACCEPTED
-  REJECTED
-  COUNTER_OFFERED
-  COMPLETED
-  EXPIRED
-}
-
-model QuoteRequest {
-  id             String      @id @default(uuid())
-  productId      String
-  customerId     String
-  artisanId      String
-  requestedPrice Decimal?    @db.Decimal(10, 2)
-  specifications String?     @db.Text
-  status         QuoteStatus @default(PENDING)
-  counterOffer   Decimal?    @db.Decimal(10, 2)
-  finalPrice     Decimal?    @db.Decimal(10, 2)
-  messages       Json? // Array of message objects for quote negotiation
-  expiresAt      DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  // Relations
-  product  Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  customer User    @relation("CustomerQuotes", fields: [customerId], references: [id], onDelete: Cascade)
-  artisan  User    @relation("ArtisanQuotes", fields: [artisanId], references: [id])
-  order    Order? // If this quote became an order
-
-  @@index([productId])
-  @@index([customerId])
-  @@index([artisanId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([expiresAt])
-}
-
-//------------- ORDER & PAYMENT MODELS -------------//
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -630,213 +78,21 @@ enum PaymentMethod {
   CASH_ON_DELIVERY
 }
 
-model Order {
-  id                String         @id @default(uuid())
-  orderNumber       String         @unique // Human-readable order ID
-  userId            String
-  addressId         String? // Shipping address
-  status            OrderStatus    @default(PENDING)
-  paymentStatus     PaymentStatus  @default(PENDING)
-  totalAmount       Decimal        @db.Decimal(10, 2)
-  subtotal          Decimal        @db.Decimal(10, 2)
-  tax               Decimal        @default(0) @db.Decimal(10, 2)
-  shippingCost      Decimal        @default(0) @db.Decimal(10, 2)
-  discount          Decimal        @default(0) @db.Decimal(10, 2)
-  paymentMethod     PaymentMethod?
-  paymentReference  String? // Reference for payment tracking
-  quoteRequestId    String?        @unique // If order came from a quote
-  notes             String?
-  trackingNumber    String?
-  trackingUrl       String?
-  estimatedDelivery DateTime?
-  deliveredAt       DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-
-  // Relations
-  customer            User                 @relation("CustomerOrders", fields: [userId], references: [id])
-  shippingAddress     Address?             @relation("ShippingAddress", fields: [addressId], references: [id])
-  items               OrderItem[]
-  quoteRequest        QuoteRequest?        @relation(fields: [quoteRequestId], references: [id])
-  statusHistory       OrderStatusHistory[]
-  paymentTransactions PaymentTransaction[]
-  CouponUsage         CouponUsage[]
-
-  @@index([userId])
-  @@index([status])
-  @@index([paymentStatus])
-  @@index([orderNumber])
-  @@index([quoteRequestId])
-  @@index([createdAt])
-}
-
-model OrderItem {
-  id          String   @id @default(uuid())
-  orderId     String
-  productId   String
-  sellerId    String
-  quantity    Int
-  price       Decimal  @db.Decimal(10, 2)
-  productData Json? // Snapshot of product at time of order
-  createdAt   DateTime @default(now())
-
-  // Relations
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
-  seller  User    @relation("SellerOrderItems", fields: [sellerId], references: [id])
-
-  @@index([orderId])
-  @@index([productId])
-  @@index([sellerId])
-}
-
-model OrderStatusHistory {
-  id        String      @id @default(uuid())
-  orderId   String
-  status    OrderStatus
-  note      String?
-  createdBy String? // User ID who changed the status
-  createdAt DateTime    @default(now())
-
-  // Relations
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([orderId])
-  @@index([status])
-  @@index([createdAt])
-}
-
-// Payment System Models (Simulated)
-model Payment {
-  id           String        @id @default(uuid())
-  userId       String
-  type         PaymentMethod
-  isDefault    Boolean       @default(false)
-  cardLast4    String? // Last 4 digits for cards
-  cardBrand    String? // Visa, Mastercard, etc.
-  expiryMonth  Int?
-  expiryYear   Int?
-  holderName   String?
-  bankName     String? // For bank transfers
-  accountLast4 String? // Last 4 digits of account
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-
-  // Relations
-  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions PaymentTransaction[]
-
-  @@index([userId])
-  @@index([isDefault])
-  @@index([isActive])
-}
-
-model PaymentTransaction {
-  id                String        @id @default(uuid())
-  orderId           String
-  userId            String
-  paymentMethodId   String?
-  amount            Decimal       @db.Decimal(10, 2)
-  currency          String        @default("USD")
-  status            PaymentStatus @default(PENDING)
-  paymentMethod     PaymentMethod
-  reference         String        @unique // Internal reference
-  externalReference String? // External payment processor reference
-  failureReason     String?
-  processedAt       DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-
-  // Relations
-  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  payment Payment? @relation(fields: [paymentMethodId], references: [id])
-
-  @@index([orderId])
-  @@index([userId])
-  @@index([status])
-  @@index([reference])
-  @@index([createdAt])
-}
-
-//------------- MESSAGING & COMMUNICATION MODELS -------------//
-model Conversation {
-  id            String    @id @default(uuid())
-  title         String?
-  isGroup       Boolean   @default(false)
-  lastMessage   String?
-  lastMessageAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // Relations
-  members  ConversationMember[]
-  messages Message[]
-
-  @@index([lastMessageAt])
-  @@index([createdAt])
-}
-
-model ConversationMember {
-  id             String    @id @default(uuid())
-  conversationId String
-  userId         String
-  joinedAt       DateTime  @default(now())
-  leftAt         DateTime?
-  isAdmin        Boolean   @default(false)
-  lastReadAt     DateTime?
-
-  // Relations
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([conversationId, userId])
-  @@index([conversationId])
-  @@index([userId])
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COUNTER_OFFERED
+  EXPIRED
 }
 
 enum MessageType {
   TEXT
   IMAGE
-  FILE
   CUSTOM_ORDER
-  QUOTE_REQUEST
-  SYSTEM
+  QUOTE_DISCUSSION
 }
 
-model Message {
-  id             String      @id @default(uuid())
-  conversationId String
-  senderId       String
-  receiverId     String? // For direct messages
-  content        String      @db.Text
-  type           MessageType @default(TEXT)
-  metadata       Json? // Additional data for custom orders, quotes, etc.
-  attachments    String[] // URLs to attachments
-  isRead         Boolean     @default(false)
-  isEdited       Boolean     @default(false)
-  replyToId      String? // For reply messages
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  deletedAt      DateTime?
-
-  // Relations
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver     User?        @relation("MessageReceiver", fields: [receiverId], references: [id])
-  replyTo      Message?     @relation("MessageReplies", fields: [replyToId], references: [id])
-  replies      Message[]    @relation("MessageReplies")
-
-  @@index([conversationId])
-  @@index([senderId])
-  @@index([receiverId])
-  @@index([createdAt])
-  @@index([isRead])
-  @@index([deletedAt])
-}
-
-//------------- NOTIFICATION MODELS -------------//
 enum NotificationType {
   LIKE
   COMMENT
@@ -852,6 +108,633 @@ enum NotificationType {
   SYSTEM
 }
 
+// === USER & AUTH MODELS ===
+model User {
+  id             String     @id @default(uuid())
+  email          String     @unique
+  username       String     @unique
+  password       String
+  firstName      String
+  lastName       String
+  role           UserRole   @default(CUSTOMER)
+  status         UserStatus @default(ACTIVE)
+  bio            String?    @db.Text
+  avatarUrl      String?
+  isVerified     Boolean    @default(false)
+  emailVerified  Boolean    @default(false)
+  phone          String?
+  lastSeenAt     DateTime?
+  followerCount  Int        @default(0)
+  followingCount Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  // Auth relations
+  profile            Profile?
+  sessions           Session[]
+  refreshTokens      RefreshToken[]
+  passwordResets     PasswordReset[]
+  emailVerifications EmailVerification[]
+
+  // Social relations
+  artisanProfile ArtisanProfile?
+  upgradeRequest ArtisanUpgradeRequest?
+  posts          Post[]
+  followers      Follow[]               @relation("Following")
+  following      Follow[]               @relation("Follower")
+  likes          Like[]
+  comments       Comment[]
+  savedPosts     SavedPost[]
+
+  // E-commerce relations
+  products            Product[]
+  cartItems           CartItem[]
+  orders              Order[]              @relation("CustomerOrders")
+  sellerOrders        OrderItem[]          @relation("SellerOrderItems")
+  quoteRequests       QuoteRequest[]       @relation("CustomerQuotes")
+  artisanQuotes       QuoteRequest[]       @relation("ArtisanQuotes")
+  reviews             Review[]
+  wishlistItems       Wishlist[]
+  paymentMethods      PaymentMethod[]
+  paymentTransactions PaymentTransaction[]
+
+  // Communication relations
+  sentMessages      Message[]      @relation("MessageSender")
+  receivedMessages  Message[]      @relation("MessageReceiver")
+  notifications     Notification[] @relation("NotificationRecipient")
+  sentNotifications Notification[] @relation("NotificationSender")
+
+  // Activity tracking
+  activities UserActivity[]
+  Payment    Payment[]
+
+  @@index([email])
+  @@index([username])
+  @@index([role])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model Profile {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  coverUrl    String?
+  location    String?
+  website     String?
+  dateOfBirth DateTime?
+  gender      String?
+  socialLinks Json?
+  preferences Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses Address[]
+
+  @@index([userId])
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  profileId String
+  fullName  String
+  phone     String?
+  street    String
+  city      String
+  state     String
+  zipCode   String
+  country   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  orders  Order[] @relation("ShippingAddress")
+
+  @@index([profileId])
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  userId     String
+  token      String   @unique
+  userAgent  String?
+  ipAddress  String?
+  lastActive DateTime @default(now())
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model EmailVerification {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+// === ARTISAN MODELS ===
+model ArtisanProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  shopName        String
+  shopDescription String?  @db.Text
+  shopLogoUrl     String?
+  shopBannerUrl   String?
+  specialties     String[]
+  experience      Int?
+  website         String?
+  contactEmail    String?
+  contactPhone    String?
+  socialMedia     Json?
+  isVerified      Boolean  @default(false)
+  rating          Float?
+  reviewCount     Int      @default(0)
+  totalSales      Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([shopName])
+  @@index([isVerified])
+  @@index([rating])
+}
+
+model ArtisanUpgradeRequest {
+  id              String               @id @default(uuid())
+  userId          String               @unique
+  shopName        String
+  shopDescription String?              @db.Text
+  specialties     String[]
+  experience      Int?
+  website         String?
+  socialMedia     Json?
+  reason          String?              @db.Text
+  status          UpgradeRequestStatus @default(PENDING)
+  adminNotes      String?              @db.Text
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// === SOCIAL MODELS ===
+model Follow {
+  id             String   @id @default(uuid())
+  followerId     String
+  followingId    String
+  status         String   @default("accepted")
+  notifyNewPosts Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model Post {
+  id           String     @id @default(uuid())
+  userId       String
+  title        String
+  slug         String?    @unique
+  summary      String?    @db.Text
+  content      Json
+  contentText  String?    @db.Text
+  type         PostType   @default(GENERAL)
+  status       PostStatus @default(DRAFT)
+  thumbnailUrl String?
+  coverImage   String?
+  mediaUrls    String[]
+  tags         String[]
+  viewCount    Int        @default(0)
+  likeCount    Int        @default(0)
+  commentCount Int        @default(0)
+  shareCount   Int        @default(0)
+  publishedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes           Like[]
+  comments        Comment[]
+  productMentions ProductMention[]
+  savedBy         SavedPost[]
+  analytics       PostAnalytics?
+  wishlistItems   Wishlist[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([deletedAt])
+  @@index([tags])
+}
+
+model Comment {
+  id         String    @id @default(uuid())
+  postId     String
+  userId     String
+  parentId   String?
+  content    String    @db.Text
+  mediaUrl   String?
+  likeCount  Int       @default(0)
+  replyCount Int       @default(0)
+  isEdited   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies Comment[] @relation("CommentReplies")
+  likes   Like[]    @relation("CommentLikes")
+
+  @@index([postId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([deletedAt])
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String?
+  commentId String?
+  reaction  String   @default("like")
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post    Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment Comment? @relation("CommentLikes", fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@index([postId])
+  @@index([commentId])
+}
+
+model SavedPost {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId])
+  @@index([postId])
+}
+
+// === PRODUCT MODELS ===
+model Product {
+  id             String        @id @default(uuid())
+  sellerId       String
+  name           String
+  slug           String?       @unique
+  description    String?       @db.Text
+  price          Decimal       @db.Decimal(10, 2)
+  discountPrice  Decimal?      @db.Decimal(10, 2)
+  quantity       Int           @default(0)
+  status         ProductStatus @default(DRAFT)
+  images         String[]
+  tags           String[]
+  isCustomizable Boolean       @default(false)
+  avgRating      Float?
+  reviewCount    Int           @default(0)
+  viewCount      Int           @default(0)
+  salesCount     Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  seller          User              @relation(fields: [sellerId], references: [id])
+  categories      CategoryProduct[]
+  priceHistory    PriceHistory[]
+  reviews         Review[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  quoteRequests   QuoteRequest[]
+  productMentions ProductMention[]
+  wishlistItems   Wishlist[]
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([avgRating])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([tags])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  imageUrl    String?
+  parentId    String?
+  level       Int      @default(0)
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent   Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[]        @relation("CategoryHierarchy")
+  products CategoryProduct[]
+
+  @@index([parentId])
+  @@index([level])
+  @@index([isActive])
+}
+
+model CategoryProduct {
+  categoryId String
+  productId  String
+
+  category Category @relation(fields: [categoryId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([categoryId, productId])
+}
+
+model PriceHistory {
+  id         String   @id @default(uuid())
+  productId  String
+  price      Decimal  @db.Decimal(10, 2)
+  changeNote String?
+  createdAt  DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model ProductMention {
+  id          String  @id @default(uuid())
+  postId      String
+  productId   String
+  contextText String? @db.Text
+  position    Int?
+
+  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([postId])
+  @@index([productId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  rating    Int // 1-5
+  title     String?
+  comment   String?  @db.Text
+  images    String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@index([rating])
+  @@index([createdAt])
+}
+
+// === CART & WISHLIST ===
+model CartItem {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  quantity  Int
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String?
+  postId    String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  post    Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@unique([userId, postId])
+  @@index([userId])
+}
+
+// === ORDER & PAYMENT ===
+model Order {
+  id                String         @id @default(uuid())
+  orderNumber       String         @unique
+  userId            String
+  addressId         String?
+  status            OrderStatus    @default(PENDING)
+  paymentStatus     PaymentStatus  @default(PENDING)
+  totalAmount       Decimal        @db.Decimal(10, 2)
+  subtotal          Decimal        @db.Decimal(10, 2)
+  shippingCost      Decimal        @default(0) @db.Decimal(10, 2)
+  paymentMethod     PaymentMethod?
+  paymentReference  String?
+  notes             String?
+  trackingNumber    String?
+  estimatedDelivery DateTime?
+  deliveredAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  customer            User                 @relation("CustomerOrders", fields: [userId], references: [id])
+  shippingAddress     Address?             @relation("ShippingAddress", fields: [addressId], references: [id])
+  items               OrderItem[]
+  paymentTransactions PaymentTransaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String
+  sellerId  String
+  quantity  Int
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  seller  User    @relation("SellerOrderItems", fields: [sellerId], references: [id])
+
+  @@index([orderId])
+  @@index([sellerId])
+}
+
+model Payment {
+  id           String        @id @default(uuid())
+  userId       String
+  type         PaymentMethod
+  isDefault    Boolean       @default(false)
+  cardLast4    String?
+  cardBrand    String?
+  expiryMonth  Int?
+  expiryYear   Int?
+  holderName   String?
+  bankName     String?
+  accountLast4 String?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions PaymentTransaction[]
+
+  @@index([userId])
+  @@index([isDefault])
+}
+
+model PaymentTransaction {
+  id                String        @id @default(uuid())
+  orderId           String
+  userId            String
+  paymentMethodId   String?
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("USD")
+  status            PaymentStatus @default(PENDING)
+  paymentMethod     PaymentMethod
+  reference         String        @unique
+  externalReference String?
+  failureReason     String?
+  processedAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment Payment? @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@index([reference])
+}
+
+// === QUOTE SYSTEM ===
+model QuoteRequest {
+  id              String      @id @default(uuid())
+  productId       String
+  customerId      String
+  artisanId       String
+  requestedPrice  Decimal?    @db.Decimal(10, 2)
+  specifications  String?     @db.Text
+  status          QuoteStatus @default(PENDING)
+  counterOffer    Decimal?    @db.Decimal(10, 2)
+  finalPrice      Decimal?    @db.Decimal(10, 2)
+  customerMessage String?     @db.Text
+  artisanMessage  String?     @db.Text
+  expiresAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  product  Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer User    @relation("CustomerQuotes", fields: [customerId], references: [id], onDelete: Cascade)
+  artisan  User    @relation("ArtisanQuotes", fields: [artisanId], references: [id])
+
+  @@index([productId])
+  @@index([customerId])
+  @@index([artisanId])
+  @@index([status])
+}
+
+// === MESSAGING ===
+model Message {
+  id         String      @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String      @db.Text
+  type       MessageType @default(TEXT)
+  metadata   Json?
+  isRead     Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+  @@index([isRead])
+}
+
+// === NOTIFICATIONS ===
 model Notification {
   id          String           @id @default(uuid())
   recipientId String
@@ -859,33 +742,29 @@ model Notification {
   type        NotificationType
   title       String
   message     String           @db.Text
-  data        Json? // Additional data related to the notification
+  data        Json?
   isRead      Boolean          @default(false)
   createdAt   DateTime         @default(now())
 
-  // Relations
   recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
   sender    User? @relation("NotificationSender", fields: [senderId], references: [id])
 
   @@index([recipientId])
-  @@index([senderId])
   @@index([type])
   @@index([isRead])
   @@index([createdAt])
 }
 
-//------------- ANALYTICS MODELS -------------//
+// === ANALYTICS & ACTIVITY ===
 model PostAnalytics {
   id              String   @id @default(uuid())
   postId          String   @unique
   viewCount       Int      @default(0)
   uniqueViewers   Int      @default(0)
-  avgReadTime     Float? // Average reading time in seconds
-  bounceRate      Float? // Percentage of people who leave quickly
-  conversionCount Int      @default(0) // Number of conversions (purchases) from this post
+  avgReadTime     Float?
+  conversionCount Int      @default(0)
   updatedAt       DateTime @updatedAt
 
-  // Relations
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@index([postId])
@@ -894,100 +773,18 @@ model PostAnalytics {
 model UserActivity {
   id           String   @id @default(uuid())
   userId       String
-  activityType String // login, view_product, add_to_cart, etc.
-  entityId     String? // Related entity ID
-  entityType   String? // Related entity type
-  metadata     Json? // Additional activity data
+  activityType String
+  entityId     String?
+  entityType   String?
+  metadata     Json?
   ipAddress    String?
   userAgent    String?
   createdAt    DateTime @default(now())
 
-  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([activityType])
   @@index([entityId])
   @@index([createdAt])
-}
-
-//------------- SYSTEM SETTINGS -------------//
-model SystemConfig {
-  id          String   @id @default(uuid())
-  key         String   @unique
-  value       Json
-  description String?
-  category    String? // For grouping configs
-  isPublic    Boolean  @default(false) // Whether this config can be accessed by non-admins
-  updatedBy   String? // Admin user ID who updated this setting
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([key])
-  @@index([category])
-  @@index([isPublic])
-}
-
-//------------- ADDITIONAL FEATURES -------------//
-// Wishlist/Favorites
-model Wishlist {
-  id        String   @id @default(uuid())
-  userId    String
-  productId String
-  createdAt DateTime @default(now())
-
-  // Relations
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, productId])
-  @@index([userId])
-  @@index([productId])
-}
-
-// Coupons/Discounts
-model Coupon {
-  id           String    @id @default(uuid())
-  code         String    @unique
-  name         String
-  description  String?
-  type         String // PERCENTAGE, FIXED_AMOUNT, FREE_SHIPPING
-  value        Decimal   @db.Decimal(10, 2)
-  minAmount    Decimal?  @db.Decimal(10, 2) // Minimum order amount
-  maxDiscount  Decimal?  @db.Decimal(10, 2) // Maximum discount amount
-  usageLimit   Int? // Total usage limit
-  usageCount   Int       @default(0)
-  perUserLimit Int? // Usage limit per user
-  isActive     Boolean   @default(true)
-  startsAt     DateTime?
-  expiresAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  // Relations
-  orders CouponUsage[]
-
-  @@index([code])
-  @@index([isActive])
-  @@index([startsAt])
-  @@index([expiresAt])
-}
-
-model CouponUsage {
-  id       String   @id @default(uuid())
-  couponId String
-  orderId  String
-  userId   String
-  discount Decimal  @db.Decimal(10, 2)
-  usedAt   DateTime @default(now())
-
-  // Relations
-  coupon Coupon @relation(fields: [couponId], references: [id])
-  order  Order  @relation(fields: [orderId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
-
-  @@unique([couponId, orderId])
-  @@index([couponId])
-  @@index([orderId])
-  @@index([userId])
 }

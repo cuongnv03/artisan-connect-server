@@ -2,92 +2,52 @@ import {
   Order,
   OrderWithDetails,
   OrderSummary,
-  OrderQueryOptions,
+  OrderStatusHistory,
   CreateOrderFromCartDto,
   CreateOrderFromQuoteDto,
   UpdateOrderStatusDto,
-  UpdateShippingInfoDto,
-  ConvertToOrderDto,
+  ProcessPaymentDto,
+  OrderQueryOptions,
+  OrderStats,
 } from '../models/Order';
-import { OrderStatusHistory } from '../models/OrderStatusHistory';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IOrderService {
-  /**
-   * Create order from cart
-   */
+  // Order creation
   createOrderFromCart(userId: string, data: CreateOrderFromCartDto): Promise<OrderWithDetails>;
-
-  /**
-   * Create order from quote request
-   */
   createOrderFromQuote(userId: string, data: CreateOrderFromQuoteDto): Promise<OrderWithDetails>;
 
-  /**
-   * Convert accepted quote to order
-   */
-  convertQuoteToOrder(
-    userId: string,
-    quoteId: string,
-    data: ConvertToOrderDto,
-  ): Promise<OrderWithDetails>;
-
-  /**
-   * Get order by ID
-   */
+  // Order retrieval
   getOrderById(id: string): Promise<OrderWithDetails | null>;
-
-  /**
-   * Get order by order number
-   */
-  getOrderByOrderNumber(orderNumber: string): Promise<OrderWithDetails | null>;
-
-  /**
-   * Get customer orders
-   */
-  getCustomerOrders(
+  getOrderByNumber(orderNumber: string): Promise<OrderWithDetails | null>;
+  getOrders(options?: OrderQueryOptions): Promise<PaginatedResult<OrderSummary>>;
+  getMyOrders(
     userId: string,
     options?: Partial<OrderQueryOptions>,
   ): Promise<PaginatedResult<OrderSummary>>;
-
-  /**
-   * Get artisan orders
-   */
-  getArtisanOrders(
-    artisanId: string,
+  getSellerOrders(
+    sellerId: string,
     options?: Partial<OrderQueryOptions>,
   ): Promise<PaginatedResult<OrderSummary>>;
 
-  /**
-   * Update order status
-   */
+  // Order management
   updateOrderStatus(
     id: string,
     data: UpdateOrderStatusDto,
     updatedBy: string,
   ): Promise<OrderWithDetails>;
+  cancelOrder(id: string, userId: string, reason?: string): Promise<OrderWithDetails>;
 
-  /**
-   * Update shipping info
-   */
-  updateShippingInfo(
-    id: string,
-    sellerId: string,
-    data: UpdateShippingInfoDto,
-  ): Promise<OrderWithDetails>;
+  // Payment
+  processPayment(id: string, data: ProcessPaymentDto): Promise<OrderWithDetails>;
+  refundPayment(id: string, reason?: string): Promise<OrderWithDetails>;
 
-  /**
-   * Process payment for order
-   */
-  processPayment(id: string, paymentIntentId: string): Promise<OrderWithDetails>;
-
-  /**
-   * Cancel order
-   */
-  cancelOrder(id: string, userId: string, note?: string): Promise<OrderWithDetails>;
-
-  /**
-   * Get order status history
-   */
+  // Tracking
   getOrderStatusHistory(orderId: string): Promise<OrderStatusHistory[]>;
+
+  // Analytics
+  getOrderStats(userId?: string, sellerId?: string): Promise<OrderStats>;
+
+  // Validation
+  validateOrderAccess(orderId: string, userId: string, userRole: string): Promise<boolean>;
 }

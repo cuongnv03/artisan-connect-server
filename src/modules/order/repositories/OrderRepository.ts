@@ -5,14 +5,16 @@ import {
   Order,
   OrderWithDetails,
   OrderSummary,
-  OrderQueryOptions,
+  OrderStatusHistory,
+  PaymentTransaction,
   CreateOrderFromCartDto,
   CreateOrderFromQuoteDto,
   UpdateOrderStatusDto,
-  UpdateShippingInfoDto,
+  ProcessPaymentDto,
+  OrderQueryOptions,
+  OrderStats,
 } from '../models/Order';
-import { OrderStatus, PaymentMethod, PaymentStatus } from '../models/OrderEnums';
-import { OrderStatusHistory } from '../models/OrderStatusHistory';
+import { OrderStatus, PaymentStatus, PaymentMethod } from '../models/OrderEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
@@ -27,9 +29,246 @@ export class OrderRepository
     super(prisma, 'order');
   }
 
-  /**
-   * Find order by ID with details
-   */
+  async createOrderFromCart(
+    userId: string,
+    data: CreateOrderFromCartDto,
+  ): Promise<OrderWithDetails> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Get cart items
+        const cartItems = await tx.cartItem.findMany({
+          where: { userId },
+          include: {
+            product: {
+              include: {
+                seller: {
+                  include: {
+                    artisanProfile: {
+                      select: { shopName: true, isVerified: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (cartItems.length === 0) {
+          throw new AppError('Cart is empty', 400, 'EMPTY_CART');
+        }
+
+        // Validate products and calculate totals
+        let subtotal = 0;
+        const orderItems: any[] = [];
+
+        for (const item of cartItems) {
+          const product = item.product;
+
+          if (!product || product.status !== 'PUBLISHED') {
+            throw new AppError(
+              `Product ${product?.name || 'Unknown'} is not available`,
+              400,
+              'PRODUCT_UNAVAILABLE',
+            );
+          }
+
+          if (product.quantity < item.quantity) {
+            throw new AppError(`Insufficient stock for ${product.name}`, 400, 'INSUFFICIENT_STOCK');
+          }
+
+          const price = product.discountPrice || product.price;
+          subtotal += Number(price) * item.quantity;
+
+          orderItems.push({
+            productId: item.productId,
+            sellerId: product.sellerId,
+            quantity: item.quantity,
+            price: price,
+          });
+
+          // Update product quantity
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { quantity: { decrement: item.quantity } },
+          });
+        }
+
+        // Validate address
+        const address = await tx.address.findFirst({
+          where: {
+            id: data.addressId,
+            profile: {
+              userId: userId,
+            },
+          },
+        });
+
+        if (!address) {
+          throw new AppError('Invalid shipping address', 400, 'INVALID_ADDRESS');
+        }
+
+        // Calculate shipping cost (simplified)
+        const shippingCost = subtotal > 50 ? 0 : 10; // Free shipping over $50
+        const totalAmount = subtotal + shippingCost;
+
+        // Generate order number
+        const orderNumber = await this.generateOrderNumber();
+
+        // Create order
+        const order = await tx.order.create({
+          data: {
+            orderNumber,
+            userId,
+            addressId: data.addressId,
+            status: OrderStatus.PENDING,
+            paymentStatus: PaymentStatus.PENDING,
+            totalAmount,
+            subtotal,
+            shippingCost,
+            paymentMethod: data.paymentMethod,
+            notes: data.notes,
+            items: {
+              create: orderItems,
+            },
+          },
+        });
+
+        // Add initial status history
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: order.id,
+            status: OrderStatus.PENDING,
+            note: 'Order created from cart',
+            createdBy: userId,
+          },
+        });
+
+        // Clear cart
+        await tx.cartItem.deleteMany({
+          where: { userId },
+        });
+
+        return (await this.findByIdWithDetails(order.id)) as OrderWithDetails;
+      });
+    } catch (error) {
+      this.logger.error(`Error creating order from cart: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to create order', 500, 'ORDER_CREATION_FAILED');
+    }
+  }
+
+  async createOrderFromQuote(
+    userId: string,
+    data: CreateOrderFromQuoteDto,
+  ): Promise<OrderWithDetails> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Get quote request
+        const quote = await tx.quoteRequest.findUnique({
+          where: { id: data.quoteRequestId },
+          include: {
+            product: {
+              include: {
+                seller: {
+                  include: {
+                    artisanProfile: {
+                      select: { shopName: true, isVerified: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (!quote) {
+          throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
+        }
+
+        if (quote.customerId !== userId) {
+          throw new AppError('You can only create orders from your own quotes', 403, 'FORBIDDEN');
+        }
+
+        if (quote.status !== 'ACCEPTED') {
+          throw new AppError(
+            'Only accepted quotes can be converted to orders',
+            400,
+            'INVALID_QUOTE_STATUS',
+          );
+        }
+
+        if (!quote.finalPrice) {
+          throw new AppError('Quote has no final price', 400, 'NO_FINAL_PRICE');
+        }
+
+        // Validate address
+        const address = await tx.address.findFirst({
+          where: {
+            id: data.addressId,
+            profile: { userId },
+          },
+        });
+
+        if (!address) {
+          throw new AppError('Invalid shipping address', 400, 'INVALID_ADDRESS');
+        }
+
+        const subtotal = Number(quote.finalPrice);
+        const shippingCost = 0; // Custom orders usually include shipping
+        const totalAmount = subtotal + shippingCost;
+
+        // Generate order number
+        const orderNumber = await this.generateOrderNumber();
+
+        // Create order
+        const order = await tx.order.create({
+          data: {
+            orderNumber,
+            userId,
+            addressId: data.addressId,
+            status: OrderStatus.CONFIRMED, // Custom orders start as confirmed
+            paymentStatus: PaymentStatus.PENDING,
+            totalAmount,
+            subtotal,
+            shippingCost,
+            paymentMethod: data.paymentMethod,
+            notes: data.notes || `Custom order from quote: ${quote.specifications}`,
+            items: {
+              create: {
+                productId: quote.productId,
+                sellerId: quote.artisanId,
+                quantity: 1, // Custom orders are typically quantity 1
+                price: quote.finalPrice,
+              },
+            },
+          },
+        });
+
+        // Add status history
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: order.id,
+            status: OrderStatus.CONFIRMED,
+            note: `Order created from accepted quote (${quote.id})`,
+            createdBy: userId,
+          },
+        });
+
+        // Update quote status
+        await tx.quoteRequest.update({
+          where: { id: quote.id },
+          data: { status: 'COMPLETED' },
+        });
+
+        return (await this.findByIdWithDetails(order.id)) as OrderWithDetails;
+      });
+    } catch (error) {
+      this.logger.error(`Error creating order from quote: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to create order from quote', 500, 'ORDER_CREATION_FAILED');
+    }
+  }
+
   async findByIdWithDetails(id: string): Promise<OrderWithDetails | null> {
     try {
       const order = await this.prisma.order.findUnique({
@@ -41,419 +280,124 @@ export class OrderRepository
               firstName: true,
               lastName: true,
               email: true,
+              phone: true,
             },
           },
           shippingAddress: true,
           items: {
             include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  images: true,
+                  isCustomizable: true,
+                },
+              },
               seller: {
                 select: {
                   id: true,
                   firstName: true,
                   lastName: true,
+                  username: true,
                   artisanProfile: {
                     select: {
                       shopName: true,
+                      isVerified: true,
                     },
                   },
                 },
               },
             },
           },
-          statusHistory: {
-            orderBy: {
-              createdAt: 'desc',
-            },
-          },
-          quoteRequest: {
-            select: {
-              id: true,
-              finalPrice: true,
-              specifications: true,
-            },
+          paymentTransactions: {
+            orderBy: { createdAt: 'desc' },
           },
         },
       });
 
       if (!order) return null;
 
-      return order as unknown as OrderWithDetails;
+      // Get status history separately to avoid circular references
+      const statusHistory = await this.getOrderStatusHistory(id);
+
+      return {
+        ...order,
+        statusHistory,
+        totalAmount: Number(order.totalAmount),
+        subtotal: Number(order.subtotal),
+        shippingCost: Number(order.shippingCost),
+        items: order.items.map((item) => ({
+          ...item,
+          price: Number(item.price),
+        })),
+        paymentTransactions: order.paymentTransactions.map((tx) => ({
+          ...tx,
+          amount: Number(tx.amount),
+        })),
+      } as OrderWithDetails;
     } catch (error) {
       this.logger.error(`Error finding order by ID: ${error}`);
       return null;
     }
   }
 
-  /**
-   * Find order by order number
-   */
   async findByOrderNumber(orderNumber: string): Promise<OrderWithDetails | null> {
     try {
       const order = await this.prisma.order.findUnique({
         where: { orderNumber },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-          shippingAddress: true,
-          items: {
-            include: {
-              seller: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  artisanProfile: {
-                    select: {
-                      shopName: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          statusHistory: {
-            orderBy: {
-              createdAt: 'desc',
-            },
-          },
-          quoteRequest: {
-            select: {
-              id: true,
-              finalPrice: true,
-              specifications: true,
-            },
-          },
-        },
       });
 
       if (!order) return null;
 
-      return order as unknown as OrderWithDetails;
+      return await this.findByIdWithDetails(order.id);
     } catch (error) {
-      this.logger.error(`Error finding order by order number: ${error}`);
+      this.logger.error(`Error finding order by number: ${error}`);
       return null;
     }
   }
 
-  /**
-   * Prepare order items from cart items
-   * This method is used to create order items from cart items
-   */
-  async prepareOrderItemsFromCart(
-    cartItems: any[],
-  ): Promise<{ orderItems: any[]; subtotal: number }> {
-    let subtotal = 0;
-
-    // Create product snapshots and calculate subtotal
-    const orderItems = cartItems.map((item) => {
-      const price = item.product.discountPrice || item.product.price;
-      const itemTotal = price * item.quantity;
-      subtotal += itemTotal;
-
-      return {
-        productId: item.productId,
-        sellerId: item.product.sellerId,
-        quantity: item.quantity,
-        price,
-        productData: {
-          id: item.product.id,
-          name: item.product.name,
-          description: item.product.description,
-          images: item.product.images,
-          attributes: item.product.attributes,
-          isCustomizable: item.product.isCustomizable,
-        },
-      };
-    });
-
-    return { orderItems, subtotal };
-  }
-
-  /**
-   * Create order with items
-   * This method is used by both createOrderFromCart and createOrderFromQuote
-   */
-  async createOrderWithItems(
-    userId: string,
-    data: {
-      orderNumber: string;
-      addressId: string;
-      paymentMethod: PaymentMethod;
-      notes?: string;
-      orderItems: any[];
-      subtotal: number;
-    },
-  ): Promise<OrderWithDetails> {
+  async getOrders(options: OrderQueryOptions): Promise<PaginatedResult<OrderSummary>> {
     try {
-      // Calculate order totals
-      const tax = 0;
-      const shippingCost = 0;
-      const totalAmount = data.subtotal + tax + shippingCost;
+      const {
+        page = 1,
+        limit = 10,
+        userId,
+        sellerId,
+        status,
+        paymentStatus,
+        dateFrom,
+        dateTo,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+      } = options;
 
-      // Create order in transaction
-      const order = await this.prisma.$transaction(async (tx) => {
-        // Create order
-        const order = await tx.order.create({
-          data: {
-            orderNumber: data.orderNumber,
-            userId,
-            addressId: data.addressId,
-            status: OrderStatus.PENDING,
-            totalAmount,
-            subtotal: data.subtotal,
-            tax,
-            shippingCost,
-            discount: 0,
-            paymentMethod: data.paymentMethod,
-            paymentStatus: false,
-            notes: data.notes,
-            items: {
-              create: data.orderItems,
-            },
-            statusHistory: {
-              create: {
-                status: OrderStatus.PENDING,
-                note: 'Order created',
-                createdBy: userId,
-              },
-            },
-          },
-          include: {
-            customer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            shippingAddress: true,
-            items: true,
-            statusHistory: true,
-          },
-        });
+      const where: Prisma.OrderWhereInput = {};
 
-        return order;
-      });
-
-      return order as OrderWithDetails;
-    } catch (error) {
-      this.logger.error(`Database error in createOrderWithItems: ${error}`);
-      throw error;
-    }
-  }
-
-  async createOrderFromQuote(
-    userId: string,
-    data: CreateOrderFromQuoteDto,
-  ): Promise<OrderWithDetails> {
-    try {
-      // Get quote request
-      const quoteRequest = await this.prisma.quoteRequest.findUnique({
-        where: {
-          id: data.quoteRequestId,
-          customerId: userId,
-          status: 'ACCEPTED', // Only accepted quotes can become orders
-        },
-        include: {
-          product: {
-            include: {
-              seller: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!quoteRequest) {
-        throw new AppError('Quote request not found or not accepted', 404, 'QUOTE_NOT_FOUND');
+      // Filters
+      if (userId) where.userId = userId;
+      if (status) {
+        where.status = Array.isArray(status) ? { in: status } : status;
+      }
+      if (paymentStatus) {
+        where.paymentStatus = Array.isArray(paymentStatus) ? { in: paymentStatus } : paymentStatus;
+      }
+      if (dateFrom || dateTo) {
+        where.createdAt = {};
+        if (dateFrom) where.createdAt.gte = dateFrom;
+        if (dateTo) where.createdAt.lte = dateTo;
+      }
+      if (sellerId) {
+        where.items = {
+          some: { sellerId },
+        };
       }
 
-      // Verify shipping address
-      const address = await this.prisma.address.findFirst({
-        where: {
-          id: data.addressId,
-          profile: {
-            userId,
-          },
-        },
-      });
+      const total = await this.prisma.order.count({ where });
 
-      if (!address) {
-        throw new AppError('Shipping address not found', 404, 'ADDRESS_NOT_FOUND');
-      }
-
-      // Ensure final price is set
-      if (!quoteRequest.finalPrice) {
-        throw new AppError('No final price set for this quote', 400, 'NO_FINAL_PRICE');
-      }
-
-      // Calculate order totals
-      const subtotal = quoteRequest.finalPrice;
-
-      // Prepare order item
-      const orderItems = [
-        {
-          productId: quoteRequest.productId,
-          sellerId: quoteRequest.product.sellerId,
-          quantity: 1, // Quotes are for single items
-          price: quoteRequest.finalPrice,
-          productData: {
-            id: quoteRequest.product.id,
-            name: quoteRequest.product.name,
-            description: quoteRequest.product.description,
-            images: quoteRequest.product.images,
-            attributes: quoteRequest.product.attributes,
-            isCustomizable: true,
-            customSpecifications: quoteRequest.specifications,
-          },
-        },
-      ];
-
-      // Generate unique order number
-      const orderNumber = await this.generateOrderNumber();
-
-      const order = await this.createOrderWithItems(userId, {
-        orderNumber,
-        addressId: data.addressId,
-        paymentMethod: data.paymentMethod,
-        notes: data.notes,
-        orderItems,
-        subtotal,
-      });
-
-      // Update quote request to COMPLETED status trong transaction khác
-      await this.prisma.quoteRequest.update({
-        where: { id: quoteRequest.id },
-        data: { status: 'COMPLETED' },
-      });
-
-      return order;
-    } catch (error) {
-      this.logger.error(`Error creating order from quote: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to create order from quote', 500, 'ORDER_CREATION_FAILED');
-    }
-  }
-
-  /**
-   * Cập nhật trạng thái đơn hàng
-   */
-  async updateOrderStatus(
-    id: string,
-    status: OrderStatus,
-    statusHistoryData: { note?: string; createdBy?: string },
-  ): Promise<OrderWithDetails> {
-    try {
-      const { note, createdBy } = statusHistoryData;
-
-      // Cập nhật đơn hàng và tạo lịch sử trạng thái
-      const updatedOrder = await this.prisma.$transaction(async (tx) => {
-        // Cập nhật trạng thái đơn hàng
-        const updated = await tx.order.update({
-          where: { id },
-          data: {
-            status,
-            // Cập nhật trạng thái thanh toán nếu cần
-            ...(status === OrderStatus.CANCELLED && {
-              paymentStatus: PaymentStatus.REFUNDED,
-            }),
-          },
-          include: {
-            customer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            shippingAddress: true,
-            items: {
-              include: {
-                seller: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    artisanProfile: {
-                      select: {
-                        shopName: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            statusHistory: {
-              orderBy: {
-                createdAt: 'desc',
-              },
-            },
-            quoteRequest: {
-              select: {
-                id: true,
-                finalPrice: true,
-                specifications: true,
-              },
-            },
-          },
-        });
-
-        // Tạo mục lịch sử trạng thái
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: id,
-            status,
-            note: note || `Order status changed to ${status}`,
-            createdBy,
-          },
-        });
-
-        return updated;
-      });
-
-      return updatedOrder as unknown as OrderWithDetails;
-    } catch (error) {
-      this.logger.error(`Error updating order status: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update order status', 500, 'STATUS_UPDATE_FAILED');
-    }
-  }
-
-  /**
-   * Update shipping information
-   */
-  async updateShippingInfo(id: string, data: UpdateShippingInfoDto): Promise<OrderWithDetails> {
-    try {
-      // Check if order exists
-      const order = await this.prisma.order.findUnique({
-        where: { id },
-      });
-
-      if (!order) {
-        throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
-      }
-
-      // Update shipping info
-      const updatedOrder = await this.prisma.order.update({
-        where: { id },
-        data: {
-          trackingNumber: data.trackingNumber,
-          trackingUrl: data.trackingUrl,
-          estimatedDelivery: data.estimatedDelivery,
-        },
+      const orders = await this.prisma.order.findMany({
+        where,
         include: {
           customer: {
             select: {
@@ -463,7 +407,6 @@ export class OrderRepository
               email: true,
             },
           },
-          shippingAddress: true,
           items: {
             include: {
               seller: {
@@ -472,150 +415,47 @@ export class OrderRepository
                   firstName: true,
                   lastName: true,
                   artisanProfile: {
-                    select: {
-                      shopName: true,
-                    },
+                    select: { shopName: true },
                   },
                 },
               },
             },
           },
-          statusHistory: {
-            orderBy: {
-              createdAt: 'desc',
-            },
-          },
-          quoteRequest: {
-            select: {
-              id: true,
-              finalPrice: true,
-              specifications: true,
-            },
-          },
-        },
-      });
-
-      // If tracking number added and status is PROCESSING, update to SHIPPED
-      if (data.trackingNumber && order.status === OrderStatus.PROCESSING) {
-        return await this.updateOrderStatus(id, {
-          status: OrderStatus.SHIPPED,
-          note: 'Tracking number added',
-        });
-      }
-
-      return updatedOrder as unknown as OrderWithDetails;
-    } catch (error) {
-      this.logger.error(`Error updating shipping info: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update shipping information', 500, 'SHIPPING_UPDATE_FAILED');
-    }
-  }
-
-  /**
-   * Get orders with filtering and pagination
-   */
-  async getOrders(options: OrderQueryOptions): Promise<PaginatedResult<OrderSummary>> {
-    try {
-      const {
-        userId,
-        status,
-        dateFrom,
-        dateTo,
-        page = 1,
-        limit = 10,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-        includeCancelled = false,
-      } = options;
-
-      // Build query conditions
-      const where: Prisma.OrderWhereInput = {};
-
-      if (userId) {
-        where.userId = userId;
-      }
-
-      if (status) {
-        where.status = Array.isArray(status) ? { in: status } : status;
-      } else if (!includeCancelled) {
-        // Exclude CANCELLED status by default
-        where.status = { not: OrderStatus.CANCELLED };
-      }
-
-      if (dateFrom || dateTo) {
-        where.createdAt = {};
-
-        if (dateFrom) {
-          where.createdAt.gte = dateFrom;
-        }
-
-        if (dateTo) {
-          where.createdAt.lte = dateTo;
-        }
-      }
-
-      // Count total orders
-      const total = await this.prisma.order.count({ where });
-
-      // Calculate total pages
-      const totalPages = Math.ceil(total / limit);
-
-      // Build sorting
-      const orderBy: any = {};
-      orderBy[sortBy] = sortOrder;
-
-      // Get orders with pagination
-      const orders = await this.prisma.order.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
           _count: {
             select: { items: true },
           },
-          items: {
-            take: 1, // Just need one to get seller info for summary
-            select: {
-              seller: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  artisanProfile: {
-                    select: {
-                      shopName: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
         },
+        orderBy: { [sortBy]: sortOrder },
+        skip: (page - 1) * limit,
+        take: limit,
       });
 
-      // Transform to OrderSummary format
-      const orderSummaries = orders.map((order) => {
-        let sellerInfo;
-
-        if (order.items.length > 0) {
-          const seller = order.items[0].seller;
-          sellerInfo = {
-            id: seller.id,
-            name: `${seller.firstName} ${seller.lastName}`,
-            shopName: seller.artisanProfile?.shopName,
-          };
-        }
+      const orderSummaries: OrderSummary[] = orders.map((order) => {
+        // Get primary seller (first item's seller)
+        const primarySeller = order.items[0]?.seller;
 
         return {
           id: order.id,
           orderNumber: order.orderNumber,
           status: order.status as OrderStatus,
+          paymentStatus: order.paymentStatus as PaymentStatus,
           totalAmount: Number(order.totalAmount),
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
           itemCount: order._count.items,
-          sellerInfo,
+          createdAt: order.createdAt,
+          customer: order.customer
+            ? {
+                id: order.customer.id,
+                name: `${order.customer.firstName} ${order.customer.lastName}`,
+                email: order.customer.email,
+              }
+            : undefined,
+          primarySeller: primarySeller
+            ? {
+                id: primarySeller.id,
+                name: `${primarySeller.firstName} ${primarySeller.lastName}`,
+                shopName: primarySeller.artisanProfile?.shopName,
+              }
+            : undefined,
         };
       });
 
@@ -625,323 +465,180 @@ export class OrderRepository
           total,
           page,
           limit,
-          totalPages,
+          totalPages: Math.ceil(total / limit),
         },
       };
     } catch (error) {
       this.logger.error(`Error getting orders: ${error}`);
-      throw new AppError('Failed to get orders', 500, 'QUERY_FAILED');
+      throw new AppError('Failed to get orders', 500, 'ORDER_QUERY_FAILED');
     }
   }
 
-  /**
-   * Get artisan orders (orders containing items sold by the artisan)
-   */
-  async getArtisanOrders(
-    artisanId: string,
-    options: OrderQueryOptions,
+  async getCustomerOrders(
+    userId: string,
+    options: Partial<OrderQueryOptions> = {},
   ): Promise<PaginatedResult<OrderSummary>> {
-    try {
-      const {
-        status,
-        dateFrom,
-        dateTo,
-        page = 1,
-        limit = 10,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-        includeCancelled = false,
-      } = options;
-
-      // Build order item conditions to find orders containing artisan's items
-      const orderItemWhere: Prisma.OrderItemWhereInput = {
-        sellerId: artisanId,
-      };
-
-      // Build order conditions
-      const where: Prisma.OrderWhereInput = {
-        items: {
-          some: orderItemWhere,
-        },
-      };
-
-      if (status) {
-        where.status = Array.isArray(status) ? { in: status } : status;
-      } else if (!includeCancelled) {
-        // Exclude CANCELLED status by default
-        where.status = { not: OrderStatus.CANCELLED };
-      }
-
-      if (dateFrom || dateTo) {
-        where.createdAt = {};
-
-        if (dateFrom) {
-          where.createdAt.gte = dateFrom;
-        }
-
-        if (dateTo) {
-          where.createdAt.lte = dateTo;
-        }
-      }
-
-      // Count total matching orders
-      const total = await this.prisma.order.count({ where });
-
-      // Calculate total pages
-      const totalPages = Math.ceil(total / limit);
-
-      // Build sorting
-      const orderBy: any = {};
-      orderBy[sortBy] = sortOrder;
-
-      // Get orders with pagination
-      const orders = await this.prisma.order.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          customer: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          items: {
-            where: {
-              sellerId: artisanId,
-            },
-          },
-        },
-      });
-
-      // Transform to OrderSummary format (with customer as the "seller" side)
-      const orderSummaries = orders.map((order) => {
-        return {
-          id: order.id,
-          orderNumber: order.orderNumber,
-          status: order.status as OrderStatus,
-          totalAmount: order.items.reduce(
-            (sum, item) => sum + Number(item.price) * item.quantity,
-            0,
-          ),
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-          itemCount: order.items.length,
-          customerInfo: {
-            id: order.customer.id,
-            name: `${order.customer.firstName} ${order.customer.lastName}`,
-          },
-        };
-      });
-
-      return {
-        data: orderSummaries,
-        meta: {
-          total,
-          page,
-          limit,
-          totalPages,
-        },
-      };
-    } catch (error) {
-      this.logger.error(`Error getting artisan orders: ${error}`);
-      throw new AppError('Failed to get artisan orders', 500, 'QUERY_FAILED');
-    }
+    return this.getOrders({ ...options, userId });
   }
 
-  /**
-   * Cancel order
-   */
-  async cancelOrder(id: string, note?: string, cancelledBy?: string): Promise<OrderWithDetails> {
+  async getSellerOrders(
+    sellerId: string,
+    options: Partial<OrderQueryOptions> = {},
+  ): Promise<PaginatedResult<OrderSummary>> {
+    return this.getOrders({ ...options, sellerId });
+  }
+
+  async updateOrderStatus(
+    id: string,
+    data: UpdateOrderStatusDto,
+    updatedBy?: string,
+  ): Promise<OrderWithDetails> {
     try {
-      // Get order to check if it can be cancelled
-      const order = await this.findByIdWithDetails(id);
-      if (!order) {
-        throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
-      }
-
-      // Only pending or paid orders can be cancelled
-      if (
-        order.status !== OrderStatus.PENDING &&
-        order.status !== OrderStatus.PAID &&
-        order.status !== OrderStatus.PROCESSING
-      ) {
-        throw new AppError(
-          `Orders in ${order.status} status cannot be cancelled`,
-          400,
-          'INVALID_ORDER_STATE',
-        );
-      }
-
-      // Process cancellation in a transaction
-      const cancelledOrder = await this.prisma.$transaction(async (tx) => {
-        // Get order items before updating
-        const orderItems = await tx.orderItem.findMany({
-          where: { orderId: id },
+      return await this.prisma.$transaction(async (tx) => {
+        // Get current order
+        const currentOrder = await tx.order.findUnique({
+          where: { id },
+          select: { status: true, paymentStatus: true },
         });
 
+        if (!currentOrder) {
+          throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
+        }
+
+        // Validate status transition
+        this.validateStatusTransition(currentOrder.status as OrderStatus, data.status);
+
+        // Update order
+        await tx.order.update({
+          where: { id },
+          data: {
+            status: data.status,
+            trackingNumber: data.trackingNumber,
+            estimatedDelivery: data.estimatedDelivery,
+            deliveredAt: data.status === OrderStatus.DELIVERED ? new Date() : undefined,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Add status history
+        await this.addStatusHistory(id, data.status, data.note, updatedBy);
+
+        return (await this.findByIdWithDetails(id)) as OrderWithDetails;
+      });
+    } catch (error) {
+      this.logger.error(`Error updating order status: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to update order status', 500, 'ORDER_UPDATE_FAILED');
+    }
+  }
+
+  async cancelOrder(id: string, reason?: string, cancelledBy?: string): Promise<OrderWithDetails> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { id },
+          include: { items: true },
+        });
+
+        if (!order) {
+          throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
+        }
+
+        // Only allow cancellation of certain statuses
+        const cancellableStatuses = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PAID];
+        if (!cancellableStatuses.includes(order.status as OrderStatus)) {
+          throw new AppError(
+            `Cannot cancel order in ${order.status} status`,
+            400,
+            'INVALID_STATUS_FOR_CANCELLATION',
+          );
+        }
+
         // Update order status
-        const updated = await tx.order.update({
+        await tx.order.update({
           where: { id },
           data: {
             status: OrderStatus.CANCELLED,
-            paymentStatus: PaymentStatus.REFUNDED, // Assume refund process happens elsewhere
-          },
-          include: {
-            customer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            shippingAddress: true,
-            items: {
-              include: {
-                seller: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    artisanProfile: {
-                      select: {
-                        shopName: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            statusHistory: {
-              orderBy: {
-                createdAt: 'desc',
-              },
-            },
-            quoteRequest: {
-              select: {
-                id: true,
-                finalPrice: true,
-                specifications: true,
-              },
-            },
-          },
-        });
-
-        // Create status history entry
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: id,
-            status: OrderStatus.CANCELLED,
-            note: note || 'Order cancelled',
-            createdBy: cancelledBy,
+            paymentStatus:
+              order.paymentStatus === PaymentStatus.COMPLETED
+                ? PaymentStatus.REFUNDED
+                : order.paymentStatus,
+            updatedAt: new Date(),
           },
         });
 
         // Restore product quantities
-        for (const item of orderItems) {
+        for (const item of order.items) {
           await tx.product.update({
             where: { id: item.productId },
-            data: {
-              quantity: {
-                increment: item.quantity,
-              },
-            },
+            data: { quantity: { increment: item.quantity } },
           });
         }
 
-        return updated;
-      });
+        // Add status history
+        await this.addStatusHistory(
+          id,
+          OrderStatus.CANCELLED,
+          reason || 'Order cancelled',
+          cancelledBy,
+        );
 
-      return cancelledOrder as unknown as OrderWithDetails;
+        return (await this.findByIdWithDetails(id)) as OrderWithDetails;
+      });
     } catch (error) {
       this.logger.error(`Error cancelling order: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to cancel order', 500, 'CANCELLATION_FAILED');
+      throw new AppError('Failed to cancel order', 500, 'ORDER_CANCELLATION_FAILED');
     }
   }
 
-  /**
-   * Process payment
-   */
-  async processPayment(id: string, paymentIntentId: string): Promise<OrderWithDetails> {
+  async processPayment(id: string, data: ProcessPaymentDto): Promise<OrderWithDetails> {
     try {
-      // Get order to validate
-      const order = await this.prisma.order.findUnique({
-        where: { id },
-      });
-
-      if (!order) {
-        throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
-      }
-
-      if (order.status !== OrderStatus.PENDING) {
-        throw new AppError(
-          'Order must be in PENDING status to process payment',
-          400,
-          'INVALID_ORDER_STATE',
-        );
-      }
-
-      // Update order with payment information
-      const updatedOrder = await this.prisma.$transaction(async (tx) => {
-        // Update order
-        const updated = await tx.order.update({
+      return await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.findUnique({
           where: { id },
+          select: { totalAmount: true, userId: true, paymentStatus: true },
+        });
+
+        if (!order) {
+          throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
+        }
+
+        if (order.paymentStatus === PaymentStatus.COMPLETED) {
+          throw new AppError('Order is already paid', 400, 'ORDER_ALREADY_PAID');
+        }
+
+        // Create payment transaction
+        const paymentTransaction = await tx.paymentTransaction.create({
           data: {
-            paymentIntentId,
-            paymentStatus: PaymentStatus.COMPLETED,
-          },
-          include: {
-            customer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            shippingAddress: true,
-            items: {
-              include: {
-                seller: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    artisanProfile: {
-                      select: {
-                        shopName: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            statusHistory: {
-              orderBy: {
-                createdAt: 'desc',
-              },
-            },
-            quoteRequest: {
-              select: {
-                id: true,
-                finalPrice: true,
-                specifications: true,
-              },
-            },
+            orderId: id,
+            userId: order.userId,
+            paymentMethodId: data.paymentMethodId,
+            amount: order.totalAmount,
+            currency: 'USD',
+            status: PaymentStatus.COMPLETED, // Simulate successful payment
+            paymentMethod: 'CREDIT_CARD', // Simplified
+            reference: `PAY_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            externalReference: data.externalReference,
+            processedAt: new Date(),
           },
         });
 
-        return updated;
-      });
+        // Update order payment status
+        await tx.order.update({
+          where: { id },
+          data: {
+            paymentStatus: PaymentStatus.COMPLETED,
+            paymentReference: paymentTransaction.reference,
+            status: OrderStatus.PAID,
+            updatedAt: new Date(),
+          },
+        });
 
-      // Update order status to PAID
-      return await this.updateOrderStatus(id, {
-        status: OrderStatus.PAID,
-        note: 'Payment completed',
+        // Add status history
+        await this.addStatusHistory(id, OrderStatus.PAID, 'Payment completed successfully');
+
+        return (await this.findByIdWithDetails(id)) as OrderWithDetails;
       });
     } catch (error) {
       this.logger.error(`Error processing payment: ${error}`);
@@ -950,115 +647,186 @@ export class OrderRepository
     }
   }
 
-  /**
-   * Get order status history
-   */
+  async refundPayment(id: string, reason?: string): Promise<OrderWithDetails> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { id },
+          select: { totalAmount: true, userId: true, paymentStatus: true },
+        });
+
+        if (!order) {
+          throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
+        }
+
+        if (order.paymentStatus !== PaymentStatus.COMPLETED) {
+          throw new AppError('Order payment is not completed', 400, 'PAYMENT_NOT_COMPLETED');
+        }
+
+        // Create refund transaction
+        await tx.paymentTransaction.create({
+          data: {
+            orderId: id,
+            userId: order.userId,
+            amount: -order.totalAmount, // Negative amount for refund
+            currency: 'USD',
+            status: PaymentStatus.REFUNDED,
+            paymentMethod: 'CREDIT_CARD',
+            reference: `REF_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            processedAt: new Date(),
+          },
+        });
+
+        // Update order
+        await tx.order.update({
+          where: { id },
+          data: {
+            paymentStatus: PaymentStatus.REFUNDED,
+            status: OrderStatus.REFUNDED,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Add status history
+        await this.addStatusHistory(id, OrderStatus.REFUNDED, reason || 'Payment refunded');
+
+        return (await this.findByIdWithDetails(id)) as OrderWithDetails;
+      });
+    } catch (error) {
+      this.logger.error(`Error refunding payment: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to refund payment', 500, 'REFUND_FAILED');
+    }
+  }
+
   async getOrderStatusHistory(orderId: string): Promise<OrderStatusHistory[]> {
     try {
-      const statusHistory = await this.prisma.orderStatusHistory.findMany({
+      const history = await this.prisma.orderStatusHistory.findMany({
         where: { orderId },
         orderBy: { createdAt: 'desc' },
-        include: {
-          createdByUser: {
-            select: {
-              firstName: true,
-              lastName: true,
-              role: true,
-            },
-          },
-        },
       });
 
-      return statusHistory as unknown as OrderStatusHistory[];
+      return history as OrderStatusHistory[];
     } catch (error) {
       this.logger.error(`Error getting order status history: ${error}`);
-      throw new AppError('Failed to get order status history', 500, 'QUERY_FAILED');
+      return [];
     }
   }
 
-  /**
-   * Generate unique order number
-   */
-  async generateOrderNumber(): Promise<string> {
+  async addStatusHistory(
+    orderId: string,
+    status: OrderStatus,
+    note?: string,
+    createdBy?: string,
+  ): Promise<OrderStatusHistory> {
     try {
-      const currentDate = new Date();
-      const year = currentDate.getFullYear().toString().substr(2, 2); // Last 2 digits of year
-      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-      const day = String(currentDate.getDate()).padStart(2, '0');
-
-      // Get current order count for today to generate sequential number
-      const todayStart = new Date(currentDate.setHours(0, 0, 0, 0));
-      const todayEnd = new Date(currentDate.setHours(23, 59, 59, 999));
-
-      const todayOrderCount = await this.prisma.order.count({
-        where: {
-          createdAt: {
-            gte: todayStart,
-            lte: todayEnd,
-          },
+      const history = await this.prisma.orderStatusHistory.create({
+        data: {
+          orderId,
+          status,
+          note,
+          createdBy,
         },
       });
 
-      // Create sequential number padded to 4 digits
-      const sequence = String(todayOrderCount + 1).padStart(4, '0');
-
-      // Generate order number in format: AC-YYMMDD-XXXX (AC for Artisan Connect)
-      const orderNumber = `AC-${year}${month}${day}-${sequence}`;
-
-      // Verify it's unique (just in case)
-      const existing = await this.prisma.order.findUnique({
-        where: { orderNumber },
-      });
-
-      if (existing) {
-        // In the rare case of collision, recursively try again
-        return this.generateOrderNumber();
-      }
-
-      return orderNumber;
+      return history as OrderStatusHistory;
     } catch (error) {
-      this.logger.error(`Error generating order number: ${error}`);
-      throw new AppError('Failed to generate order number', 500, 'GENERATION_FAILED');
+      this.logger.error(`Error adding status history: ${error}`);
+      throw new AppError('Failed to add status history', 500, 'STATUS_HISTORY_FAILED');
     }
   }
 
-  /**
-   * Check if user is involved in order
-   */
-  async isUserInvolved(orderId: string, userId: string): Promise<boolean> {
+  async generateOrderNumber(): Promise<string> {
+    const currentDate = new Date();
+    const year = currentDate.getFullYear().toString().substr(-2);
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const day = String(currentDate.getDate()).padStart(2, '0');
+
+    // Get today's order count
+    const todayStart = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate(),
+    );
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const todayOrderCount = await this.prisma.order.count({
+      where: {
+        createdAt: {
+          gte: todayStart,
+          lt: todayEnd,
+        },
+      },
+    });
+
+    const sequence = String(todayOrderCount + 1).padStart(4, '0');
+    return `AC${year}${month}${day}${sequence}`;
+  }
+
+  async getOrderStats(userId?: string, sellerId?: string): Promise<OrderStats> {
     try {
-      // Check if user is the customer
+      const where: Prisma.OrderWhereInput = {};
+
+      if (userId) where.userId = userId;
+      if (sellerId) {
+        where.items = { some: { sellerId } };
+      }
+
+      const [totalStats, statusCounts] = await Promise.all([
+        this.prisma.order.aggregate({
+          where,
+          _count: { id: true },
+          _sum: { totalAmount: true },
+        }),
+        this.prisma.order.groupBy({
+          by: ['status'],
+          where,
+          _count: { id: true },
+        }),
+      ]);
+
+      const statusMap = new Map(statusCounts.map((s) => [s.status, s._count.id]));
+
+      return {
+        totalOrders: totalStats._count.id || 0,
+        pendingOrders: statusMap.get('PENDING') || 0,
+        completedOrders: statusMap.get('DELIVERED') || 0,
+        cancelledOrders: statusMap.get('CANCELLED') || 0,
+        totalRevenue: Number(totalStats._sum.totalAmount) || 0,
+        averageOrderValue:
+          totalStats._count.id > 0 ? Number(totalStats._sum.totalAmount) / totalStats._count.id : 0,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting order stats: ${error}`);
+      throw new AppError('Failed to get order stats', 500, 'ORDER_STATS_FAILED');
+    }
+  }
+
+  async isUserInvolvedInOrder(orderId: string, userId: string): Promise<boolean> {
+    try {
       const order = await this.prisma.order.findUnique({
         where: { id: orderId },
-        select: { userId: true },
+        include: { items: true },
       });
 
-      if (order?.userId === userId) {
-        return true;
-      }
+      if (!order) return false;
 
-      // Check if user is a seller of any item in the order
-      const orderItem = await this.prisma.orderItem.findFirst({
-        where: {
-          orderId,
-          sellerId: userId,
-        },
-      });
+      // Check if user is the customer
+      if (order.userId === userId) return true;
 
-      return !!orderItem;
+      // Check if user is a seller
+      return order.items.some((item) => item.sellerId === userId);
     } catch (error) {
-      this.logger.error(`Error checking user involvement in order: ${error}`);
+      this.logger.error(`Error checking user involvement: ${error}`);
       return false;
     }
   }
 
-  /**
-   * Validate order status transition
-   */
   private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
-    // Define valid transitions for each status
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.PENDING]: [OrderStatus.PAID, OrderStatus.CANCELLED],
+      [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.PAID, OrderStatus.CANCELLED],
+      [OrderStatus.CONFIRMED]: [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.CANCELLED],
       [OrderStatus.PAID]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED, OrderStatus.REFUNDED],
       [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED, OrderStatus.REFUNDED],
       [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED, OrderStatus.REFUNDED],
@@ -1067,12 +835,9 @@ export class OrderRepository
       [OrderStatus.REFUNDED]: [],
     };
 
-    // Check if transition is valid
-    if (currentStatus === newStatus) {
-      return; // Same status is always valid
-    }
+    if (currentStatus === newStatus) return;
 
-    if (!validTransitions[currentStatus].includes(newStatus)) {
+    if (!validTransitions[currentStatus]?.includes(newStatus)) {
       throw new AppError(
         `Invalid status transition from ${currentStatus} to ${newStatus}`,
         400,

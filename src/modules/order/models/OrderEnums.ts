@@ -1,8 +1,6 @@
-/**
- * Order status enum
- */
 export enum OrderStatus {
   PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
   PAID = 'PAID',
   PROCESSING = 'PROCESSING',
   SHIPPED = 'SHIPPED',
@@ -11,22 +9,19 @@ export enum OrderStatus {
   REFUNDED = 'REFUNDED',
 }
 
-/**
- * Payment method enum
- */
-export enum PaymentMethod {
-  CREDIT_CARD = 'CREDIT_CARD',
-  BANK_TRANSFER = 'BANK_TRANSFER',
-  PAYPAL = 'PAYPAL',
-  CASH_ON_DELIVERY = 'CASH_ON_DELIVERY',
-}
-
-/**
- * Payment status enum
- */
 export enum PaymentStatus {
   PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
   REFUNDED = 'REFUNDED',
+}
+
+export enum PaymentMethod {
+  CREDIT_CARD = 'CREDIT_CARD',
+  DEBIT_CARD = 'DEBIT_CARD',
+  BANK_TRANSFER = 'BANK_TRANSFER',
+  DIGITAL_WALLET = 'DIGITAL_WALLET',
+  CASH_ON_DELIVERY = 'CASH_ON_DELIVERY',
 }

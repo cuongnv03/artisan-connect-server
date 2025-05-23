@@ -14,28 +14,21 @@ export class GetOrderByNumberController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const { orderNumber } = req.params;
-      const order = await this.orderService.getOrderByOrderNumber(orderNumber);
+    const { orderNumber } = req.params;
+    const order = await this.orderService.getOrderByNumber(orderNumber);
 
-      if (!order) {
-        throw AppError.notFound('Order not found');
-      }
-
-      // Check if user is involved in this order
-      if (
-        order.userId !== req.user!.id &&
-        !order.items.some((item) => item.sellerId === req.user!.id) &&
-        req.user!.role !== 'ADMIN'
-      ) {
-        throw AppError.forbidden('You do not have permission to view this order');
-      }
-
-      ApiResponse.success(res, order, 'Order retrieved successfully');
-    } catch (error) {
-      next(error);
+    if (!order) {
+      throw AppError.notFound('Order not found');
     }
+
+    // Validate access
+    const hasAccess = await this.orderService.validateOrderAccess(order.id, req.user!.id, 'VIEW');
+    if (!hasAccess) {
+      throw AppError.forbidden('You do not have permission to view this order');
+    }
+
+    ApiResponse.success(res, order, 'Order retrieved successfully');
   }
 }

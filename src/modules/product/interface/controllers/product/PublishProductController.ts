@@ -14,19 +14,15 @@ export class PublishProductController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      if (req.user!.role !== 'ARTISAN') {
-        throw AppError.forbidden('Only artisans can publish products');
-      }
-
-      const { id } = req.params;
-      const product = await this.productService.publishProduct(id, req.user!.id);
-
-      ApiResponse.success(res, product, 'Product published successfully');
-    } catch (error) {
-      next(error);
+    if (req.user!.role !== 'ARTISAN') {
+      throw AppError.forbidden('Only artisans can publish products');
     }
+
+    const { id } = req.params;
+    const product = await this.productService.publishProduct(id, req.user!.id);
+
+    ApiResponse.success(res, product, 'Product published successfully');
   }
 }

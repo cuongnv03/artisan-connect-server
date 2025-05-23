@@ -13,14 +13,10 @@ export class GetCartSummaryController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const summary = await this.cartService.getCartSummary(req.user!.id);
+    const summary = await this.cartService.getCartSummary(req.user!.id);
 
-      ApiResponse.success(res, summary, 'Cart summary retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
+    ApiResponse.success(res, summary, 'Cart summary retrieved successfully');
   }
 }

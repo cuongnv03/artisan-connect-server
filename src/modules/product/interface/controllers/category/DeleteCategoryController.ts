@@ -14,20 +14,15 @@ export class DeleteCategoryController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      // Ensure user is an admin
-      if (req.user!.role !== 'ADMIN') {
-        throw AppError.forbidden('Only admins can delete categories');
-      }
-
-      const { id } = req.params;
-      await this.categoryService.deleteCategory(id);
-
-      ApiResponse.success(res, null, 'Category deleted successfully');
-    } catch (error) {
-      next(error);
+    if (req.user!.role !== 'ADMIN') {
+      throw AppError.forbidden('Only admins can delete categories');
     }
+
+    const { id } = req.params;
+    await this.categoryService.deleteCategory(id);
+
+    ApiResponse.success(res, null, 'Category deleted successfully');
   }
 }

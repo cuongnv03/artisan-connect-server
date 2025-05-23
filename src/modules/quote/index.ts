@@ -1,12 +1,9 @@
 /**
  * Quote Module Exports
- *
- * Centralized exports for the Quote module to simplify imports
  */
 
 // Export models
-export * from './models/QuoteRequest';
-export * from './models/QuoteMessage';
+export * from './models/Quote';
 export * from './models/QuoteEnums';
 
 // Export service interfaces
@@ -24,6 +21,17 @@ export function registerQuoteModule() {
 
   return {
     name: 'quote',
-    description: 'Product quote request management module',
+    description: 'Complete quote & negotiation system for custom artisan products',
+    version: '1.0.0',
+    features: [
+      'Quote request creation for customizable products',
+      'Artisan response system (accept/reject/counter)',
+      'Real-time negotiation with messaging',
+      'Quote expiration management',
+      'Negotiation history tracking',
+      'Role-based access control',
+      'Quote statistics & analytics',
+      'Integration with order system',
+    ],
   };
 }

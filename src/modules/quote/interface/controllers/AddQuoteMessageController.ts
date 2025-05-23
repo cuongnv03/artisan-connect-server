@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { IQuoteService } from '../../services/QuoteService.interface';
-import { AppError } from '../../../../core/errors/AppError';
 import container from '../../../../core/di/container';
 
 export class AddQuoteMessageController extends BaseController {
@@ -14,15 +13,13 @@ export class AddQuoteMessageController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const { id } = req.params;
-      const message = await this.quoteService.addMessageToQuote(id, req.user!.id, req.body);
+    const { id } = req.params;
+    const { message } = req.body;
 
-      ApiResponse.success(res, message, 'Message added successfully');
-    } catch (error) {
-      next(error);
-    }
+    const quote = await this.quoteService.addMessageToQuote(id, req.user!.id, message);
+
+    ApiResponse.success(res, quote, 'Message added to quote successfully');
   }
 }

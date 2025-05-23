@@ -2,60 +2,62 @@ import { BaseRepository } from '../../../shared/interfaces/BaseRepository';
 import {
   QuoteRequest,
   QuoteRequestWithDetails,
+  QuoteSummary,
+  QuoteNegotiation,
   CreateQuoteRequestDto,
-  QuoteRequestQueryOptions,
-} from '../models/QuoteRequest';
-import { QuoteMessage } from '../models/QuoteMessage';
-import { QuoteStatus } from '../models/QuoteEnums';
+  RespondToQuoteDto,
+  AddQuoteMessageDto,
+  QuoteQueryOptions,
+  QuoteStats,
+} from '../models/Quote';
+import { QuoteStatus, QuoteAction } from '../models/QuoteEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IQuoteRepository extends BaseRepository<QuoteRequest, string> {
-  /**
-   * Find quote request by ID with details
-   */
-  findByIdWithDetails(id: string): Promise<QuoteRequestWithDetails | null>;
-
-  /**
-   * Create a new quote request
-   */
+  // Quote creation & management
   createQuoteRequest(
     customerId: string,
     data: CreateQuoteRequestDto,
   ): Promise<QuoteRequestWithDetails>;
+  respondToQuote(
+    id: string,
+    artisanId: string,
+    data: RespondToQuoteDto,
+  ): Promise<QuoteRequestWithDetails>;
 
-  /**
-   * Get quote requests with filtering and pagination
-   */
-  getQuoteRequests(
-    options: QuoteRequestQueryOptions,
-  ): Promise<PaginatedResult<QuoteRequestWithDetails>>;
+  // Quote retrieval
+  findByIdWithDetails(id: string): Promise<QuoteRequestWithDetails | null>;
+  getQuotes(options: QuoteQueryOptions): Promise<PaginatedResult<QuoteSummary>>;
+  getCustomerQuotes(
+    customerId: string,
+    options?: Partial<QuoteQueryOptions>,
+  ): Promise<PaginatedResult<QuoteSummary>>;
+  getArtisanQuotes(
+    artisanId: string,
+    options?: Partial<QuoteQueryOptions>,
+  ): Promise<PaginatedResult<QuoteSummary>>;
 
-  /**
-   * Update quote request status
-   */
+  // Quote messaging & negotiation
+  addMessage(id: string, data: AddQuoteMessageDto): Promise<QuoteRequestWithDetails>;
+  getNegotiationHistory(id: string): Promise<QuoteNegotiation[]>;
+  addNegotiationEntry(
+    quoteId: string,
+    action: QuoteAction,
+    actor: 'customer' | 'artisan',
+    data?: any,
+  ): Promise<QuoteNegotiation>;
+
+  // Quote status management
   updateQuoteStatus(
     id: string,
     status: QuoteStatus,
-    data?: { counterOffer?: number; finalPrice?: number },
+    finalPrice?: number,
   ): Promise<QuoteRequestWithDetails>;
+  markAsCompleted(id: string): Promise<QuoteRequestWithDetails>;
+  expireQuotes(): Promise<number>;
 
-  /**
-   * Add message to quote
-   */
-  addMessageToQuote(quoteId: string, userId: string, message: string): Promise<QuoteMessage>;
-
-  /**
-   * Check if user is involved in quote
-   */
-  isUserInvolved(quoteId: string, userId: string): Promise<boolean>;
-
-  /**
-   * Mark quote request as expired
-   */
-  markExpiredQuotes(): Promise<number>;
-
-  /**
-   * Delete a quote request
-   */
-  deleteQuoteRequest(id: string): Promise<boolean>;
+  // Validation & utilities
+  isUserInvolvedInQuote(quoteId: string, userId: string): Promise<boolean>;
+  canUserRespondToQuote(quoteId: string, userId: string): Promise<boolean>;
+  getQuoteStats(userId?: string, role?: string): Promise<QuoteStats>;
 }

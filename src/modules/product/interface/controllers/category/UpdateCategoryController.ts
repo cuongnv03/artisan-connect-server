@@ -14,20 +14,15 @@ export class UpdateCategoryController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      // Ensure user is an admin
-      if (req.user!.role !== 'ADMIN') {
-        throw AppError.forbidden('Only admins can update categories');
-      }
-
-      const { id } = req.params;
-      const category = await this.categoryService.updateCategory(id, req.body);
-
-      ApiResponse.success(res, category, 'Category updated successfully');
-    } catch (error) {
-      next(error);
+    if (req.user!.role !== 'ADMIN') {
+      throw AppError.forbidden('Only admins can update categories');
     }
+
+    const { id } = req.params;
+    const category = await this.categoryService.updateCategory(id, req.body);
+
+    ApiResponse.success(res, category, 'Category updated successfully');
   }
 }

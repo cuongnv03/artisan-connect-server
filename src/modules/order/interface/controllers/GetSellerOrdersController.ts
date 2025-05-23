@@ -1,22 +1,27 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IQuoteService } from '../../services/QuoteService.interface';
-import { QuoteQueryOptions } from '../../models/Quote';
+import { IOrderService } from '../../services/OrderService.interface';
+import { OrderQueryOptions } from '../../models/Order';
+import { AppError } from '../../../../core/errors/AppError';
 import container from '../../../../core/di/container';
 
-export class GetMyQuoteRequestsController extends BaseController {
-  private quoteService: IQuoteService;
+export class GetSellerOrdersController extends BaseController {
+  private orderService: IOrderService;
 
   constructor() {
     super();
-    this.quoteService = container.resolve<IQuoteService>('quoteService');
+    this.orderService = container.resolve<IOrderService>('orderService');
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     this.validateAuth(req);
 
-    const options: Partial<QuoteQueryOptions> = {
+    if (req.user!.role !== 'ARTISAN') {
+      throw AppError.forbidden('Only artisans can view seller orders');
+    }
+
+    const options: Partial<OrderQueryOptions> = {
       page: parseInt(req.query.page as string) || 1,
       limit: parseInt(req.query.limit as string) || 10,
       status: req.query.status as any,
@@ -32,22 +37,8 @@ export class GetMyQuoteRequestsController extends BaseController {
       options.dateTo = new Date(req.query.dateTo as string);
     }
 
-    const quotes = await this.quoteService.getMyQuoteRequests(
-      req.user!.id,
-      req.user!.role,
-      options,
-    );
+    const orders = await this.orderService.getSellerOrders(req.user!.id, options);
 
-    const roleMessage = {
-      CUSTOMER: 'My quote requests retrieved successfully',
-      ARTISAN: 'My received quote requests retrieved successfully',
-      ADMIN: 'All quote requests retrieved successfully',
-    };
-
-    ApiResponse.success(
-      res,
-      quotes,
-      roleMessage[req.user!.role] || 'Quote requests retrieved successfully',
-    );
+    ApiResponse.success(res, orders, 'Seller orders retrieved successfully');
   }
 }

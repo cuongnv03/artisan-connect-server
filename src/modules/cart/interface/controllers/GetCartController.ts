@@ -13,20 +13,16 @@ export class GetCartController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const includeDetails = req.query.details === 'true';
+    const includeDetails = req.query.details === 'true';
 
-      if (includeDetails) {
-        const cartSummary = await this.cartService.getCartSummary(req.user!.id);
-        ApiResponse.success(res, cartSummary, 'Cart summary retrieved successfully');
-      } else {
-        const cartItems = await this.cartService.getCartItems(req.user!.id);
-        ApiResponse.success(res, { items: cartItems }, 'Cart items retrieved successfully');
-      }
-    } catch (error) {
-      next(error);
+    if (includeDetails) {
+      const cartSummary = await this.cartService.getCartSummary(req.user!.id);
+      ApiResponse.success(res, cartSummary, 'Cart summary retrieved successfully');
+    } else {
+      const cartItems = await this.cartService.getCartItems(req.user!.id);
+      ApiResponse.success(res, { items: cartItems }, 'Cart items retrieved successfully');
     }
   }
 }

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { IOrderService } from '../../services/OrderService.interface';
-import { AppError } from '../../../../core/errors/AppError';
+import { OrderQueryOptions } from '../../models/Order';
 import container from '../../../../core/di/container';
 
 export class GetMyOrdersController extends BaseController {
@@ -14,26 +14,26 @@ export class GetMyOrdersController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      // Parse query parameters
-      const options = {
-        page: parseInt(req.query.page as string) || 1,
-        limit: parseInt(req.query.limit as string) || 10,
-        status: req.query.status as any,
-        dateFrom: req.query.dateFrom ? new Date(req.query.dateFrom as string) : undefined,
-        dateTo: req.query.dateTo ? new Date(req.query.dateTo as string) : undefined,
-        sortBy: (req.query.sortBy as string) || 'createdAt',
-        sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
-        includeCancelled: req.query.includeCancelled === 'true',
-      };
+    const options: Partial<OrderQueryOptions> = {
+      page: parseInt(req.query.page as string) || 1,
+      limit: parseInt(req.query.limit as string) || 10,
+      status: req.query.status as any,
+      sortBy: (req.query.sortBy as string) || 'createdAt',
+      sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
+    };
 
-      const orders = await this.orderService.getCustomerOrders(req.user!.id, options);
-
-      ApiResponse.success(res, orders, 'Orders retrieved successfully');
-    } catch (error) {
-      next(error);
+    if (req.query.dateFrom) {
+      options.dateFrom = new Date(req.query.dateFrom as string);
     }
+
+    if (req.query.dateTo) {
+      options.dateTo = new Date(req.query.dateTo as string);
+    }
+
+    const orders = await this.orderService.getMyOrders(req.user!.id, options);
+
+    ApiResponse.success(res, orders, 'My orders retrieved successfully');
   }
 }

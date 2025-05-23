@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { IOrderService } from '../../services/OrderService.interface';
-import { AppError } from '../../../../core/errors/AppError';
 import container from '../../../../core/di/container';
 
 export class CreateOrderFromQuoteController extends BaseController {
@@ -14,14 +13,10 @@ export class CreateOrderFromQuoteController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const order = await this.orderService.createOrderFromQuote(req.user!.id, req.body);
+    const order = await this.orderService.createOrderFromQuote(req.user!.id, req.body);
 
-      ApiResponse.created(res, order, 'Order created successfully from quote');
-    } catch (error) {
-      next(error);
-    }
+    ApiResponse.created(res, order, 'Order created successfully from quote');
   }
 }

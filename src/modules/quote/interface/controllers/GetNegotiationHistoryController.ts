@@ -5,7 +5,7 @@ import { IQuoteService } from '../../services/QuoteService.interface';
 import { AppError } from '../../../../core/errors/AppError';
 import container from '../../../../core/di/container';
 
-export class RespondToQuoteController extends BaseController {
+export class GetNegotiationHistoryController extends BaseController {
   private quoteService: IQuoteService;
 
   constructor() {
@@ -16,21 +16,16 @@ export class RespondToQuoteController extends BaseController {
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     this.validateAuth(req);
 
-    if (req.user!.role !== 'ARTISAN') {
-      throw AppError.forbidden('Only artisans can respond to quote requests');
+    const { id } = req.params;
+
+    // Validate access
+    const hasAccess = await this.quoteService.validateQuoteAccess(id, req.user!.id);
+    if (!hasAccess) {
+      throw AppError.forbidden('You do not have permission to view this quote negotiation history');
     }
 
-    const { id } = req.params;
-    const quote = await this.quoteService.respondToQuote(id, req.user!.id, req.body);
+    const history = await this.quoteService.getNegotiationHistory(id);
 
-    const actionMessages = {
-      ACCEPT: 'Quote request accepted successfully',
-      REJECT: 'Quote request rejected successfully',
-      COUNTER: 'Counter offer sent successfully',
-    };
-
-    const message = actionMessages[req.body.action] || 'Quote response sent successfully';
-
-    ApiResponse.success(res, quote, message);
+    ApiResponse.success(res, history, 'Negotiation history retrieved successfully');
   }
 }

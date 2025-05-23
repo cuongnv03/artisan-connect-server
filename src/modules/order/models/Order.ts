@@ -1,75 +1,111 @@
 import { OrderStatus, PaymentMethod, PaymentStatus } from './OrderEnums';
-import { OrderItem } from './OrderItem';
-import { OrderStatusHistory } from './OrderStatusHistory';
 
-/**
- * Order entity
- */
 export interface Order {
   id: string;
   orderNumber: string;
   userId: string;
-  addressId?: string | null;
+  addressId?: string;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
   totalAmount: number;
   subtotal: number;
-  tax: number;
   shippingCost: number;
-  discount: number;
-  paymentMethod?: PaymentMethod | null;
-  paymentStatus: PaymentStatus;
-  paymentIntentId?: string | null;
-  quoteRequestId?: string | null;
-  notes?: string | null;
-  trackingNumber?: string | null;
-  trackingUrl?: string | null;
-  estimatedDelivery?: Date | null;
+  paymentMethod?: PaymentMethod;
+  paymentReference?: string;
+  notes?: string;
+  trackingNumber?: string;
+  estimatedDelivery?: Date;
+  deliveredAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/**
- * Order with detailed information
- */
 export interface OrderWithDetails extends Order {
   customer: {
     id: string;
     firstName: string;
     lastName: string;
     email: string;
+    phone?: string;
   };
   shippingAddress?: {
     id: string;
     fullName: string;
+    phone?: string;
     street: string;
     city: string;
     state: string;
     zipCode: string;
     country: string;
-    phone?: string | null;
-  } | null;
-  items: OrderItem[];
+  };
+  items: OrderItemWithDetails[];
   statusHistory: OrderStatusHistory[];
-  quoteRequest?: {
-    id: string;
-    finalPrice: number;
-    specifications?: string | null;
-  } | null;
+  paymentTransactions: PaymentTransaction[];
 }
 
-/**
- * Create order from cart DTO
- */
+export interface OrderItem {
+  id: string;
+  orderId: string;
+  productId: string;
+  sellerId: string;
+  quantity: number;
+  price: number;
+  createdAt: Date;
+}
+
+export interface OrderItemWithDetails extends OrderItem {
+  product: {
+    id: string;
+    name: string;
+    slug?: string;
+    images: string[];
+    isCustomizable: boolean;
+  };
+  seller: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    username: string;
+    artisanProfile?: {
+      shopName: string;
+      isVerified: boolean;
+    };
+  };
+}
+
+export interface OrderStatusHistory {
+  id: string;
+  orderId: string;
+  status: OrderStatus;
+  note?: string;
+  createdBy?: string;
+  createdAt: Date;
+}
+
+export interface PaymentTransaction {
+  id: string;
+  orderId: string;
+  userId: string;
+  paymentMethodId?: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  paymentMethod: PaymentMethod;
+  reference: string;
+  externalReference?: string;
+  failureReason?: string;
+  processedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// DTOs
 export interface CreateOrderFromCartDto {
   addressId: string;
   paymentMethod: PaymentMethod;
   notes?: string;
-  appliedCouponCode?: string;
 }
 
-/**
- * Create order from quote DTO
- */
 export interface CreateOrderFromQuoteDto {
   quoteRequestId: string;
   addressId: string;
@@ -77,61 +113,57 @@ export interface CreateOrderFromQuoteDto {
   notes?: string;
 }
 
-/**
- * Update order status DTO
- */
 export interface UpdateOrderStatusDto {
   status: OrderStatus;
   note?: string;
-}
-
-/**
- * Update shipping info DTO
- */
-export interface UpdateShippingInfoDto {
   trackingNumber?: string;
-  trackingUrl?: string;
   estimatedDelivery?: Date;
 }
 
-/**
- * Order query options
- */
-export interface OrderQueryOptions {
-  userId?: string;
-  status?: OrderStatus | OrderStatus[];
-  dateFrom?: Date;
-  dateTo?: Date;
-  page?: number;
-  limit?: number;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-  includeCancelled?: boolean;
+export interface ProcessPaymentDto {
+  paymentMethodId?: string;
+  paymentReference?: string;
+  externalReference?: string;
 }
 
-/**
- * Order summary DTO (for listings)
- */
+export interface OrderQueryOptions {
+  page?: number;
+  limit?: number;
+  userId?: string;
+  sellerId?: string;
+  status?: OrderStatus | OrderStatus[];
+  paymentStatus?: PaymentStatus | PaymentStatus[];
+  dateFrom?: Date;
+  dateTo?: Date;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
 export interface OrderSummary {
   id: string;
   orderNumber: string;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
   totalAmount: number;
-  createdAt: Date;
-  updatedAt: Date;
   itemCount: number;
-  sellerInfo?: {
+  createdAt: Date;
+  customer?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  primarySeller?: {
     id: string;
     name: string;
     shopName?: string;
   };
 }
 
-/**
- * Convert quote to order DTO
- */
-export interface ConvertToOrderDto {
-  shippingAddressId?: string;
-  paymentMethod?: string;
-  notes?: string;
+export interface OrderStats {
+  totalOrders: number;
+  pendingOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  totalRevenue: number;
+  averageOrderValue: number;
 }

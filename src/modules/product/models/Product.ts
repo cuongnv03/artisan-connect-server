@@ -1,36 +1,22 @@
 import { ProductStatus } from './ProductEnums';
 
-export interface ProductDimensions {
-  length?: number;
-  width?: number;
-  height?: number;
-  unit?: string; // 'cm', 'inch', etc.
-}
-
 export interface Product {
   id: string;
   sellerId: string;
   name: string;
-  slug?: string | null;
-  description?: string | null;
+  slug?: string;
+  description?: string;
   price: number;
-  discountPrice?: number | null;
+  discountPrice?: number;
   quantity: number;
-  sku?: string | null;
-  weight?: number | null;
-  dimensions?: ProductDimensions | null;
   status: ProductStatus;
   images: string[];
   tags: string[];
-  attributes?: Record<string, any> | null;
   isCustomizable: boolean;
-  avgRating?: number | null;
-  reviewCount: number;
   viewCount: number;
   salesCount: number;
   createdAt: Date;
   updatedAt: Date;
-  deletedAt?: Date | null;
 }
 
 export interface ProductWithSeller extends Product {
@@ -39,31 +25,24 @@ export interface ProductWithSeller extends Product {
     firstName: string;
     lastName: string;
     username: string;
-    avatarUrl?: string | null;
+    avatarUrl?: string;
     artisanProfile?: {
       shopName: string;
       isVerified: boolean;
-    } | null;
+    };
   };
-}
-
-export interface ProductWithDetails extends ProductWithSeller {
-  categories: Array<{
+  categories?: Array<{
     id: string;
     name: string;
     slug: string;
   }>;
-  priceHistory: PriceHistory[];
-  canEdit?: boolean;
-  canDelete?: boolean;
 }
 
 export interface PriceHistory {
   id: string;
   productId: string;
   price: number;
-  changeNote?: string | null;
-  changedBy: string;
+  changeNote?: string;
   createdAt: Date;
 }
 
@@ -71,39 +50,25 @@ export interface CreateProductDto {
   name: string;
   description?: string;
   price: number;
-  discountPrice?: number | null;
+  discountPrice?: number;
   quantity: number;
   categories?: string[];
-  status?: ProductStatus;
   images: string[];
   tags?: string[];
-  attributes?: Record<string, any>;
   isCustomizable?: boolean;
-  sku?: string;
-  weight?: number;
-  dimensions?: ProductDimensions;
 }
 
 export interface UpdateProductDto {
   name?: string;
-  description?: string | null;
+  description?: string;
   price?: number;
-  discountPrice?: number | null;
+  discountPrice?: number;
   quantity?: number;
   categories?: string[];
-  status?: ProductStatus;
   images?: string[];
   tags?: string[];
-  attributes?: Record<string, any> | null;
   isCustomizable?: boolean;
-  sku?: string | null;
-  weight?: number | null;
-  dimensions?: ProductDimensions | null;
-}
-
-export interface PriceUpdateDto {
-  price: number;
-  changeNote?: string;
+  status?: ProductStatus;
 }
 
 export interface ProductQueryOptions {
@@ -112,11 +77,7 @@ export interface ProductQueryOptions {
   sellerId?: string;
   categoryId?: string;
   search?: string;
-  minPrice?: number;
-  maxPrice?: number;
   status?: ProductStatus | ProductStatus[];
-  isCustomizable?: boolean;
-  tags?: string[];
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   inStock?: boolean;
@@ -132,15 +93,10 @@ export interface ProductPaginationResult {
   };
 }
 
-export interface ProductStockUpdate {
-  productId: string;
-  quantity: number;
-  operation: 'increment' | 'decrement' | 'set';
-}
-
-export interface ProductInventoryCheck {
-  productId: string;
-  requestedQuantity: number;
-  availableQuantity: number;
-  inStock: boolean;
+export interface ProductStats {
+  totalProducts: number;
+  publishedProducts: number;
+  draftProducts: number;
+  totalViews: number;
+  totalSales: number;
 }

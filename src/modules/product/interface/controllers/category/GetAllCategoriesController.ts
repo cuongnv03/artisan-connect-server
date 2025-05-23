@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
 import { ICategoryService } from '../../../services/CategoryService.interface';
-import { CategoryQueryOptions } from '../../../models/Category';
 import container from '../../../../../core/di/container';
 
 export class GetAllCategoriesController extends BaseController {
@@ -14,21 +13,8 @@ export class GetAllCategoriesController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const options: CategoryQueryOptions = {
-        includeParent: req.query.includeParent === 'true',
-        includeChildren: req.query.includeChildren === 'true',
-        includeProductCount: req.query.includeProductCount === 'true',
-        includeInactive: req.query.includeInactive === 'true',
-        level: req.query.level ? parseInt(req.query.level as string) : undefined,
-        parentId: req.query.parentId === 'null' ? null : (req.query.parentId as string),
-      };
+    const categories = await this.categoryService.getAllCategories();
 
-      const categories = await this.categoryService.getAllCategories(options);
-
-      ApiResponse.success(res, categories, 'Categories retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
+    ApiResponse.success(res, categories, 'Categories retrieved successfully');
   }
 }

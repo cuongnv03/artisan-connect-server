@@ -1,11 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IOrderService } from '../../../order/services/OrderService.interface';
-import { AppError } from '../../../../core/errors/AppError';
+import { IOrderService } from '../../services/OrderService.interface';
 import container from '../../../../core/di/container';
 
-export class ConvertToOrderController extends BaseController {
+export class ProcessPaymentController extends BaseController {
   private orderService: IOrderService;
 
   constructor() {
@@ -14,16 +13,11 @@ export class ConvertToOrderController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const { id } = req.params;
+    const { id } = req.params;
+    const order = await this.orderService.processPayment(id, req.body);
 
-      const order = await this.orderService.convertQuoteToOrder(req.user!.id, id, req.body);
-
-      ApiResponse.success(res, order, 'Quote successfully converted to order');
-    } catch (error) {
-      next(error);
-    }
+    ApiResponse.success(res, order, 'Payment processed successfully');
   }
 }

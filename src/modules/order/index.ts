@@ -1,14 +1,10 @@
 /**
  * Order Module Exports
- *
- * Centralized exports for the Order module to simplify imports
  */
 
 // Export models
 export * from './models/Order';
-export * from './models/OrderItem';
 export * from './models/OrderEnums';
-export * from './models/OrderStatusHistory';
 
 // Export service interfaces
 export * from './services/OrderService.interface';
@@ -25,6 +21,16 @@ export function registerOrderModule() {
 
   return {
     name: 'order',
-    description: 'Order management module for handling product orders and fulfillment',
+    description: 'Complete order management system for artisan marketplace',
+    version: '1.0.0',
+    features: [
+      'Order creation from cart',
+      'Custom order creation from quotes',
+      'Order status tracking & history',
+      'Payment processing simulation',
+      'Multi-seller order support',
+      'Role-based access control',
+      'Order analytics & statistics',
+    ],
   };
 }

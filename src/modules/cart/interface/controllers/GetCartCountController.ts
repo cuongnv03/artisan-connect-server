@@ -13,14 +13,10 @@ export class GetCartCountController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const count = await this.cartService.getCartItemCount(req.user!.id);
+    const count = await this.cartService.getCartItemCount(req.user!.id);
 
-      ApiResponse.success(res, { count }, 'Cart item count retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
+    ApiResponse.success(res, { count }, 'Cart item count retrieved successfully');
   }
 }

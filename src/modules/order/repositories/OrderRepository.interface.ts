@@ -3,103 +3,59 @@ import {
   Order,
   OrderWithDetails,
   OrderSummary,
-  OrderQueryOptions,
+  OrderStatusHistory,
+  PaymentTransaction,
   CreateOrderFromCartDto,
   CreateOrderFromQuoteDto,
   UpdateOrderStatusDto,
-  UpdateShippingInfoDto,
+  ProcessPaymentDto,
+  OrderQueryOptions,
+  OrderStats,
 } from '../models/Order';
-import { OrderStatus, PaymentMethod } from '../models/OrderEnums';
-import { OrderStatusHistory } from '../models/OrderStatusHistory';
+import { OrderStatus, PaymentStatus } from '../models/OrderEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IOrderRepository extends BaseRepository<Order, string> {
-  /**
-   * Find order by ID with details
-   */
-  findByIdWithDetails(id: string): Promise<OrderWithDetails | null>;
-
-  /**
-   * Find order by order number
-   */
-  findByOrderNumber(orderNumber: string): Promise<OrderWithDetails | null>;
-
-  /**
-   * Prepare order items from cart items
-   * This method is used to create order items from cart items
-   */
-  prepareOrderItemsFromCart(cartItems: any[]): Promise<{ orderItems: any[]; subtotal: number }>;
-
-  /**
-   * Create order with items
-   * This method is used by both createOrderFromCart and createOrderFromQuote
-   */
-  createOrderWithItems(
-    userId: string,
-    data: {
-      orderNumber: string;
-      addressId: string;
-      paymentMethod: PaymentMethod;
-      notes?: string;
-      orderItems: any[];
-      subtotal: number;
-    },
-  ): Promise<OrderWithDetails>;
-
-  /**
-   * Create order from quote request
-   */
+  // Order creation
+  createOrderFromCart(userId: string, data: CreateOrderFromCartDto): Promise<OrderWithDetails>;
   createOrderFromQuote(userId: string, data: CreateOrderFromQuoteDto): Promise<OrderWithDetails>;
 
-  /**
-   * Update order status
-   */
-  updateOrderStatus(
-    id: string,
-    status: OrderStatus,
-    statusHistoryData: { note?: string; createdBy?: string },
-  ): Promise<OrderWithDetails>;
-
-  /**
-   * Update shipping information
-   */
-  updateShippingInfo(id: string, data: UpdateShippingInfoDto): Promise<OrderWithDetails>;
-
-  /**
-   * Get orders with filtering and pagination
-   */
+  // Order retrieval
+  findByIdWithDetails(id: string): Promise<OrderWithDetails | null>;
+  findByOrderNumber(orderNumber: string): Promise<OrderWithDetails | null>;
   getOrders(options: OrderQueryOptions): Promise<PaginatedResult<OrderSummary>>;
-
-  /**
-   * Get artisan orders (orders containing items sold by the artisan)
-   */
-  getArtisanOrders(
-    artisanId: string,
-    options: OrderQueryOptions,
+  getCustomerOrders(
+    userId: string,
+    options?: Partial<OrderQueryOptions>,
+  ): Promise<PaginatedResult<OrderSummary>>;
+  getSellerOrders(
+    sellerId: string,
+    options?: Partial<OrderQueryOptions>,
   ): Promise<PaginatedResult<OrderSummary>>;
 
-  /**
-   * Cancel order
-   */
-  cancelOrder(id: string, note?: string, cancelledBy?: string): Promise<OrderWithDetails>;
+  // Order management
+  updateOrderStatus(
+    id: string,
+    data: UpdateOrderStatusDto,
+    updatedBy?: string,
+  ): Promise<OrderWithDetails>;
+  cancelOrder(id: string, reason?: string, cancelledBy?: string): Promise<OrderWithDetails>;
 
-  /**
-   * Process payment
-   */
-  processPayment(id: string, paymentIntentId: string): Promise<OrderWithDetails>;
+  // Payment
+  processPayment(id: string, data: ProcessPaymentDto): Promise<OrderWithDetails>;
+  refundPayment(id: string, reason?: string): Promise<OrderWithDetails>;
 
-  /**
-   * Get order status history
-   */
+  // Status tracking
   getOrderStatusHistory(orderId: string): Promise<OrderStatusHistory[]>;
+  addStatusHistory(
+    orderId: string,
+    status: OrderStatus,
+    note?: string,
+    createdBy?: string,
+  ): Promise<OrderStatusHistory>;
 
-  /**
-   * Generate unique order number
-   */
+  // Utilities
   generateOrderNumber(): Promise<string>;
-
-  /**
-   * Check if user is involved in order
-   */
-  isUserInvolved(orderId: string, userId: string): Promise<boolean>;
+  getOrderStats(userId?: string, sellerId?: string): Promise<OrderStats>;
+  isUserInvolvedInOrder(orderId: string, userId: string): Promise<boolean>;
 }

@@ -2,10 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { IQuoteService } from '../../services/QuoteService.interface';
-import { AppError } from '../../../../core/errors/AppError';
 import container from '../../../../core/di/container';
 
-export class GetQuoteRequestController extends BaseController {
+export class GetQuoteStatsController extends BaseController {
   private quoteService: IQuoteService;
 
   constructor() {
@@ -16,20 +15,18 @@ export class GetQuoteRequestController extends BaseController {
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     this.validateAuth(req);
 
-    const { id } = req.params;
+    let stats;
 
-    // Validate access
-    const hasAccess = await this.quoteService.validateQuoteAccess(id, req.user!.id);
-    if (!hasAccess) {
-      throw AppError.forbidden('You do not have permission to view this quote request');
+    if (req.user!.role === 'ADMIN') {
+      // Admin can get overall stats or specific user stats
+      const userId = req.query.userId as string;
+      const userRole = req.query.userRole as string;
+      stats = await this.quoteService.getQuoteStats(userId, userRole);
+    } else {
+      // Get user's own stats
+      stats = await this.quoteService.getQuoteStats(req.user!.id, req.user!.role);
     }
 
-    const quote = await this.quoteService.getQuoteById(id);
-
-    if (!quote) {
-      throw AppError.notFound('Quote request not found');
-    }
-
-    ApiResponse.success(res, quote, 'Quote request retrieved successfully');
+    ApiResponse.success(res, stats, 'Quote statistics retrieved successfully');
   }
 }

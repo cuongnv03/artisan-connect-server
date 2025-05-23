@@ -1,84 +1,56 @@
 import {
   QuoteRequest,
   QuoteRequestWithDetails,
+  QuoteSummary,
+  QuoteNegotiation,
   CreateQuoteRequestDto,
   RespondToQuoteDto,
   AddQuoteMessageDto,
-  QuoteRequestQueryOptions,
-} from '../models/QuoteRequest';
-import { QuoteMessage } from '../models/QuoteMessage';
-import { QuoteStatus } from '../models/QuoteEnums';
+  QuoteQueryOptions,
+  QuoteStats,
+} from '../models/Quote';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IQuoteService {
-  /**
-   * Create a new quote request
-   */
+  // Quote creation & management
   createQuoteRequest(
     customerId: string,
     data: CreateQuoteRequestDto,
   ): Promise<QuoteRequestWithDetails>;
-
-  /**
-   * Get quote request by ID
-   */
-  getQuoteRequestById(id: string): Promise<QuoteRequestWithDetails | null>;
-
-  /**
-   * Get quote requests with filtering
-   */
-  getQuoteRequests(
-    options: QuoteRequestQueryOptions,
-  ): Promise<PaginatedResult<QuoteRequestWithDetails>>;
-
-  /**
-   * Get customer quote requests
-   */
-  getCustomerQuoteRequests(
-    customerId: string,
-    page?: number,
-    limit?: number,
-  ): Promise<PaginatedResult<QuoteRequestWithDetails>>;
-
-  /**
-   * Get artisan quote requests
-   */
-  getArtisanQuoteRequests(
-    artisanId: string,
-    page?: number,
-    limit?: number,
-  ): Promise<PaginatedResult<QuoteRequestWithDetails>>;
-
-  /**
-   * Respond to quote request
-   */
-  respondToQuoteRequest(
+  respondToQuote(
     quoteId: string,
     artisanId: string,
-    response: RespondToQuoteDto,
+    data: RespondToQuoteDto,
   ): Promise<QuoteRequestWithDetails>;
 
-  /**
-   * Add message to quote
-   */
+  // Quote retrieval
+  getQuoteById(id: string): Promise<QuoteRequestWithDetails | null>;
+  getQuotes(options?: QuoteQueryOptions): Promise<PaginatedResult<QuoteSummary>>;
+  getMyQuoteRequests(
+    userId: string,
+    userRole: string,
+    options?: Partial<QuoteQueryOptions>,
+  ): Promise<PaginatedResult<QuoteSummary>>;
+
+  // Quote messaging & negotiation
   addMessageToQuote(
     quoteId: string,
     userId: string,
-    data: AddQuoteMessageDto,
-  ): Promise<QuoteMessage>;
+    message: string,
+  ): Promise<QuoteRequestWithDetails>;
+  getNegotiationHistory(quoteId: string): Promise<QuoteNegotiation[]>;
 
-  /**
-   * Cancel quote request
-   */
-  cancelQuoteRequest(quoteId: string, userId: string): Promise<QuoteRequestWithDetails>;
+  // Quote status management
+  cancelQuoteRequest(
+    quoteId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<QuoteRequestWithDetails>;
 
-  /**
-   * Clean up expired quotes
-   */
-  cleanupExpiredQuotes(): Promise<number>;
+  // Validation & utilities
+  validateQuoteAccess(quoteId: string, userId: string, action?: string): Promise<boolean>;
+  getQuoteStats(userId?: string, userRole?: string): Promise<QuoteStats>;
 
-  /**
-   * Update quote status
-   */
-  updateQuoteStatus(quoteId: string, status: QuoteStatus): Promise<QuoteRequestWithDetails>;
+  // Background tasks
+  expireOldQuotes(): Promise<number>;
 }

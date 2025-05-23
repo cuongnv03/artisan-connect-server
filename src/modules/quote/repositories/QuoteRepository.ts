@@ -1,15 +1,18 @@
-import { PrismaClient } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { BasePrismaRepository } from '../../../shared/baseClasses/BasePrismaRepository';
 import { IQuoteRepository } from './QuoteRepository.interface';
 import {
   QuoteRequest,
   QuoteRequestWithDetails,
+  QuoteSummary,
+  QuoteNegotiation,
   CreateQuoteRequestDto,
-  QuoteRequestQueryOptions,
-} from '../models/QuoteRequest';
-import { QuoteMessage } from '../models/QuoteMessage';
-import { QuoteStatus } from '../models/QuoteEnums';
+  RespondToQuoteDto,
+  AddQuoteMessageDto,
+  QuoteQueryOptions,
+  QuoteStats,
+} from '../models/Quote';
+import { QuoteStatus, QuoteAction } from '../models/QuoteEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
@@ -24,9 +27,204 @@ export class QuoteRepository
     super(prisma, 'quoteRequest');
   }
 
-  /**
-   * Find quote request by ID with details
-   */
+  async createQuoteRequest(
+    customerId: string,
+    data: CreateQuoteRequestDto,
+  ): Promise<QuoteRequestWithDetails> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Validate product exists and is customizable
+        const product = await tx.product.findUnique({
+          where: { id: data.productId },
+          include: {
+            seller: {
+              include: {
+                artisanProfile: {
+                  select: { shopName: true, isVerified: true, rating: true },
+                },
+              },
+            },
+          },
+        });
+
+        if (!product) {
+          throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        }
+
+        if (product.status !== 'PUBLISHED') {
+          throw new AppError('Product is not available for quotes', 400, 'PRODUCT_NOT_AVAILABLE');
+        }
+
+        if (!product.isCustomizable) {
+          throw new AppError(
+            'This product does not accept custom quote requests',
+            400,
+            'PRODUCT_NOT_CUSTOMIZABLE',
+          );
+        }
+
+        if (product.sellerId === customerId) {
+          throw new AppError(
+            'You cannot create a quote request for your own product',
+            400,
+            'CANNOT_QUOTE_OWN_PRODUCT',
+          );
+        }
+
+        // Check for existing active quotes
+        const existingQuote = await tx.quoteRequest.findFirst({
+          where: {
+            productId: data.productId,
+            customerId,
+            status: { in: ['PENDING', 'COUNTER_OFFERED'] },
+          },
+        });
+
+        if (existingQuote) {
+          throw new AppError(
+            'You already have an active quote request for this product',
+            400,
+            'DUPLICATE_QUOTE_REQUEST',
+          );
+        }
+
+        // Calculate expiration date
+        const expiresAt = data.expiresInDays
+          ? new Date(Date.now() + data.expiresInDays * 24 * 60 * 60 * 1000)
+          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Default 7 days
+
+        // Create quote request
+        const quote = await tx.quoteRequest.create({
+          data: {
+            productId: data.productId,
+            customerId,
+            artisanId: product.sellerId,
+            requestedPrice: data.requestedPrice,
+            specifications: data.specifications,
+            customerMessage: data.message,
+            status: QuoteStatus.PENDING,
+            expiresAt,
+          },
+        });
+
+        // Add initial negotiation entry
+        await this.addNegotiationEntry(quote.id, QuoteAction.REQUEST, 'customer', {
+          requestedPrice: data.requestedPrice,
+          message: data.message,
+        });
+
+        return (await this.findByIdWithDetails(quote.id)) as QuoteRequestWithDetails;
+      });
+    } catch (error) {
+      this.logger.error(`Error creating quote request: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to create quote request', 500, 'QUOTE_CREATION_FAILED');
+    }
+  }
+
+  async respondToQuote(
+    id: string,
+    artisanId: string,
+    data: RespondToQuoteDto,
+  ): Promise<QuoteRequestWithDetails> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Get current quote
+        const quote = await tx.quoteRequest.findUnique({
+          where: { id },
+          include: { product: true },
+        });
+
+        if (!quote) {
+          throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
+        }
+
+        if (quote.artisanId !== artisanId) {
+          throw new AppError('You can only respond to your own quote requests', 403, 'FORBIDDEN');
+        }
+
+        // Validate current status
+        if (!['PENDING', 'COUNTER_OFFERED'].includes(quote.status)) {
+          throw new AppError(
+            'This quote cannot be responded to in its current state',
+            400,
+            'INVALID_QUOTE_STATUS',
+          );
+        }
+
+        // Check if expired
+        if (quote.expiresAt && quote.expiresAt < new Date()) {
+          await tx.quoteRequest.update({
+            where: { id },
+            data: { status: QuoteStatus.EXPIRED },
+          });
+          throw new AppError('This quote request has expired', 400, 'QUOTE_EXPIRED');
+        }
+
+        let newStatus: QuoteStatus;
+        let finalPrice: number | undefined;
+        let updateData: any = {
+          artisanMessage: data.message,
+          updatedAt: new Date(),
+        };
+
+        switch (data.action) {
+          case QuoteAction.ACCEPT:
+            newStatus = QuoteStatus.ACCEPTED;
+            // Set final price to customer's requested price or existing counter offer
+            finalPrice = quote.counterOffer
+              ? Number(quote.counterOffer)
+              : quote.requestedPrice
+                ? Number(quote.requestedPrice)
+                : Number(quote.product.price);
+            updateData.finalPrice = finalPrice;
+            updateData.status = newStatus;
+            break;
+
+          case QuoteAction.REJECT:
+            newStatus = QuoteStatus.REJECTED;
+            updateData.status = newStatus;
+            break;
+
+          case QuoteAction.COUNTER:
+            if (!data.counterOffer || data.counterOffer <= 0) {
+              throw new AppError(
+                'Counter offer amount is required and must be greater than 0',
+                400,
+                'INVALID_COUNTER_OFFER',
+              );
+            }
+            newStatus = QuoteStatus.COUNTER_OFFERED;
+            updateData.counterOffer = data.counterOffer;
+            updateData.status = newStatus;
+            break;
+
+          default:
+            throw new AppError('Invalid action', 400, 'INVALID_ACTION');
+        }
+
+        // Update quote
+        await tx.quoteRequest.update({
+          where: { id },
+          data: updateData,
+        });
+
+        // Add negotiation entry
+        await this.addNegotiationEntry(id, data.action, 'artisan', {
+          counterOffer: data.counterOffer,
+          finalPrice,
+          message: data.message,
+        });
+
+        return (await this.findByIdWithDetails(id)) as QuoteRequestWithDetails;
+      });
+    } catch (error) {
+      this.logger.error(`Error responding to quote: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to respond to quote', 500, 'QUOTE_RESPONSE_FAILED');
+    }
+  }
+
   async findByIdWithDetails(id: string): Promise<QuoteRequestWithDetails | null> {
     try {
       const quote = await this.prisma.quoteRequest.findUnique({
@@ -36,9 +234,12 @@ export class QuoteRepository
             select: {
               id: true,
               name: true,
+              slug: true,
               images: true,
               price: true,
+              discountPrice: true,
               isCustomizable: true,
+              status: true,
             },
           },
           customer: {
@@ -47,6 +248,8 @@ export class QuoteRepository
               firstName: true,
               lastName: true,
               email: true,
+              username: true,
+              avatarUrl: true,
             },
           },
           artisan: {
@@ -54,9 +257,13 @@ export class QuoteRepository
               id: true,
               firstName: true,
               lastName: true,
+              username: true,
+              avatarUrl: true,
               artisanProfile: {
                 select: {
                   shopName: true,
+                  isVerified: true,
+                  rating: true,
                 },
               },
             },
@@ -66,178 +273,68 @@ export class QuoteRepository
 
       if (!quote) return null;
 
-      // Transform the data to match our domain entity
+      // Get negotiation history
+      const negotiationHistory = await this.getNegotiationHistory(id);
+
       return {
         ...quote,
-        messages: (quote.messages as any) || [],
-      } as unknown as QuoteRequestWithDetails;
+        requestedPrice: quote.requestedPrice ? Number(quote.requestedPrice) : undefined,
+        counterOffer: quote.counterOffer ? Number(quote.counterOffer) : undefined,
+        finalPrice: quote.finalPrice ? Number(quote.finalPrice) : undefined,
+        product: {
+          ...quote.product,
+          price: Number(quote.product.price),
+          discountPrice: quote.product.discountPrice
+            ? Number(quote.product.discountPrice)
+            : undefined,
+        },
+        negotiationHistory,
+      } as QuoteRequestWithDetails;
     } catch (error) {
-      this.logger.error(`Error finding quote request: ${error}`);
+      this.logger.error(`Error finding quote with details: ${error}`);
       return null;
     }
   }
 
-  /**
-   * Create a new quote request
-   */
-  async createQuoteRequest(
-    customerId: string,
-    data: CreateQuoteRequestDto,
-  ): Promise<QuoteRequestWithDetails> {
+  async getQuotes(options: QuoteQueryOptions): Promise<PaginatedResult<QuoteSummary>> {
     try {
-      // Get product to verify it exists and get artisan ID
-      const product = await this.prisma.product.findUnique({
-        where: { id: data.productId },
-        select: {
-          id: true,
-          sellerId: true,
-          isCustomizable: true,
-        },
-      });
+      const {
+        page = 1,
+        limit = 10,
+        customerId,
+        artisanId,
+        productId,
+        status,
+        dateFrom,
+        dateTo,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+      } = options;
 
-      if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
-      }
+      const where: Prisma.QuoteRequestWhereInput = {};
 
-      // Only allow quote requests for customizable products
-      if (!product.isCustomizable) {
-        throw new AppError(
-          'Quote requests are only available for customizable products',
-          400,
-          'PRODUCT_NOT_CUSTOMIZABLE',
-        );
-      }
-
-      // Check if artisan and customer are different people
-      if (product.sellerId === customerId) {
-        throw new AppError(
-          'You cannot create a quote request for your own product',
-          400,
-          'INVALID_QUOTE_REQUEST',
-        );
-      }
-
-      // Calculate expiration date if provided
-      let expiresAt = null;
-      if (data.expiresInDays) {
-        expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + data.expiresInDays);
-      } else {
-        // Default 7 days expiration
-        expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7);
-      }
-
-      // Prepare initial message if specifications are provided
-      const initialMessages = data.specifications
-        ? [
-            {
-              id: uuidv4(),
-              senderId: customerId,
-              message: data.specifications,
-              createdAt: new Date(),
-            },
-          ]
-        : [];
-
-      // Create quote request
-      const quote = await this.prisma.quoteRequest.create({
-        data: {
-          productId: data.productId,
-          customerId,
-          artisanId: product.sellerId,
-          requestedPrice: data.requestedPrice || null,
-          specifications: data.specifications || null,
-          status: QuoteStatus.PENDING,
-          messages: initialMessages,
-          expiresAt,
-        },
-        include: {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              images: true,
-              price: true,
-              isCustomizable: true,
-            },
-          },
-          customer: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-          artisan: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              artisanProfile: {
-                select: {
-                  shopName: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      return quote as unknown as QuoteRequestWithDetails;
-    } catch (error) {
-      this.logger.error(`Error creating quote request: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to create quote request', 500, 'DATABASE_ERROR');
-    }
-  }
-
-  /**
-   * Get quote requests with filtering and pagination
-   */
-  async getQuoteRequests(
-    options: QuoteRequestQueryOptions,
-  ): Promise<PaginatedResult<QuoteRequestWithDetails>> {
-    try {
-      const { status, customerId, artisanId, productId, page = 1, limit = 10 } = options;
-
-      // Build where conditions
-      const where: any = {};
-
+      // Filters
+      if (customerId) where.customerId = customerId;
+      if (artisanId) where.artisanId = artisanId;
+      if (productId) where.productId = productId;
       if (status) {
         where.status = Array.isArray(status) ? { in: status } : status;
       }
-
-      if (customerId) {
-        where.customerId = customerId;
+      if (dateFrom || dateTo) {
+        where.createdAt = {};
+        if (dateFrom) where.createdAt.gte = dateFrom;
+        if (dateTo) where.createdAt.lte = dateTo;
       }
 
-      if (artisanId) {
-        where.artisanId = artisanId;
-      }
-
-      if (productId) {
-        where.productId = productId;
-      }
-
-      // Count total matching quotes
       const total = await this.prisma.quoteRequest.count({ where });
 
-      // Calculate total pages
-      const totalPages = Math.ceil(total / limit);
-
-      // Get quotes with pagination
       const quotes = await this.prisma.quoteRequest.findMany({
         where,
         include: {
           product: {
             select: {
-              id: true,
               name: true,
               images: true,
-              price: true,
-              isCustomizable: true,
             },
           },
           customer: {
@@ -245,7 +342,7 @@ export class QuoteRepository
               id: true,
               firstName: true,
               lastName: true,
-              email: true,
+              username: true,
             },
           },
           artisan: {
@@ -254,181 +351,222 @@ export class QuoteRepository
               firstName: true,
               lastName: true,
               artisanProfile: {
-                select: {
-                  shopName: true,
-                },
+                select: { shopName: true },
               },
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
       });
 
-      // Transform data to match expected format
-      const transformedQuotes = quotes.map((quote) => ({
-        ...quote,
-        messages: (quote.messages as any) || [],
+      const quoteSummaries: QuoteSummary[] = quotes.map((quote) => ({
+        id: quote.id,
+        productName: quote.product.name,
+        productImages: quote.product.images,
+        status: quote.status as QuoteStatus,
+        requestedPrice: quote.requestedPrice ? Number(quote.requestedPrice) : undefined,
+        counterOffer: quote.counterOffer ? Number(quote.counterOffer) : undefined,
+        finalPrice: quote.finalPrice ? Number(quote.finalPrice) : undefined,
+        createdAt: quote.createdAt,
+        expiresAt: quote.expiresAt,
+        customer: quote.customer
+          ? {
+              id: quote.customer.id,
+              name: `${quote.customer.firstName} ${quote.customer.lastName}`,
+              username: quote.customer.username,
+            }
+          : undefined,
+        artisan: quote.artisan
+          ? {
+              id: quote.artisan.id,
+              name: `${quote.artisan.firstName} ${quote.artisan.lastName}`,
+              shopName: quote.artisan.artisanProfile?.shopName,
+            }
+          : undefined,
       }));
 
       return {
-        data: transformedQuotes as unknown as QuoteRequestWithDetails[],
+        data: quoteSummaries,
         meta: {
           total,
           page,
           limit,
-          totalPages,
+          totalPages: Math.ceil(total / limit),
         },
       };
     } catch (error) {
-      this.logger.error(`Error getting quote requests: ${error}`);
-      throw new AppError('Failed to get quote requests', 500, 'DATABASE_ERROR');
+      this.logger.error(`Error getting quotes: ${error}`);
+      throw new AppError('Failed to get quotes', 500, 'QUOTE_QUERY_FAILED');
     }
   }
 
-  /**
-   * Update quote request status
-   */
+  async getCustomerQuotes(
+    customerId: string,
+    options: Partial<QuoteQueryOptions> = {},
+  ): Promise<PaginatedResult<QuoteSummary>> {
+    return this.getQuotes({ ...options, customerId });
+  }
+
+  async getArtisanQuotes(
+    artisanId: string,
+    options: Partial<QuoteQueryOptions> = {},
+  ): Promise<PaginatedResult<QuoteSummary>> {
+    return this.getQuotes({ ...options, artisanId });
+  }
+
+  async addMessage(id: string, data: AddQuoteMessageDto): Promise<QuoteRequestWithDetails> {
+    try {
+      const updateField = data.isCustomerMessage ? 'customerMessage' : 'artisanMessage';
+
+      await this.prisma.quoteRequest.update({
+        where: { id },
+        data: {
+          [updateField]: data.message,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Add negotiation entry
+      await this.addNegotiationEntry(
+        id,
+        QuoteAction.MESSAGE,
+        data.isCustomerMessage ? 'customer' : 'artisan',
+        {
+          message: data.message,
+        },
+      );
+
+      return (await this.findByIdWithDetails(id)) as QuoteRequestWithDetails;
+    } catch (error) {
+      this.logger.error(`Error adding message to quote: ${error}`);
+      throw new AppError('Failed to add message to quote', 500, 'QUOTE_MESSAGE_FAILED');
+    }
+  }
+
+  async getNegotiationHistory(id: string): Promise<QuoteNegotiation[]> {
+    try {
+      // For simplicity, we'll reconstruct negotiation history from the quote data
+      // In a real implementation, you might want a separate table for this
+      const quote = await this.prisma.quoteRequest.findUnique({
+        where: { id },
+        include: {
+          product: { select: { price: true } },
+        },
+      });
+
+      if (!quote) return [];
+
+      const history: QuoteNegotiation[] = [];
+
+      // Initial request
+      history.push({
+        id: `${id}_initial`,
+        action: QuoteAction.REQUEST,
+        actor: 'customer',
+        newPrice: quote.requestedPrice ? Number(quote.requestedPrice) : undefined,
+        message: quote.customerMessage,
+        timestamp: quote.createdAt,
+      });
+
+      // If there's a counter offer, add it
+      if (quote.counterOffer && quote.status === QuoteStatus.COUNTER_OFFERED) {
+        history.push({
+          id: `${id}_counter`,
+          action: QuoteAction.COUNTER,
+          actor: 'artisan',
+          previousPrice: quote.requestedPrice ? Number(quote.requestedPrice) : undefined,
+          newPrice: Number(quote.counterOffer),
+          message: quote.artisanMessage,
+          timestamp: quote.updatedAt,
+        });
+      }
+
+      // If accepted or rejected
+      if ([QuoteStatus.ACCEPTED, QuoteStatus.REJECTED].includes(quote.status as QuoteStatus)) {
+        history.push({
+          id: `${id}_final`,
+          action: quote.status === QuoteStatus.ACCEPTED ? QuoteAction.ACCEPT : QuoteAction.REJECT,
+          actor: 'artisan',
+          newPrice: quote.finalPrice ? Number(quote.finalPrice) : undefined,
+          message: quote.artisanMessage,
+          timestamp: quote.updatedAt,
+        });
+      }
+
+      return history.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    } catch (error) {
+      this.logger.error(`Error getting negotiation history: ${error}`);
+      return [];
+    }
+  }
+
+  async addNegotiationEntry(
+    quoteId: string,
+    action: QuoteAction,
+    actor: 'customer' | 'artisan',
+    data?: any,
+  ): Promise<QuoteNegotiation> {
+    // This is a simplified implementation
+    // In a real app, you might want to store this in a separate table
+    return {
+      id: `${quoteId}_${action}_${Date.now()}`,
+      action,
+      actor,
+      previousPrice: data?.previousPrice,
+      newPrice: data?.newPrice || data?.requestedPrice || data?.counterOffer || data?.finalPrice,
+      message: data?.message,
+      timestamp: new Date(),
+    };
+  }
+
   async updateQuoteStatus(
     id: string,
     status: QuoteStatus,
-    data?: { counterOffer?: number; finalPrice?: number },
+    finalPrice?: number,
   ): Promise<QuoteRequestWithDetails> {
     try {
-      // Check if quote exists
-      const existingQuote = await this.prisma.quoteRequest.findUnique({
-        where: { id },
-      });
-
-      if (!existingQuote) {
-        throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
+      const updateData: any = { status, updatedAt: new Date() };
+      if (finalPrice !== undefined) {
+        updateData.finalPrice = finalPrice;
       }
 
-      // Update quote status and additional data
-      const updateData: any = { status };
-
-      if (data) {
-        if (data.counterOffer !== undefined) {
-          updateData.counterOffer = data.counterOffer;
-        }
-
-        if (data.finalPrice !== undefined) {
-          updateData.finalPrice = data.finalPrice;
-        }
-      }
-
-      // When accepting, set final price to requested price if no counter offer
-      if (status === QuoteStatus.ACCEPTED && !existingQuote.counterOffer) {
-        updateData.finalPrice = existingQuote.requestedPrice;
-      }
-
-      // Update quote
-      const updatedQuote = await this.prisma.quoteRequest.update({
+      await this.prisma.quoteRequest.update({
         where: { id },
         data: updateData,
-        include: {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              images: true,
-              price: true,
-              isCustomizable: true,
-            },
-          },
-          customer: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-          artisan: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              artisanProfile: {
-                select: {
-                  shopName: true,
-                },
-              },
-            },
-          },
-        },
       });
 
-      return {
-        ...updatedQuote,
-        messages: (updatedQuote.messages as any) || [],
-      } as unknown as QuoteRequestWithDetails;
+      return (await this.findByIdWithDetails(id)) as QuoteRequestWithDetails;
     } catch (error) {
       this.logger.error(`Error updating quote status: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update quote status', 500, 'DATABASE_ERROR');
+      throw new AppError('Failed to update quote status', 500, 'QUOTE_UPDATE_FAILED');
     }
   }
 
-  /**
-   * Add message to quote
-   */
-  async addMessageToQuote(quoteId: string, userId: string, message: string): Promise<QuoteMessage> {
+  async markAsCompleted(id: string): Promise<QuoteRequestWithDetails> {
+    return this.updateQuoteStatus(id, QuoteStatus.COMPLETED);
+  }
+
+  async expireQuotes(): Promise<number> {
     try {
-      // Check if quote exists
-      const quote = await this.prisma.quoteRequest.findUnique({
-        where: { id: quoteId },
-      });
-
-      if (!quote) {
-        throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
-      }
-
-      // Check if user is involved in this quote
-      if (quote.customerId !== userId && quote.artisanId !== userId) {
-        throw new AppError(
-          'You are not authorized to add messages to this quote',
-          403,
-          'FORBIDDEN',
-        );
-      }
-
-      // Create new message
-      const newMessage: QuoteMessage = {
-        id: uuidv4(),
-        senderId: userId,
-        message,
-        createdAt: new Date(),
-      };
-
-      // Get existing messages
-      const currentMessages = (quote.messages as any) || [];
-
-      // Add new message to the list
-      const updatedMessages = [...currentMessages, newMessage];
-
-      // Update quote with new message
-      await this.prisma.quoteRequest.update({
-        where: { id: quoteId },
-        data: {
-          messages: updatedMessages,
-          updatedAt: new Date(), // Ensure updatedAt is refreshed
+      const result = await this.prisma.quoteRequest.updateMany({
+        where: {
+          status: { in: [QuoteStatus.PENDING, QuoteStatus.COUNTER_OFFERED] },
+          expiresAt: { lt: new Date() },
         },
+        data: { status: QuoteStatus.EXPIRED },
       });
 
-      return newMessage;
+      this.logger.info(`Expired ${result.count} quote requests`);
+      return result.count;
     } catch (error) {
-      this.logger.error(`Error adding message to quote: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to add message to quote', 500, 'DATABASE_ERROR');
+      this.logger.error(`Error expiring quotes: ${error}`);
+      return 0;
     }
   }
 
-  /**
-   * Check if user is involved in quote
-   */
-  async isUserInvolved(quoteId: string, userId: string): Promise<boolean> {
+  async isUserInvolvedInQuote(quoteId: string, userId: string): Promise<boolean> {
     try {
       const quote = await this.prisma.quoteRequest.findUnique({
         where: { id: quoteId },
@@ -436,50 +574,101 @@ export class QuoteRepository
       });
 
       if (!quote) return false;
-
       return quote.customerId === userId || quote.artisanId === userId;
     } catch (error) {
-      this.logger.error(`Error checking if user is involved in quote: ${error}`);
+      this.logger.error(`Error checking user involvement in quote: ${error}`);
       return false;
     }
   }
 
-  /**
-   * Mark quote request as expired
-   */
-  async markExpiredQuotes(): Promise<number> {
+  async canUserRespondToQuote(quoteId: string, userId: string): Promise<boolean> {
     try {
-      const result = await this.prisma.quoteRequest.updateMany({
-        where: {
-          status: QuoteStatus.PENDING,
-          expiresAt: {
-            lt: new Date(),
-          },
-        },
-        data: {
-          status: QuoteStatus.EXPIRED,
+      const quote = await this.prisma.quoteRequest.findUnique({
+        where: { id: quoteId },
+        select: {
+          artisanId: true,
+          status: true,
+          expiresAt: true,
         },
       });
 
-      return result.count;
-    } catch (error) {
-      this.logger.error(`Error marking expired quotes: ${error}`);
-      return 0;
-    }
-  }
+      if (!quote) return false;
 
-  /**
-   * Delete a quote request
-   */
-  async deleteQuoteRequest(id: string): Promise<boolean> {
-    try {
-      await this.prisma.quoteRequest.delete({
-        where: { id },
-      });
+      // Only artisan can respond
+      if (quote.artisanId !== userId) return false;
+
+      // Check status
+      if (!['PENDING', 'COUNTER_OFFERED'].includes(quote.status)) return false;
+
+      // Check expiration
+      if (quote.expiresAt && quote.expiresAt < new Date()) return false;
+
       return true;
     } catch (error) {
-      this.logger.error(`Error deleting quote request: ${error}`);
+      this.logger.error(`Error checking quote response permission: ${error}`);
       return false;
+    }
+  }
+
+  async getQuoteStats(userId?: string, role?: string): Promise<QuoteStats> {
+    try {
+      const where: Prisma.QuoteRequestWhereInput = {};
+
+      if (userId && role) {
+        if (role === 'CUSTOMER') {
+          where.customerId = userId;
+        } else if (role === 'ARTISAN') {
+          where.artisanId = userId;
+        }
+      }
+
+      const [totalStats, statusCounts] = await Promise.all([
+        this.prisma.quoteRequest.aggregate({
+          where,
+          _count: { id: true },
+        }),
+        this.prisma.quoteRequest.groupBy({
+          by: ['status'],
+          where,
+          _count: { id: true },
+        }),
+      ]);
+
+      const statusMap = new Map(statusCounts.map((s) => [s.status, s._count.id]));
+
+      // Calculate average negotiation time (simplified)
+      const acceptedQuotes = await this.prisma.quoteRequest.findMany({
+        where: { ...where, status: QuoteStatus.ACCEPTED },
+        select: { createdAt: true, updatedAt: true },
+        take: 100, // Sample for performance
+      });
+
+      const avgNegotiationTime =
+        acceptedQuotes.length > 0
+          ? acceptedQuotes.reduce((acc, quote) => {
+              return acc + (quote.updatedAt.getTime() - quote.createdAt.getTime());
+            }, 0) /
+            acceptedQuotes.length /
+            (1000 * 60 * 60) // Convert to hours
+          : 0;
+
+      // Calculate conversion rate (accepted quotes / total quotes)
+      const totalQuotes = totalStats._count.id || 0;
+      const acceptedCount = statusMap.get(QuoteStatus.ACCEPTED) || 0;
+      const conversionRate = totalQuotes > 0 ? (acceptedCount / totalQuotes) * 100 : 0;
+
+      return {
+        totalQuotes,
+        pendingQuotes: statusMap.get(QuoteStatus.PENDING) || 0,
+        acceptedQuotes: acceptedCount,
+        rejectedQuotes: statusMap.get(QuoteStatus.REJECTED) || 0,
+        expiredQuotes: statusMap.get(QuoteStatus.EXPIRED) || 0,
+        averageNegotiationTime: Math.round(avgNegotiationTime * 100) / 100,
+        conversionRate: Math.round(conversionRate * 100) / 100,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting quote stats: ${error}`);
+      throw new AppError('Failed to get quote stats', 500, 'QUOTE_STATS_FAILED');
     }
   }
 }

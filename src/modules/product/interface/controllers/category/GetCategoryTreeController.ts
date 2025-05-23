@@ -13,12 +13,8 @@ export class GetCategoryTreeController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const categoryTree = await this.categoryService.getCategoryTree();
+    const categoryTree = await this.categoryService.getCategoryTree();
 
-      ApiResponse.success(res, categoryTree, 'Category tree retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
+    ApiResponse.success(res, categoryTree, 'Category tree retrieved successfully');
   }
 }

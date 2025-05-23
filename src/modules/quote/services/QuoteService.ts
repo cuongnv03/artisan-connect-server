@@ -2,16 +2,18 @@ import { IQuoteService } from './QuoteService.interface';
 import {
   QuoteRequest,
   QuoteRequestWithDetails,
+  QuoteSummary,
+  QuoteNegotiation,
   CreateQuoteRequestDto,
   RespondToQuoteDto,
   AddQuoteMessageDto,
-  QuoteRequestQueryOptions,
-} from '../models/QuoteRequest';
-import { QuoteMessage } from '../models/QuoteMessage';
-import { QuoteStatus } from '../models/QuoteEnums';
+  QuoteQueryOptions,
+  QuoteStats,
+} from '../models/Quote';
+import { QuoteStatus, QuoteAction } from '../models/QuoteEnums';
 import { IQuoteRepository } from '../repositories/QuoteRepository.interface';
 import { IProductRepository } from '../../product/repositories/ProductRepository.interface';
-import { IUserRepository } from '../../user/repositories/UserRepository.interface';
+import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -29,42 +31,33 @@ export class QuoteService implements IQuoteService {
     this.userRepository = container.resolve<IUserRepository>('userRepository');
   }
 
-  /**
-   * Create a new quote request
-   */
   async createQuoteRequest(
     customerId: string,
     data: CreateQuoteRequestDto,
   ): Promise<QuoteRequestWithDetails> {
     try {
-      // Validate user exists
-      const user = await this.userRepository.findById(customerId);
-      if (!user) {
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      // Validate customer exists
+      const customer = await this.userRepository.findById(customerId);
+      if (!customer) {
+        throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
       }
 
-      // Validate product exists and is customizable
-      const product = await this.productRepository.findByIdWithDetails(data.productId);
+      // Validate product exists and get details
+      const product = await this.productRepository.getProductById(data.productId);
       if (!product) {
         throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
       }
 
-      if (!product.isCustomizable) {
-        throw new AppError(
-          'Quote requests are only available for customizable products',
-          400,
-          'PRODUCT_NOT_CUSTOMIZABLE',
-        );
-      }
+      // Additional business validations
+      this.validateQuoteRequestData(data, product);
 
-      // Create quote request
-      const quoteRequest = await this.quoteRepository.createQuoteRequest(customerId, data);
+      const quote = await this.quoteRepository.createQuoteRequest(customerId, data);
 
       this.logger.info(
-        `Quote request created: Customer ${customerId} requested quote for product ${data.productId} from artisan ${quoteRequest.artisanId}`,
+        `Quote request created: ${quote.id} by customer ${customerId} for product ${data.productId}`,
       );
 
-      return quoteRequest;
+      return quote;
     } catch (error) {
       this.logger.error(`Error creating quote request: ${error}`);
       if (error instanceof AppError) throw error;
@@ -72,206 +65,122 @@ export class QuoteService implements IQuoteService {
     }
   }
 
-  /**
-   * Get quote request by ID
-   */
-  async getQuoteRequestById(id: string): Promise<QuoteRequestWithDetails | null> {
-    try {
-      return await this.quoteRepository.findByIdWithDetails(id);
-    } catch (error) {
-      this.logger.error(`Error getting quote request: ${error}`);
-      return null;
-    }
-  }
-
-  /**
-   * Get quote requests with filtering
-   */
-  async getQuoteRequests(
-    options: QuoteRequestQueryOptions,
-  ): Promise<PaginatedResult<QuoteRequestWithDetails>> {
-    try {
-      return await this.quoteRepository.getQuoteRequests(options);
-    } catch (error) {
-      this.logger.error(`Error getting quote requests: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get quote requests', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  /**
-   * Get customer quote requests
-   */
-  async getCustomerQuoteRequests(
-    customerId: string,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<PaginatedResult<QuoteRequestWithDetails>> {
-    try {
-      return await this.quoteRepository.getQuoteRequests({
-        customerId,
-        page,
-        limit,
-      });
-    } catch (error) {
-      this.logger.error(`Error getting customer quote requests: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get customer quote requests', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  /**
-   * Get artisan quote requests
-   */
-  async getArtisanQuoteRequests(
-    artisanId: string,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<PaginatedResult<QuoteRequestWithDetails>> {
-    try {
-      return await this.quoteRepository.getQuoteRequests({
-        artisanId,
-        page,
-        limit,
-      });
-    } catch (error) {
-      this.logger.error(`Error getting artisan quote requests: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get artisan quote requests', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  /**
-   * Respond to quote request
-   */
-  async respondToQuoteRequest(
+  async respondToQuote(
     quoteId: string,
     artisanId: string,
-    response: RespondToQuoteDto,
+    data: RespondToQuoteDto,
   ): Promise<QuoteRequestWithDetails> {
     try {
-      // Get quote with details
-      const quote = await this.quoteRepository.findByIdWithDetails(quoteId);
-
-      if (!quote) {
-        throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
+      // Validate artisan exists and has correct role
+      const artisan = await this.userRepository.findById(artisanId);
+      if (!artisan) {
+        throw new AppError('Artisan not found', 404, 'ARTISAN_NOT_FOUND');
       }
 
-      // Verify the user is the artisan for this quote
-      if (quote.artisanId !== artisanId) {
-        throw new AppError('Only the artisan can respond to this quote', 403, 'FORBIDDEN');
+      if (artisan.role !== 'ARTISAN') {
+        throw new AppError('Only artisans can respond to quote requests', 403, 'FORBIDDEN');
       }
 
-      // Verify quote is in PENDING or COUNTER_OFFERED status (if customer counter-offered)
-      if (
-        quote.status !== QuoteStatus.PENDING &&
-        !(quote.status === QuoteStatus.COUNTER_OFFERED && quote.counterOffer)
-      ) {
+      // Validate response permission
+      const canRespond = await this.quoteRepository.canUserRespondToQuote(quoteId, artisanId);
+      if (!canRespond) {
         throw new AppError(
-          'This quote cannot be responded to in its current state',
-          400,
-          'INVALID_QUOTE_STATE',
+          'You cannot respond to this quote request',
+          403,
+          'CANNOT_RESPOND_TO_QUOTE',
         );
       }
 
-      // Process response based on action
-      let updateData: any = {};
-      let newStatus: QuoteStatus;
+      // Validate response data
+      this.validateQuoteResponseData(data);
 
-      switch (response.action) {
-        case 'accept':
-          newStatus = QuoteStatus.ACCEPTED;
+      const quote = await this.quoteRepository.respondToQuote(quoteId, artisanId, data);
 
-          // If there was already a counter offer, use that as final price
-          if (quote.counterOffer) {
-            updateData.finalPrice = quote.counterOffer;
-          }
-          // Otherwise use customer's requested price
-          else if (quote.requestedPrice) {
-            updateData.finalPrice = quote.requestedPrice;
-          } else {
-            throw new AppError(
-              'No price has been specified for this quote',
-              400,
-              'NO_PRICE_SPECIFIED',
-            );
-          }
-          break;
+      this.logger.info(`Quote response: ${quoteId} - ${data.action} by artisan ${artisanId}`);
 
-        case 'reject':
-          newStatus = QuoteStatus.REJECTED;
-          break;
-
-        case 'counter':
-          if (!response.counterOffer) {
-            throw new AppError('Counter offer amount is required', 400, 'MISSING_COUNTER_OFFER');
-          }
-          newStatus = QuoteStatus.COUNTER_OFFERED;
-          updateData.counterOffer = response.counterOffer;
-          break;
-
-        default:
-          throw new AppError('Invalid action', 400, 'INVALID_ACTION');
-      }
-
-      // Update quote status
-      const updatedQuote = await this.quoteRepository.updateQuoteStatus(
-        quoteId,
-        newStatus,
-        updateData,
-      );
-
-      // Add response message if provided
-      if (response.message) {
-        await this.quoteRepository.addMessageToQuote(quoteId, artisanId, response.message);
-      }
-
-      // Log appropriate message based on action
-      if (response.action === 'accept') {
-        this.logger.info(
-          `Quote ${quoteId} accepted by artisan ${artisanId} at price ${updateData.finalPrice}`,
-        );
-      } else if (response.action === 'reject') {
-        this.logger.info(`Quote ${quoteId} rejected by artisan ${artisanId}`);
-      } else if (response.action === 'counter') {
-        this.logger.info(
-          `Artisan ${artisanId} made counter offer of ${response.counterOffer} for quote ${quoteId}`,
-        );
-      }
-
-      return updatedQuote;
+      return quote;
     } catch (error) {
-      this.logger.error(`Error responding to quote request: ${error}`);
+      this.logger.error(`Error responding to quote: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to respond to quote request', 500, 'SERVICE_ERROR');
     }
   }
 
-  /**
-   * Add message to quote
-   */
+  async getQuoteById(id: string): Promise<QuoteRequestWithDetails | null> {
+    try {
+      return await this.quoteRepository.findByIdWithDetails(id);
+    } catch (error) {
+      this.logger.error(`Error getting quote by ID: ${error}`);
+      return null;
+    }
+  }
+
+  async getQuotes(options: QuoteQueryOptions = {}): Promise<PaginatedResult<QuoteSummary>> {
+    try {
+      return await this.quoteRepository.getQuotes(options);
+    } catch (error) {
+      this.logger.error(`Error getting quotes: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get quotes', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getMyQuoteRequests(
+    userId: string,
+    userRole: string,
+    options: Partial<QuoteQueryOptions> = {},
+  ): Promise<PaginatedResult<QuoteSummary>> {
+    try {
+      if (userRole === 'CUSTOMER') {
+        return await this.quoteRepository.getCustomerQuotes(userId, options);
+      } else if (userRole === 'ARTISAN') {
+        return await this.quoteRepository.getArtisanQuotes(userId, options);
+      } else if (userRole === 'ADMIN') {
+        return await this.quoteRepository.getQuotes(options);
+      } else {
+        throw new AppError('Invalid user role for quote requests', 403, 'FORBIDDEN');
+      }
+    } catch (error) {
+      this.logger.error(`Error getting my quote requests: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get my quote requests', 500, 'SERVICE_ERROR');
+    }
+  }
+
   async addMessageToQuote(
     quoteId: string,
     userId: string,
-    data: AddQuoteMessageDto,
-  ): Promise<QuoteMessage> {
+    message: string,
+  ): Promise<QuoteRequestWithDetails> {
     try {
-      // Verify user is involved in the quote
-      const isInvolved = await this.quoteRepository.isUserInvolved(quoteId, userId);
-
-      if (!isInvolved) {
+      // Validate user access
+      const hasAccess = await this.validateQuoteAccess(quoteId, userId, 'MESSAGE');
+      if (!hasAccess) {
         throw new AppError(
-          'You are not authorized to send messages to this quote',
+          'You do not have permission to add messages to this quote',
           403,
           'FORBIDDEN',
         );
       }
 
-      const message = await this.quoteRepository.addMessageToQuote(quoteId, userId, data.message);
+      // Get quote to determine if user is customer or artisan
+      const quote = await this.quoteRepository.findByIdWithDetails(quoteId);
+      if (!quote) {
+        throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
+      }
 
-      this.logger.info(`User ${userId} added message to quote ${quoteId}`);
+      const isCustomerMessage = quote.customer.id === userId;
 
-      return message;
+      const updatedQuote = await this.quoteRepository.addMessage(quoteId, {
+        message: message.trim(),
+        isCustomerMessage,
+      });
+
+      this.logger.info(
+        `Message added to quote ${quoteId} by ${isCustomerMessage ? 'customer' : 'artisan'} ${userId}`,
+      );
+
+      return updatedQuote;
     } catch (error) {
       this.logger.error(`Error adding message to quote: ${error}`);
       if (error instanceof AppError) throw error;
@@ -279,41 +188,59 @@ export class QuoteService implements IQuoteService {
     }
   }
 
-  /**
-   * Cancel quote request
-   */
-  async cancelQuoteRequest(quoteId: string, userId: string): Promise<QuoteRequestWithDetails> {
+  async getNegotiationHistory(quoteId: string): Promise<QuoteNegotiation[]> {
     try {
-      // Get quote
-      const quote = await this.quoteRepository.findByIdWithDetails(quoteId);
+      return await this.quoteRepository.getNegotiationHistory(quoteId);
+    } catch (error) {
+      this.logger.error(`Error getting negotiation history: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get negotiation history', 500, 'SERVICE_ERROR');
+    }
+  }
 
+  async cancelQuoteRequest(
+    quoteId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<QuoteRequestWithDetails> {
+    try {
+      // Get quote to validate cancellation
+      const quote = await this.quoteRepository.findByIdWithDetails(quoteId);
       if (!quote) {
         throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
       }
 
-      // Verify the user is involved in this quote
-      if (quote.customerId !== userId && quote.artisanId !== userId) {
-        throw new AppError('You are not authorized to cancel this quote', 403, 'FORBIDDEN');
+      // Validate user can cancel
+      if (quote.customer.id !== userId && quote.artisan.id !== userId) {
+        throw new AppError('You can only cancel your own quote requests', 403, 'FORBIDDEN');
       }
 
-      // Only allow cancellation of PENDING or COUNTER_OFFERED quotes
-      if (quote.status !== QuoteStatus.PENDING && quote.status !== QuoteStatus.COUNTER_OFFERED) {
+      // Only allow cancellation of certain statuses
+      const cancellableStatuses = [QuoteStatus.PENDING, QuoteStatus.COUNTER_OFFERED];
+      if (!cancellableStatuses.includes(quote.status)) {
         throw new AppError(
-          'This quote cannot be cancelled in its current state',
+          `Cannot cancel quote in ${quote.status} status`,
           400,
-          'INVALID_QUOTE_STATE',
+          'INVALID_STATUS_FOR_CANCELLATION',
         );
       }
 
-      // Update quote to REJECTED status
+      // Update to rejected status
       const cancelledQuote = await this.quoteRepository.updateQuoteStatus(
         quoteId,
         QuoteStatus.REJECTED,
       );
 
-      this.logger.info(
-        `Quote ${quoteId} cancelled by ${userId === quote.customerId ? 'customer' : 'artisan'} ${userId}`,
-      );
+      // Add message if reason provided
+      if (reason) {
+        const isCustomerMessage = quote.customer.id === userId;
+        await this.quoteRepository.addMessage(quoteId, {
+          message: `Quote cancelled: ${reason}`,
+          isCustomerMessage,
+        });
+      }
+
+      this.logger.info(`Quote cancelled: ${quoteId} by user ${userId}`);
 
       return cancelledQuote;
     } catch (error) {
@@ -323,46 +250,131 @@ export class QuoteService implements IQuoteService {
     }
   }
 
-  /**
-   * Clean up expired quotes
-   */
-  async cleanupExpiredQuotes(): Promise<number> {
+  async validateQuoteAccess(
+    quoteId: string,
+    userId: string,
+    action: string = 'VIEW',
+  ): Promise<boolean> {
     try {
-      const count = await this.quoteRepository.markExpiredQuotes();
+      // Get user role
+      const user = await this.userRepository.findById(userId);
+      if (!user) return false;
 
-      if (count > 0) {
-        this.logger.info(`Marked ${count} quotes as expired`);
+      // Admins can access everything
+      if (user.role === 'ADMIN') return true;
+
+      // Check if user is involved in the quote
+      const isInvolved = await this.quoteRepository.isUserInvolvedInQuote(quoteId, userId);
+      if (!isInvolved) return false;
+
+      // Additional permission checks based on action
+      if (action === 'RESPOND') {
+        return await this.quoteRepository.canUserRespondToQuote(quoteId, userId);
       }
 
-      return count;
+      return true;
     } catch (error) {
-      this.logger.error(`Error cleaning up expired quotes: ${error}`);
+      this.logger.error(`Error validating quote access: ${error}`);
+      return false;
+    }
+  }
+
+  async getQuoteStats(userId?: string, userRole?: string): Promise<QuoteStats> {
+    try {
+      return await this.quoteRepository.getQuoteStats(userId, userRole);
+    } catch (error) {
+      this.logger.error(`Error getting quote stats: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get quote stats', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async expireOldQuotes(): Promise<number> {
+    try {
+      const expiredCount = await this.quoteRepository.expireQuotes();
+
+      if (expiredCount > 0) {
+        this.logger.info(`Expired ${expiredCount} old quote requests`);
+      }
+
+      return expiredCount;
+    } catch (error) {
+      this.logger.error(`Error expiring old quotes: ${error}`);
       return 0;
     }
   }
 
-  /**
-   * Update quote status
-   */
-  async updateQuoteStatus(quoteId: string, status: QuoteStatus): Promise<QuoteRequestWithDetails> {
-    try {
-      // Get quote with details
-      const quote = await this.quoteRepository.findByIdWithDetails(quoteId);
-
-      if (!quote) {
-        throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
+  // Private validation methods
+  private validateQuoteRequestData(data: CreateQuoteRequestDto, product: any): void {
+    // Validate requested price if provided
+    if (data.requestedPrice !== undefined) {
+      if (data.requestedPrice <= 0) {
+        throw new AppError(
+          'Requested price must be greater than 0',
+          400,
+          'INVALID_REQUESTED_PRICE',
+        );
       }
 
-      // Update quote to the new status
-      const updatedQuote = await this.quoteRepository.updateQuoteStatus(quoteId, status);
+      // Check if requested price is reasonable (not too low compared to original price)
+      const originalPrice = product.discountPrice || product.price;
+      const minAcceptablePrice = originalPrice * 0.5; // At least 50% of original price
 
-      this.logger.info(`Quote ${quoteId} status updated to ${status}`);
+      if (data.requestedPrice < minAcceptablePrice) {
+        throw new AppError(
+          `Requested price is too low. Minimum acceptable price is $${minAcceptablePrice.toFixed(2)}`,
+          400,
+          'REQUESTED_PRICE_TOO_LOW',
+        );
+      }
+    }
 
-      return updatedQuote;
-    } catch (error) {
-      this.logger.error(`Error updating quote status: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update quote status', 500, 'SERVICE_ERROR');
+    // Validate specifications
+    if (data.specifications && data.specifications.length > 2000) {
+      throw new AppError(
+        'Specifications cannot exceed 2000 characters',
+        400,
+        'SPECIFICATIONS_TOO_LONG',
+      );
+    }
+
+    // Validate expiration
+    if (data.expiresInDays !== undefined) {
+      if (data.expiresInDays < 1 || data.expiresInDays > 30) {
+        throw new AppError('Expiration must be between 1 and 30 days', 400, 'INVALID_EXPIRATION');
+      }
+    }
+
+    // Validate message
+    if (data.message && data.message.length > 1000) {
+      throw new AppError('Message cannot exceed 1000 characters', 400, 'MESSAGE_TOO_LONG');
+    }
+  }
+
+  private validateQuoteResponseData(data: RespondToQuoteDto): void {
+    // Validate counter offer if action is COUNTER
+    if (data.action === QuoteAction.COUNTER) {
+      if (!data.counterOffer || data.counterOffer <= 0) {
+        throw new AppError(
+          'Counter offer amount is required and must be greater than 0',
+          400,
+          'INVALID_COUNTER_OFFER',
+        );
+      }
+    }
+
+    // Validate message length
+    if (data.message && data.message.length > 1000) {
+      throw new AppError('Response message cannot exceed 1000 characters', 400, 'MESSAGE_TOO_LONG');
+    }
+
+    // Ensure counter offer is not provided for non-counter actions
+    if (data.action !== QuoteAction.COUNTER && data.counterOffer !== undefined) {
+      throw new AppError(
+        'Counter offer should only be provided when action is COUNTER',
+        400,
+        'UNNECESSARY_COUNTER_OFFER',
+      );
     }
   }
 }

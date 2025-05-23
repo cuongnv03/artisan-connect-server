@@ -14,19 +14,14 @@ export class CreateCategoryController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      // Ensure user is an admin
-      if (req.user!.role !== 'ADMIN') {
-        throw AppError.forbidden('Only admins can create categories');
-      }
-
-      const category = await this.categoryService.createCategory(req.body);
-
-      ApiResponse.created(res, category, 'Category created successfully');
-    } catch (error) {
-      next(error);
+    if (req.user!.role !== 'ADMIN') {
+      throw AppError.forbidden('Only admins can create categories');
     }
+
+    const category = await this.categoryService.createCategory(req.body);
+
+    ApiResponse.created(res, category, 'Category created successfully');
   }
 }

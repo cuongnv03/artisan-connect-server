@@ -13,15 +13,11 @@ export class UpdateCartItemController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const { productId } = req.params;
-      const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
+    const { productId } = req.params;
+    const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
 
-      ApiResponse.success(res, cartItem, 'Cart item updated successfully');
-    } catch (error) {
-      next(error);
-    }
+    ApiResponse.success(res, cartItem, 'Cart item updated successfully');
   }
 }
