@@ -1,10 +1,10 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { ISocketService } from './SocketService.interface';
-import { Notification } from '../../modules/notification/models/Notification';
-import { Message } from '../../modules/messaging/models/Message';
-import { Logger } from '../logging/Logger';
-import { JwtService } from '../infrastructure/security/JwtService';
-import container from '../di/container';
+import { Notification } from '../../../modules/notification/models/Notification';
+import { Message } from '../../../modules/messaging/models/Message';
+import { Logger } from '../../logging/Logger';
+import { JwtService } from '../security/JwtService';
+import container from '../../di/container';
 
 export class SocketService implements ISocketService {
   private io: SocketIOServer;

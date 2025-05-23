@@ -1,5 +1,5 @@
-import { Notification } from '../../modules/notification/models/Notification';
-import { Message } from '../../modules/messaging/models/Message';
+import { Notification } from '../../../modules/notification/models/Notification';
+import { Message } from '../../../modules/messaging/models/Message';
 
 export interface ISocketService {
   // Connection management

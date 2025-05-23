@@ -3,27 +3,42 @@ import { validate } from '../../../../shared/middlewares/validate.middleware';
 import { authenticate } from '../../../../shared/middlewares/auth.middleware';
 import { validateIdParam } from '../../../../shared/middlewares/request-validation.middleware';
 
-// Controllers
-import { SendMessageController } from '../controllers/SendMessageController';
-import { GetConversationsController } from '../controllers/GetConversationsController';
-import { GetConversationMessagesController } from '../controllers/GetConversationMessagesController';
-import { GetMessagesController } from '../controllers/GetMessagesController';
-import { MarkAsReadController } from '../controllers/MarkAsReadController';
-import { MarkConversationAsReadController } from '../controllers/MarkConversationAsReadController';
-import { DeleteMessageController } from '../controllers/DeleteMessageController';
-import { SendQuoteMessageController } from '../controllers/SendQuoteMessageController';
-import { SendCustomOrderController } from '../controllers/SendCustomOrderController';
-import { SendMediaMessageController } from '../controllers/SendMediaMessageController';
-import { GetUnreadCountController } from '../controllers/GetUnreadCountController';
+// Core Controllers
+import { SendMessageController } from '../controllers/core/SendMessageController';
+import { GetConversationsController } from '../controllers/core/GetConversationsController';
+import { GetConversationMessagesController } from '../controllers/core/GetConversationMessagesController';
+import { GetMessagesController } from '../controllers/core/GetMessagesController';
+import { MarkAsReadController } from '../controllers/core/MarkAsReadController';
+import { MarkConversationAsReadController } from '../controllers/core/MarkConversationAsReadController';
+import { DeleteMessageController } from '../controllers/core/DeleteMessageController';
+import { GetUnreadCountController } from '../controllers/core/GetUnreadCountController';
+
+// Media Controllers
+import { SendMediaMessageController } from '../controllers/media/SendMediaMessageController';
+
+// Quote Controllers
+import { SendQuoteMessageController } from '../controllers/quote/SendQuoteMessageController';
+
+// Custom Order Controllers
+import { SendCustomOrderController } from '../controllers/customOrder/SendCustomOrderController';
+import { GetNegotiationHistoryController } from '../controllers/customOrder/GetNegotiationHistoryController';
+import { GetActiveNegotiationsController } from '../controllers/customOrder/GetActiveNegotiationsController';
+import { UpdateCustomOrderProposalController } from '../controllers/customOrder/UpdateCustomOrderProposalController';
+import { CancelNegotiationController } from '../controllers/customOrder/CancelNegotiationController';
 
 // Validators
 import {
   sendMessageSchema,
   getMessagesQuerySchema,
   sendQuoteMessageSchema,
-  sendCustomOrderSchema,
   sendMediaMessageSchema,
 } from '../validators/message.validator';
+
+import {
+  sendCustomOrderSchema,
+  updateCustomOrderProposalSchema,
+  cancelNegotiationSchema,
+} from '../validators/customOrder.validator';
 
 const router = Router();
 
@@ -35,16 +50,23 @@ const getMessagesController = new GetMessagesController();
 const markAsReadController = new MarkAsReadController();
 const markConversationAsReadController = new MarkConversationAsReadController();
 const deleteMessageController = new DeleteMessageController();
-const sendQuoteMessageController = new SendQuoteMessageController();
-const sendCustomOrderController = new SendCustomOrderController();
-const sendMediaMessageController = new SendMediaMessageController();
 const getUnreadCountController = new GetUnreadCountController();
+
+const sendMediaMessageController = new SendMediaMessageController();
+
+const sendQuoteMessageController = new SendQuoteMessageController();
+
+const sendCustomOrderController = new SendCustomOrderController();
+const getNegotiationHistoryController = new GetNegotiationHistoryController();
+const getActiveNegotiationsController = new GetActiveNegotiationsController();
+const updateCustomOrderProposalController = new UpdateCustomOrderProposalController();
+const cancelNegotiationController = new CancelNegotiationController();
 
 // All routes require authentication
 router.use(authenticate);
 
-// === BASIC MESSAGING ===
-// Send message
+// ===== CORE MESSAGING =====
+// Send basic message
 router.post('/', validate(sendMessageSchema), sendMessageController.execute);
 
 // Get conversations list
@@ -63,7 +85,7 @@ router.get(
 // Get unread message count
 router.get('/unread-count', getUnreadCountController.execute);
 
-// === MESSAGE MANAGEMENT ===
+// ===== MESSAGE MANAGEMENT =====
 // Mark message as read
 router.patch('/:id/read', validateIdParam(), markAsReadController.execute);
 
@@ -77,7 +99,11 @@ router.patch(
 // Delete message
 router.delete('/:id', validateIdParam(), deleteMessageController.execute);
 
-// === SPECIAL MESSAGE TYPES ===
+// ===== MEDIA MESSAGING =====
+// Send media message (images, files)
+router.post('/media', validate(sendMediaMessageSchema), sendMediaMessageController.execute);
+
+// ===== QUOTE INTEGRATION =====
 // Send quote discussion message
 router.post(
   '/quote-discussion',
@@ -85,10 +111,34 @@ router.post(
   sendQuoteMessageController.execute,
 );
 
-// Send custom order proposal
+// ===== CUSTOM ORDER NEGOTIATION =====
+// Send custom order (proposal, response, or simple message)
 router.post('/custom-order', validate(sendCustomOrderSchema), sendCustomOrderController.execute);
 
-// Send media message
-router.post('/media', validate(sendMediaMessageSchema), sendMediaMessageController.execute);
+// Get active negotiations
+router.get('/negotiations', getActiveNegotiationsController.execute);
+
+// Get negotiation history
+router.get(
+  '/negotiations/:negotiationId/history',
+  validateIdParam('negotiationId'),
+  getNegotiationHistoryController.execute,
+);
+
+// Update custom order proposal
+router.patch(
+  '/negotiations/:negotiationId/proposal',
+  validateIdParam('negotiationId'),
+  validate(updateCustomOrderProposalSchema),
+  updateCustomOrderProposalController.execute,
+);
+
+// Cancel negotiation
+router.post(
+  '/negotiations/:negotiationId/cancel',
+  validateIdParam('negotiationId'),
+  validate(cancelNegotiationSchema),
+  cancelNegotiationController.execute,
+);
 
 export default router;

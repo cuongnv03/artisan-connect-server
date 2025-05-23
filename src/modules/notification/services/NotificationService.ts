@@ -7,7 +7,7 @@ import {
   NotificationType,
 } from '../models/Notification';
 import { INotificationRepository } from '../repositories/NotificationRepository.interface';
-import { ISocketService } from '../../../core/socket/SocketService.interface';
+import { ISocketService } from '../../../core/infrastructure/socket/SocketService.interface';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';

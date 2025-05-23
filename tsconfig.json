@@ -29,6 +29,7 @@
         "noImplicitOverride": true,
         "noPropertyAccessFromIndexSignature": false,
         "noUncheckedIndexedAccess": true,
+        "strictPropertyInitialization": false,
         "paths": {
             "@/*": [
                 "./src/*"

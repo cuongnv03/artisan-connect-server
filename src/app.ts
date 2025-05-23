@@ -9,13 +9,13 @@ import rateLimit from 'express-rate-limit';
 import { errorHandler } from './shared/middlewares/errorHandler.middleware';
 import { Config } from './config/config';
 import { Logger } from './core/logging/Logger';
-import { SocketService } from './core/socket/SocketService';
+import { SocketService } from './core/infrastructure/socket/SocketService';
 
 export class App {
   public app: Express;
   public server: any;
-  public io: SocketIOServer;
-  public socketService: SocketService;
+  public io!: SocketIOServer; // Definite assignment assertion
+  public socketService!: SocketService; // Definite assignment assertion
   private logger = Logger.getInstance();
 
   constructor() {
@@ -25,8 +25,7 @@ export class App {
     this.app = express();
     this.server = createServer(this.app);
     this.setupSocketIO();
-    const { registerSocketService } = require('./core/di/injection');
-    registerSocketService(this.socketService);
+    this.registerSocketService();
     this.setupMiddlewares();
     this.setupErrorHandling();
   }
@@ -49,6 +48,14 @@ export class App {
     this.socketService = new SocketService(this.io);
 
     this.logger.info('Socket.IO server initialized');
+  }
+
+  /**
+   * Register socket service in DI container
+   */
+  private registerSocketService(): void {
+    const { registerSocketService } = require('./core/di/injection');
+    registerSocketService(this.socketService);
   }
 
   /**
