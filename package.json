@@ -11,10 +11,15 @@
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:create": "prisma migrate dev --create-only",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:reset": "prisma migrate reset --force",
     "prisma:studio": "prisma studio",
+    "prisma:format": "prisma format",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\"",
-    "seed": "ts-node prisma/seeds/main.seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "seed:fresh": "npm run prisma:reset && npm run seed"
   },
   "keywords": [],
   "author": "",
