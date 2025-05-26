@@ -18,6 +18,12 @@ export class GetUpgradeRequestStatusController extends BaseController {
 
       const status = await this.artisanProfileService.getUpgradeRequestStatus(req.user!.id);
 
+      // If no request exists, return 404
+      if (!status.hasRequest) {
+        ApiResponse.notFound(res, 'No upgrade request found');
+        return;
+      }
+
       ApiResponse.success(res, status, 'Upgrade request status retrieved successfully');
     } catch (error) {
       next(error);

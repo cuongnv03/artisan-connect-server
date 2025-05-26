@@ -603,7 +603,6 @@ model Order {
   paymentMethod     PaymentMethod?
   paymentReference  String?
   notes             String?
-  trackingNumber    String?
   estimatedDelivery DateTime?
   deliveredAt       DateTime?
   createdAt         DateTime       @default(now())

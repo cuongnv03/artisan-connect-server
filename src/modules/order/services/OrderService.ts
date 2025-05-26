@@ -342,17 +342,42 @@ export class OrderService implements IOrderService {
           throw new AppError('You can only update orders for your products', 403, 'FORBIDDEN');
         }
 
-        // Artisans can mark as processing, shipped, or delivered
         const allowedStatuses = [
+          OrderStatus.CONFIRMED, // Thêm CONFIRMED
           OrderStatus.PROCESSING,
           OrderStatus.SHIPPED,
           OrderStatus.DELIVERED,
+          OrderStatus.CANCELLED, // Thêm CANCELLED
         ];
+
         if (!allowedStatuses.includes(data.status)) {
           throw new AppError(
-            'Artisans can only update orders to processing, shipped, or delivered',
+            'Artisans can only update orders to confirmed, processing, shipped, delivered, or cancelled',
             403,
             'FORBIDDEN_STATUS',
+          );
+        }
+
+        // Validate status flow cho nghệ nhân
+        const validTransitions: Record<OrderStatus, OrderStatus[]> = {
+          [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
+          [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
+          [OrderStatus.PAID]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
+          [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+          [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
+          [OrderStatus.DELIVERED]: [],
+          [OrderStatus.CANCELLED]: [],
+          [OrderStatus.REFUNDED]: [],
+        };
+
+        const currentStatus = order.status as OrderStatus;
+        const allowedNextStatuses = validTransitions[currentStatus] || [];
+
+        if (!allowedNextStatuses.includes(data.status)) {
+          throw new AppError(
+            `Cannot change order status from ${currentStatus} to ${data.status}`,
+            400,
+            'INVALID_STATUS_TRANSITION',
           );
         }
         break;
@@ -365,6 +390,12 @@ export class OrderService implements IOrderService {
 
         if (data.status !== OrderStatus.CANCELLED) {
           throw new AppError('Customers can only cancel orders', 403, 'FORBIDDEN_STATUS');
+        }
+
+        // Customers can only cancel orders in certain statuses
+        const cancellableStatuses = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PAID];
+        if (!cancellableStatuses.includes(order.status as OrderStatus)) {
+          throw new AppError(`Cannot cancel order in ${order.status} status`, 400, 'CANNOT_CANCEL');
         }
         break;
 

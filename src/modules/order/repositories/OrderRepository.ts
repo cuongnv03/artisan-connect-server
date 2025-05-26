@@ -534,7 +534,6 @@ export class OrderRepository
           where: { id },
           data: {
             status: data.status,
-            trackingNumber: data.trackingNumber,
             estimatedDelivery: data.estimatedDelivery,
             deliveredAt: data.status === OrderStatus.DELIVERED ? new Date() : undefined,
             updatedAt: new Date(),

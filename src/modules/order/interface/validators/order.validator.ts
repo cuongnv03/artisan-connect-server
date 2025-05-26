@@ -50,9 +50,6 @@ export const updateOrderStatusSchema = Joi.object({
   note: Joi.string().max(500).allow('').messages({
     'string.max': 'Note cannot exceed 500 characters',
   }),
-  trackingNumber: Joi.string().max(100).allow('').messages({
-    'string.max': 'Tracking number cannot exceed 100 characters',
-  }),
   estimatedDelivery: Joi.date().iso().min('now').messages({
     'date.min': 'Estimated delivery must be in the future',
   }),

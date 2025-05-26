@@ -13,7 +13,6 @@ export interface Order {
   paymentMethod?: PaymentMethod;
   paymentReference?: string;
   notes?: string;
-  trackingNumber?: string;
   estimatedDelivery?: Date;
   deliveredAt?: Date;
   createdAt: Date;
@@ -116,7 +115,6 @@ export interface CreateOrderFromQuoteDto {
 export interface UpdateOrderStatusDto {
   status: OrderStatus;
   note?: string;
-  trackingNumber?: string;
   estimatedDelivery?: Date;
 }
 
