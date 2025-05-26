@@ -613,6 +613,7 @@ model Order {
   shippingAddress     Address?             @relation("ShippingAddress", fields: [addressId], references: [id])
   items               OrderItem[]
   paymentTransactions PaymentTransaction[]
+  statusHistory       OrderStatusHistory[] @relation("OrderStatusHistory")
 
   @@index([userId])
   @@index([status])
@@ -635,6 +636,20 @@ model OrderItem {
 
   @@index([orderId])
   @@index([sellerId])
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  status    OrderStatus
+  note      String?     @db.Text
+  createdBy String?
+  createdAt DateTime    @default(now())
+
+  order Order @relation("OrderStatusHistory", fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([createdAt])
 }
 
 model Payment {

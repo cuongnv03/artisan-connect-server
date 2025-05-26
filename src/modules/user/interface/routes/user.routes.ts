@@ -72,25 +72,16 @@ const getActivityStatsController = new GetActivityStatsController();
 // Search users (public)
 router.get('/search', validate(searchUsersSchema, 'query'), searchUsersController.execute);
 
-// Get user profile (public)
-router.get('/:id', validateIdParam(), getUserProfileController.execute);
+// === PROTECTED ROUTES (Specific routes first) ===
 
-// Get user followers/following (public)
-router.get('/:userId/followers', validateIdParam('userId'), getFollowersController.execute);
-router.get('/:userId/following', validateIdParam('userId'), getFollowingController.execute);
-router.get('/:userId/follow-stats', validateIdParam('userId'), getFollowStatsController.execute);
-
-// === PROTECTED ROUTES ===
 // Profile management
+router.get('/profile/me', authenticate, getProfileController.execute);
 router.patch(
   '/profile',
   authenticate,
   validate(updateProfileSchema),
   updateProfileController.execute,
 );
-
-// Extended profile management
-router.get('/profile/me', authenticate, getProfileController.execute);
 router.patch(
   '/profile/extended',
   authenticate,
@@ -98,8 +89,9 @@ router.patch(
   updateUserProfileController.execute,
 );
 
-// Address management
+// Address management (all specific routes)
 router.get('/addresses', authenticate, getAddressesController.execute);
+router.get('/addresses/default', authenticate, getDefaultAddressController.execute);
 router.post(
   '/addresses',
   authenticate,
@@ -120,21 +112,6 @@ router.post(
   validateIdParam(),
   setDefaultAddressController.execute,
 );
-router.get('/addresses/default', authenticate, getDefaultAddressController.execute);
-
-// Follow management
-router.post(
-  '/:userId/follow',
-  authenticate,
-  validateIdParam('userId'),
-  followUserController.execute,
-);
-router.delete(
-  '/:userId/follow',
-  authenticate,
-  validateIdParam('userId'),
-  unfollowUserController.execute,
-);
 
 // Activity tracking
 router.get(
@@ -152,6 +129,30 @@ router.get(
 
 // Account management
 router.delete('/account', authenticate, deleteAccountController.execute);
+
+// === DYNAMIC USER ROUTES (must be after specific routes) ===
+
+// Get user followers/following (public)
+router.get('/:userId/followers', validateIdParam('userId'), getFollowersController.execute);
+router.get('/:userId/following', validateIdParam('userId'), getFollowingController.execute);
+router.get('/:userId/follow-stats', validateIdParam('userId'), getFollowStatsController.execute);
+
+// Follow management
+router.post(
+  '/:userId/follow',
+  authenticate,
+  validateIdParam('userId'),
+  followUserController.execute,
+);
+router.delete(
+  '/:userId/follow',
+  authenticate,
+  validateIdParam('userId'),
+  unfollowUserController.execute,
+);
+
+// Get user profile (public) - MUST BE LAST
+router.get('/:id', validateIdParam(), getUserProfileController.execute);
 
 // === ADMIN ROUTES ===
 // Admin user management routes can be added here with proper authorization

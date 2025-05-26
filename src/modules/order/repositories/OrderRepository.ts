@@ -521,7 +521,14 @@ export class OrderRepository
         });
 
         // Add status history
-        await this.addStatusHistory(id, data.status, data.note, updatedBy);
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: id,
+            status: data.status,
+            note: data.note,
+            createdBy: updatedBy,
+          },
+        });
 
         return (await this.findByIdWithDetails(id)) as OrderWithDetails;
       });
@@ -576,12 +583,14 @@ export class OrderRepository
         }
 
         // Add status history
-        await this.addStatusHistory(
-          id,
-          OrderStatus.CANCELLED,
-          reason || 'Order cancelled',
-          cancelledBy,
-        );
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: id,
+            status: OrderStatus.CANCELLED,
+            note: reason || 'Order cancelled',
+            createdBy: cancelledBy,
+          },
+        });
 
         return (await this.findByIdWithDetails(id)) as OrderWithDetails;
       });
