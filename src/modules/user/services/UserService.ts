@@ -34,6 +34,16 @@ export class UserService implements IUserService {
       container.resolve<IUserActivityRepository>('userActivityRepository');
   }
 
+  // Helper method to track activity safely
+  private async trackActivity(data: CreateUserActivityDto): Promise<void> {
+    try {
+      await this.userActivityRepository.createActivity(data);
+    } catch (error) {
+      // Log the error but don't throw to avoid breaking the main operation
+      this.logger.error(`Error tracking activity: ${error}`);
+    }
+  }
+
   // User management methods
   async getUserById(id: string): Promise<UserProfileDto | null> {
     try {
@@ -70,10 +80,10 @@ export class UserService implements IUserService {
       // Update user
       const updatedUser = await this.userRepository.updateUser(id, data);
 
-      // Track activity
+      // Track activity safely
       await this.trackActivity({
         userId: id,
-        activityType: ActivityType.PROFILE_VIEW,
+        activityType: 'profile_updated',
         metadata: { updatedFields: Object.keys(data) },
       });
 
@@ -115,7 +125,7 @@ export class UserService implements IUserService {
       // Soft delete
       const result = await this.userRepository.softDelete(id);
 
-      // Track activity
+      // Track activity safely
       if (result) {
         await this.trackActivity({
           userId: id,
@@ -211,7 +221,7 @@ export class UserService implements IUserService {
 
       const profile = await this.profileRepository.updateProfile(userId, data);
 
-      // Track activity
+      // Track activity safely
       await this.trackActivity({
         userId,
         activityType: 'profile_updated',
@@ -251,7 +261,7 @@ export class UserService implements IUserService {
       // Create address
       const address = await this.addressRepository.createAddress(profile.id, data);
 
-      // Track activity
+      // Track activity safely
       await this.trackActivity({
         userId,
         activityType: 'address_created',
@@ -283,7 +293,7 @@ export class UserService implements IUserService {
       // Update address
       const updatedAddress = await this.addressRepository.updateAddress(id, data);
 
-      // Track activity
+      // Track activity safely
       await this.trackActivity({
         userId,
         activityType: 'address_updated',
@@ -315,7 +325,7 @@ export class UserService implements IUserService {
       // Delete address
       const result = await this.addressRepository.delete(id);
 
-      // Track activity
+      // Track activity safely
       if (result) {
         await this.trackActivity({
           userId,
@@ -349,7 +359,7 @@ export class UserService implements IUserService {
       // Set as default
       const address = await this.addressRepository.setAsDefault(id, profile.id);
 
-      // Track activity
+      // Track activity safely
       await this.trackActivity({
         userId,
         activityType: 'address_set_default',
@@ -401,10 +411,15 @@ export class UserService implements IUserService {
       // Create follow relationship
       const follow = await this.followRepository.createFollow(followerId, followingId);
 
-      const notificationService = container.resolve<INotificationService>('notificationService');
-      await notificationService.notifyFollow(followerId, followingId);
+      try {
+        const notificationService = container.resolve<INotificationService>('notificationService');
+        await notificationService.notifyFollow(followerId, followingId);
+      } catch (notifError) {
+        this.logger.error(`Error sending follow notification: ${notifError}`);
+        // Don't throw - follow was successful even if notification failed
+      }
 
-      // Track activity for both users
+      // Track activity safely
       await Promise.all([
         this.trackActivity({
           userId: followerId,
@@ -435,7 +450,7 @@ export class UserService implements IUserService {
       // Remove follow relationship
       const result = await this.followRepository.removeFollow(followerId, followingId);
 
-      // Track activity
+      // Track activity safely
       if (result) {
         await this.trackActivity({
           userId: followerId,
@@ -512,6 +527,37 @@ export class UserService implements IUserService {
       this.logger.error(`Error getting follow stats: ${error}`);
       if (error instanceof AppError) throw error;
       throw AppError.internal('Failed to get follow stats', 'SERVICE_ERROR');
+    }
+  }
+
+  // Activity tracking methods
+  async getUserActivities(
+    userId: string,
+    activityTypes?: string[],
+    page?: number,
+    limit?: number,
+  ): Promise<PaginatedResult<UserActivity>> {
+    try {
+      return await this.userActivityRepository.getUserActivities(
+        userId,
+        activityTypes,
+        page,
+        limit,
+      );
+    } catch (error) {
+      this.logger.error(`Error getting user activities: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get user activities', 'SERVICE_ERROR');
+    }
+  }
+
+  async getActivityStats(userId: string, days?: number): Promise<Record<string, number>> {
+    try {
+      return await this.userActivityRepository.getActivityStats(userId, days);
+    } catch (error) {
+      this.logger.error(`Error getting activity stats: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get activity stats', 'SERVICE_ERROR');
     }
   }
 }
