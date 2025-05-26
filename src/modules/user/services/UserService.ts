@@ -408,18 +408,28 @@ export class UserService implements IUserService {
         throw AppError.notFound('Following user not found', 'USER_NOT_FOUND');
       }
 
+      // Check if already following before creating
+      const existingFollow = await this.followRepository.findByFollowerAndFollowing(
+        followerId,
+        followingId,
+      );
+
+      if (existingFollow) {
+        this.logger.info(`User ${followerId} already follows user ${followingId}`);
+        return existingFollow;
+      }
+
       // Create follow relationship
       const follow = await this.followRepository.createFollow(followerId, followingId);
 
+      // Send notification and track activity
       try {
         const notificationService = container.resolve<INotificationService>('notificationService');
         await notificationService.notifyFollow(followerId, followingId);
       } catch (notifError) {
         this.logger.error(`Error sending follow notification: ${notifError}`);
-        // Don't throw - follow was successful even if notification failed
       }
 
-      // Track activity safely
       await Promise.all([
         this.trackActivity({
           userId: followerId,
@@ -436,7 +446,6 @@ export class UserService implements IUserService {
       ]);
 
       this.logger.info(`User ${followerId} followed user ${followingId}`);
-
       return follow;
     } catch (error) {
       this.logger.error(`Error following user: ${error}`);

@@ -46,7 +46,9 @@ export class FollowRepository
       // Check if already following
       const existingFollow = await this.findByFollowerAndFollowing(followerId, followingId);
       if (existingFollow) {
-        throw AppError.conflict('Already following this user', 'ALREADY_FOLLOWING');
+        // Return existing follow instead of throwing error
+        this.logger.info(`User ${followerId} already follows user ${followingId}`);
+        return existingFollow;
       }
 
       // Create follow relationship in transaction
