@@ -55,6 +55,11 @@ export class OrderService implements IOrderService {
 
       const order = await this.orderRepository.createOrderFromCart(userId, data);
 
+      // Add null check
+      if (!order) {
+        throw new AppError('Failed to retrieve created order', 500, 'ORDER_RETRIEVAL_FAILED');
+      }
+
       this.logger.info(
         `Order created from cart: ${order.id} (${order.orderNumber}) for user ${userId}`,
       );

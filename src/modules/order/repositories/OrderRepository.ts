@@ -34,7 +34,7 @@ export class OrderRepository
     data: CreateOrderFromCartDto,
   ): Promise<OrderWithDetails> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const createdOrder = await this.prisma.$transaction(async (tx) => {
         // Get cart items
         const cartItems = await tx.cartItem.findMany({
           where: { userId },
@@ -148,8 +148,18 @@ export class OrderRepository
           where: { userId },
         });
 
-        return (await this.findByIdWithDetails(order.id)) as OrderWithDetails;
+        return order;
       });
+
+      // Get full order details after transaction
+      const orderWithDetails = await this.findByIdWithDetails(createdOrder.id);
+
+      if (!orderWithDetails) {
+        this.logger.error(`Failed to retrieve order details for order ${createdOrder.id}`);
+        throw new AppError('Failed to retrieve order details', 500, 'ORDER_DETAILS_NOT_FOUND');
+      }
+
+      return orderWithDetails;
     } catch (error) {
       this.logger.error(`Error creating order from cart: ${error}`);
       if (error instanceof AppError) throw error;
@@ -269,6 +279,8 @@ export class OrderRepository
     }
   }
 
+  // src/modules/order/repositories/OrderRepository.ts
+
   async findByIdWithDetails(id: string): Promise<OrderWithDetails | null> {
     try {
       const order = await this.prisma.order.findUnique({
@@ -317,10 +329,19 @@ export class OrderRepository
         },
       });
 
-      if (!order) return null;
+      if (!order) {
+        this.logger.warn(`Order not found: ${id}`);
+        return null;
+      }
 
-      // Get status history separately to avoid circular references
-      const statusHistory = await this.getOrderStatusHistory(id);
+      // Get status history separately
+      let statusHistory: OrderStatusHistory[] = [];
+      try {
+        statusHistory = await this.getOrderStatusHistory(id);
+      } catch (error) {
+        this.logger.error(`Error getting status history for order ${id}: ${error}`);
+        // Continue without status history rather than failing
+      }
 
       return {
         ...order,
@@ -338,7 +359,7 @@ export class OrderRepository
         })),
       } as OrderWithDetails;
     } catch (error) {
-      this.logger.error(`Error finding order by ID: ${error}`);
+      this.logger.error(`Error finding order by ID ${id}: ${error}`);
       return null;
     }
   }
