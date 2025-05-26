@@ -194,10 +194,24 @@ export class ReviewService implements IReviewService {
     productId: string,
   ): Promise<ReviewWithDetails | null> {
     try {
+      // Validate user
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      // Validate product
+      const product = await this.productRepository.findById(productId);
+      if (!product) {
+        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+      }
+
+      // Get review by user and product
       return await this.reviewRepository.findByUserAndProduct(userId, productId);
     } catch (error) {
       this.logger.error(`Error getting review by user and product: ${error}`);
-      return null;
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get user product review', 500, 'SERVICE_ERROR');
     }
   }
 

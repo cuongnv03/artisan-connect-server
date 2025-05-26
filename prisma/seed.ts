@@ -3,6 +3,57 @@ import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+// Types để đảm bảo type safety
+interface UserData {
+  id: string;
+  email: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  role: 'ADMIN' | 'ARTISAN' | 'CUSTOMER';
+  bio?: string;
+  isVerified?: boolean;
+  password: string;
+  emailVerified: boolean;
+  followerCount: number;
+  followingCount: number;
+}
+
+interface ArtisanData {
+  shopName: string;
+  shopDescription: string;
+  specialties: string[];
+  experience: number;
+  contactEmail: string;
+  contactPhone: string;
+}
+
+interface ProductData {
+  name: string;
+  description: string;
+  price: number;
+  discountPrice?: number;
+  quantity: number;
+  tags: string[];
+  isCustomizable: boolean;
+  category: string;
+}
+
+interface PostData {
+  title: string;
+  summary: string;
+  content: {
+    blocks: Array<{
+      type: string;
+      content?: string;
+      url?: string;
+      caption?: string;
+    }>;
+  };
+  type: 'BEHIND_THE_SCENES' | 'TUTORIAL' | 'PRODUCT_SHOWCASE' | 'STORY' | 'EVENT' | 'GENERAL';
+  tags: string[];
+}
+
 async function main() {
   console.log('🌱 Bắt đầu seed database...');
 
@@ -180,7 +231,7 @@ async function createCategories() {
   return createdCategories;
 }
 
-async function createUsers() {
+async function createUsers(): Promise<UserData[]> {
   const hashedPassword = await bcrypt.hash('123456', 10);
 
   const userData = [
@@ -296,7 +347,7 @@ async function createUsers() {
     },
   ];
 
-  const users = [];
+  const users: UserData[] = [];
   for (const data of userData) {
     const user = await prisma.user.create({
       data: {
@@ -307,13 +358,13 @@ async function createUsers() {
         followingCount: Math.floor(Math.random() * 500),
       },
     });
-    users.push(user);
+    users.push(user as UserData);
   }
 
   return users;
 }
 
-async function createProfilesAndAddresses(users: any[]) {
+async function createProfilesAndAddresses(users: UserData[]) {
   for (const user of users) {
     const profile = await prisma.profile.create({
       data: {
@@ -337,12 +388,17 @@ async function createProfilesAndAddresses(users: any[]) {
     // Tạo 1-3 địa chỉ cho mỗi user
     const addressCount = Math.floor(Math.random() * 3) + 1;
     for (let i = 0; i < addressCount; i++) {
+      const addressData = generateAddress();
       await prisma.address.create({
         data: {
           profileId: profile.id,
           fullName: `${user.firstName} ${user.lastName}`,
           phone: generatePhoneNumber(),
-          ...generateAddress(),
+          street: addressData.street,
+          city: addressData.city,
+          state: addressData.state,
+          zipCode: addressData.zipCode,
+          country: addressData.country,
           isDefault: i === 0,
         },
       });
@@ -350,11 +406,11 @@ async function createProfilesAndAddresses(users: any[]) {
   }
 }
 
-async function createArtisanProfiles(users: any[]) {
+async function createArtisanProfiles(users: UserData[]) {
   const artisans = users.filter((u) => u.role === 'ARTISAN');
   const profiles = [];
 
-  const artisanData = [
+  const artisanData: ArtisanData[] = [
     {
       shopName: 'Gốm sứ Mai Bát Tràng',
       shopDescription:
@@ -402,29 +458,35 @@ async function createArtisanProfiles(users: any[]) {
     },
   ];
 
-  for (let i = 0; i < artisans.length && i < artisanData.length; i++) {
+  // Đảm bảo không vượt quá bounds
+  const maxItems = Math.min(artisans.length, artisanData.length);
+
+  for (let i = 0; i < maxItems; i++) {
+    const artisan = artisans[i]!;
+    const artisanInfo = artisanData[i]!;
+
     const profile = await prisma.artisanProfile.create({
       data: {
-        userId: artisans[i].id,
-        shopName: artisanData[i].shopName,
-        shopDescription: artisanData[i].shopDescription,
-        specialties: artisanData[i].specialties,
-        experience: artisanData[i].experience,
-        website: `https://${artisanData[i].shopName.replace(/\s+/g, '')}.com`,
-        contactEmail: artisanData[i].contactEmail,
-        contactPhone: artisanData[i].contactPhone,
-        shopLogoUrl: `https://picsum.photos/seed/${artisans[i].id}-logo/200/200`,
-        shopBannerUrl: `https://picsum.photos/seed/${artisans[i].id}-banner/1200/400`,
-        isVerified: artisans[i].isVerified || false,
+        userId: artisan.id,
+        shopName: artisanInfo.shopName,
+        shopDescription: artisanInfo.shopDescription,
+        specialties: artisanInfo.specialties,
+        experience: artisanInfo.experience,
+        website: `https://${artisanInfo.shopName.replace(/\s+/g, '')}.com`,
+        contactEmail: artisanInfo.contactEmail,
+        contactPhone: artisanInfo.contactPhone,
+        shopLogoUrl: `https://picsum.photos/seed/${artisan.id}-logo/200/200`,
+        shopBannerUrl: `https://picsum.photos/seed/${artisan.id}-banner/1200/400`,
+        isVerified: artisan.isVerified || false,
         rating: 4 + Math.random(),
         reviewCount: Math.floor(Math.random() * 200) + 50,
         totalSales: Math.floor(Math.random() * 50000000) + 10000000,
         socialMedia: {
-          facebook: `https://facebook.com/${artisanData[i].shopName.replace(/\s+/g, '')}`,
-          instagram: `https://instagram.com/${artisanData[i].shopName.replace(/\s+/g, '')}`,
+          facebook: `https://facebook.com/${artisanInfo.shopName.replace(/\s+/g, '')}`,
+          instagram: `https://instagram.com/${artisanInfo.shopName.replace(/\s+/g, '')}`,
           youtube:
             Math.random() > 0.5
-              ? `https://youtube.com/@${artisanData[i].shopName.replace(/\s+/g, '')}`
+              ? `https://youtube.com/@${artisanInfo.shopName.replace(/\s+/g, '')}`
               : null,
         },
       },
@@ -435,8 +497,8 @@ async function createArtisanProfiles(users: any[]) {
   return profiles;
 }
 
-async function createUpgradeRequests(users: any[]) {
-  const customers = users.filter((u) => u.role === 'CUSTOMER').slice(0, 5);
+async function createUpgradeRequests(users: UserData[]) {
+  const customers = users.filter((u) => u.role === 'CUSTOMER').slice(0, 3);
 
   const requestData = [
     {
@@ -446,6 +508,8 @@ async function createUpgradeRequests(users: any[]) {
       experience: 10,
       reason: 'Tôi muốn mở rộng kinh doanh và chia sẻ nghệ thuật đan tre trúc truyền thống',
       status: 'PENDING' as const,
+      adminNotes: null,
+      reviewedAt: null,
     },
     {
       shopName: 'Tơ lụa Bảo Lộc',
@@ -469,33 +533,37 @@ async function createUpgradeRequests(users: any[]) {
     },
   ];
 
-  for (let i = 0; i < requestData.length && i < customers.length; i++) {
+  const maxItems = Math.min(requestData.length, customers.length);
+
+  for (let i = 0; i < maxItems; i++) {
+    const customer = customers[i]!;
+    const request = requestData[i]!;
+
     await prisma.artisanUpgradeRequest.create({
       data: {
-        userId: customers[i].id,
-        shopName: requestData[i].shopName,
-        shopDescription: requestData[i].shopDescription,
-        specialties: requestData[i].specialties,
-        experience: requestData[i].experience,
-        reason: requestData[i].reason,
-        status: requestData[i].status,
-        adminNotes: requestData[i].adminNotes,
-        reviewedAt: requestData[i].reviewedAt,
-        website:
-          Math.random() > 0.5 ? `https://${requestData[i].shopName.replace(/\s+/g, '')}.com` : null,
+        userId: customer.id,
+        shopName: request.shopName,
+        shopDescription: request.shopDescription,
+        specialties: request.specialties,
+        experience: request.experience,
+        reason: request.reason,
+        status: request.status,
+        adminNotes: request.adminNotes,
+        reviewedAt: request.reviewedAt,
+        website: Math.random() > 0.5 ? `https://${request.shopName.replace(/\s+/g, '')}.com` : null,
         socialMedia: {
-          facebook: `https://facebook.com/${requestData[i].shopName.replace(/\s+/g, '')}`,
+          facebook: `https://facebook.com/${request.shopName.replace(/\s+/g, '')}`,
         },
       },
     });
   }
 }
 
-async function createProducts(users: any[], categories: any[]) {
+async function createProducts(users: UserData[], categories: any[]) {
   const artisans = users.filter((u) => u.role === 'ARTISAN');
   const products = [];
 
-  const productData = [
+  const productData: ProductData[] = [
     // Gốm sứ
     {
       name: 'Bộ ấm trà men rạn cổ',
@@ -514,6 +582,7 @@ async function createProducts(users: any[], categories: any[]) {
       price: 1800000,
       quantity: 20,
       tags: ['gốm sứ', 'bình hoa', 'trang trí', 'sen'],
+      isCustomizable: false,
       category: 'Bình hoa',
     },
     {
@@ -533,6 +602,7 @@ async function createProducts(users: any[], categories: any[]) {
       price: 15000000,
       quantity: 3,
       tags: ['tượng gỗ', 'phật di lặc', 'gỗ hương', 'phong thủy'],
+      isCustomizable: false,
       category: 'Tượng gỗ',
     },
     {
@@ -551,6 +621,7 @@ async function createProducts(users: any[], categories: any[]) {
       price: 3500000,
       quantity: 10,
       tags: ['hộp gỗ', 'gỗ trắc', 'trang sức', 'quà tặng'],
+      isCustomizable: false,
       category: 'Đồ lưu niệm',
     },
     // Thêu thùa
@@ -560,6 +631,7 @@ async function createProducts(users: any[], categories: any[]) {
       price: 8500000,
       quantity: 5,
       tags: ['tranh thêu', 'đồng quê', 'lụa', 'thủ công'],
+      isCustomizable: false,
       category: 'Tranh thêu',
     },
     {
@@ -577,6 +649,7 @@ async function createProducts(users: any[], categories: any[]) {
       price: 1200000,
       quantity: 25,
       tags: ['khăn thêu', 'dân tộc', "h'mông", 'thời trang'],
+      isCustomizable: false,
       category: 'Khăn thêu',
     },
     // Tranh vẽ
@@ -586,6 +659,7 @@ async function createProducts(users: any[], categories: any[]) {
       price: 12000000,
       quantity: 1,
       tags: ['tranh sơn dầu', 'phố cổ', 'hà nội', 'nghệ thuật'],
+      isCustomizable: false,
       category: 'Tranh sơn dầu',
     },
     {
@@ -594,6 +668,7 @@ async function createProducts(users: any[], categories: any[]) {
       price: 6500000,
       quantity: 3,
       tags: ['tranh lụa', 'chân dung', 'áo dài', 'việt nam'],
+      isCustomizable: false,
       category: 'Tranh lụa',
     },
     {
@@ -603,6 +678,7 @@ async function createProducts(users: any[], categories: any[]) {
       discountPrice: 3000000,
       quantity: 10,
       tags: ['tranh đông hồ', '12 con giáp', 'dân gian', 'truyền thống'],
+      isCustomizable: false,
       category: 'Tranh Đông Hồ',
     },
     // Đồ da
@@ -621,6 +697,7 @@ async function createProducts(users: any[], categories: any[]) {
       price: 2800000,
       quantity: 15,
       tags: ['túi xách', 'da bò', 'vintage', 'thời trang'],
+      isCustomizable: false,
       category: 'Túi xách',
     },
     {
@@ -637,8 +714,8 @@ async function createProducts(users: any[], categories: any[]) {
 
   // Phân bổ sản phẩm cho các artisan
   for (let i = 0; i < productData.length; i++) {
-    const artisan = artisans[i % artisans.length];
-    const productInfo = productData[i];
+    const artisan = artisans[i % artisans.length]!;
+    const productInfo = productData[i]!;
     const productCategory = categories.find((c) => c.name === productInfo.category);
 
     const product = await prisma.product.create({
@@ -653,7 +730,7 @@ async function createProducts(users: any[], categories: any[]) {
         status: productInfo.quantity > 0 ? 'PUBLISHED' : 'OUT_OF_STOCK',
         images: generateProductImages(i, 3),
         tags: productInfo.tags,
-        isCustomizable: productInfo.isCustomizable || false,
+        isCustomizable: productInfo.isCustomizable,
         avgRating: 4 + Math.random() * 0.9,
         reviewCount: Math.floor(Math.random() * 50) + 10,
         viewCount: Math.floor(Math.random() * 1000) + 100,
@@ -686,12 +763,12 @@ async function createProducts(users: any[], categories: any[]) {
   return products;
 }
 
-async function createPosts(users: any[]) {
+async function createPosts(users: UserData[]) {
   const posts = [];
   const artisans = users.filter((u) => u.role === 'ARTISAN');
   const allUsers = [...users];
 
-  const postData = [
+  const postData: PostData[] = [
     {
       title: 'Quy trình làm gốm sứ Bát Tràng truyền thống',
       summary:
@@ -843,8 +920,10 @@ async function createPosts(users: any[]) {
 
   for (let i = 0; i < postData.length; i++) {
     const author =
-      i < 5 ? artisans[i % artisans.length] : allUsers[Math.floor(Math.random() * allUsers.length)];
-    const postInfo = postData[i];
+      i < 5
+        ? artisans[i % artisans.length]!
+        : allUsers[Math.floor(Math.random() * allUsers.length)]!;
+    const postInfo = postData[i]!;
 
     const post = await prisma.post.create({
       data: {
@@ -853,8 +932,8 @@ async function createPosts(users: any[]) {
         slug: generateSlug(postInfo.title),
         summary: postInfo.summary,
         content: postInfo.content,
-        contentText: postInfo.content.blocks.map((b: any) => b.content || '').join(' '),
-        type: postInfo.type as any,
+        contentText: postInfo.content.blocks.map((b) => b.content || '').join(' '),
+        type: postInfo.type,
         status: Math.random() > 0.2 ? 'PUBLISHED' : 'DRAFT',
         thumbnailUrl: `https://picsum.photos/seed/post-${i}/400/300`,
         coverImage: `https://picsum.photos/seed/post-${i}-cover/1200/600`,
@@ -888,7 +967,7 @@ async function createPosts(users: any[]) {
   return posts;
 }
 
-async function createFollows(users: any[]) {
+async function createFollows(users: UserData[]) {
   interface FollowRecord {
     followerId: string;
     followingId: string;
@@ -902,7 +981,7 @@ async function createFollows(users: any[]) {
     const otherUsers = users.filter((u) => u.id !== follower.id);
 
     for (let i = 0; i < followCount && i < otherUsers.length; i++) {
-      const following = otherUsers[Math.floor(Math.random() * otherUsers.length)];
+      const following = otherUsers[Math.floor(Math.random() * otherUsers.length)]!;
 
       // Kiểm tra chưa follow
       const exists = follows.some(
@@ -923,7 +1002,7 @@ async function createFollows(users: any[]) {
   }
 }
 
-async function createLikesAndSavedPosts(users: any[], posts: any[]) {
+async function createLikesAndSavedPosts(users: UserData[], posts: any[]) {
   // Likes
   for (const user of users) {
     const likeCount = Math.floor(Math.random() * 10) + 5;
@@ -956,7 +1035,7 @@ async function createLikesAndSavedPosts(users: any[], posts: any[]) {
   }
 }
 
-async function createComments(users: any[], posts: any[]) {
+async function createComments(users: UserData[], posts: any[]) {
   const comments = [];
 
   const commentTexts = [
@@ -981,8 +1060,8 @@ async function createComments(users: any[], posts: any[]) {
     const commentCount = Math.floor(Math.random() * 5) + 3;
 
     for (let i = 0; i < commentCount; i++) {
-      const commenter = users[Math.floor(Math.random() * users.length)];
-      const commentText = commentTexts[Math.floor(Math.random() * commentTexts.length)];
+      const commenter = users[Math.floor(Math.random() * users.length)]!;
+      const commentText = commentTexts[Math.floor(Math.random() * commentTexts.length)]!;
       const comment = await prisma.comment.create({
         data: {
           postId: post.id,
@@ -998,8 +1077,8 @@ async function createComments(users: any[], posts: any[]) {
       if (Math.random() > 0.5) {
         const replyCount = Math.floor(Math.random() * 3) + 1;
         for (let j = 0; j < replyCount; j++) {
-          const replier = users[Math.floor(Math.random() * users.length)];
-          const replyText = commentTexts[Math.floor(Math.random() * commentTexts.length)];
+          const replier = users[Math.floor(Math.random() * users.length)]!;
+          const replyText = commentTexts[Math.floor(Math.random() * commentTexts.length)]!;
           await prisma.comment.create({
             data: {
               postId: post.id,
@@ -1015,7 +1094,7 @@ async function createComments(users: any[], posts: any[]) {
   }
 }
 
-async function createReviews(users: any[], products: any[]) {
+async function createReviews(users: UserData[], products: any[]) {
   const customers = users.filter((u) => u.role === 'CUSTOMER');
 
   const reviewTexts = [
@@ -1076,7 +1155,7 @@ async function createReviews(users: any[], products: any[]) {
     const reviewers = customers.sort(() => 0.5 - Math.random()).slice(0, reviewCount);
 
     for (const reviewer of reviewers) {
-      const reviewData = reviewTexts[Math.floor(Math.random() * reviewTexts.length)];
+      const reviewData = reviewTexts[Math.floor(Math.random() * reviewTexts.length)]!;
       await prisma.review.create({
         data: {
           userId: reviewer.id,
@@ -1091,7 +1170,7 @@ async function createReviews(users: any[], products: any[]) {
   }
 }
 
-async function createCartItems(users: any[], products: any[]) {
+async function createCartItems(users: UserData[], products: any[]) {
   const customers = users.filter((u) => u.role === 'CUSTOMER');
 
   for (const customer of customers) {
@@ -1111,7 +1190,7 @@ async function createCartItems(users: any[], products: any[]) {
   }
 }
 
-async function createOrders(users: any[], products: any[]) {
+async function createOrders(users: UserData[], products: any[]) {
   const customers = users.filter((u) => u.role === 'CUSTOMER');
   const orders = [];
 
@@ -1128,7 +1207,7 @@ async function createOrders(users: any[], products: any[]) {
       const orderProducts = products
         .sort(() => 0.5 - Math.random())
         .slice(0, Math.floor(Math.random() * 3) + 1);
-      const orderItems = orderProducts.map((p) => ({
+      const orderItems = orderProducts.map((p: any) => ({
         productId: p.id,
         sellerId: p.sellerId,
         quantity: Math.floor(Math.random() * 2) + 1,
@@ -1145,7 +1224,7 @@ async function createOrders(users: any[], products: any[]) {
         data: {
           orderNumber: generateOrderNumber(),
           userId: customer.id,
-          addressId: profile?.addresses[0]?.id || undefined,
+          addressId: profile?.addresses[0]?.id || null,
           status: getRandomOrderStatus(),
           paymentStatus: getRandomPaymentStatus(),
           totalAmount: subtotal + shippingCost,
@@ -1172,9 +1251,9 @@ async function createOrders(users: any[], products: any[]) {
   return orders;
 }
 
-async function createQuoteRequests(users: any[], products: any[]) {
+async function createQuoteRequests(users: UserData[], products: any[]) {
   const customers = users.filter((u) => u.role === 'CUSTOMER');
-  const customizableProducts = products.filter((p) => p.isCustomizable);
+  const customizableProducts = products.filter((p: any) => p.isCustomizable);
 
   const quoteMessages = [
     {
@@ -1195,10 +1274,12 @@ async function createQuoteRequests(users: any[], products: any[]) {
     },
   ];
 
-  for (let i = 0; i < 10 && i < customizableProducts.length; i++) {
-    const customer = customers[i % customers.length];
-    const product = customizableProducts[i % customizableProducts.length];
-    const quoteData = quoteMessages[i % quoteMessages.length];
+  const maxItems = Math.min(10, customizableProducts.length);
+
+  for (let i = 0; i < maxItems; i++) {
+    const customer = customers[i % customers.length]!;
+    const product = customizableProducts[i % customizableProducts.length]!;
+    const quoteData = quoteMessages[i % quoteMessages.length]!;
 
     const quote = await prisma.quoteRequest.create({
       data: {
@@ -1242,7 +1323,7 @@ async function createQuoteRequests(users: any[], products: any[]) {
   }
 }
 
-async function createMessages(users: any[]) {
+async function createMessages(users: UserData[]) {
   const messageTemplates = [
     {
       type: 'TEXT' as const,
@@ -1291,32 +1372,36 @@ async function createMessages(users: any[]) {
   const artisans = users.filter((u) => u.role === 'ARTISAN');
 
   for (let i = 0; i < 20; i++) {
-    const customer = customers[i % customers.length];
-    const artisan = artisans[i % artisans.length];
+    const customer = customers[i % customers.length]!;
+    const artisan = artisans[i % artisans.length]!;
     const isCustomerFirst = Math.random() > 0.5;
 
     const sender = isCustomerFirst ? customer : artisan;
     const receiver = isCustomerFirst ? artisan : customer;
 
-    const messageData = messageTemplates[i % messageTemplates.length];
+    const messageData = messageTemplates[i % messageTemplates.length]!;
+
+    // Sử dụng conditional object creation
+    const messageCreateData: any = {
+      senderId: sender.id,
+      receiverId: receiver.id,
+      content: messageData.content,
+      type: messageData.type,
+      isRead: Math.random() > 0.3,
+    };
+
+    // Chỉ thêm metadata nếu cần thiết
+    if (messageData.type === 'IMAGE') {
+      messageCreateData.metadata = { url: `https://picsum.photos/seed/msg-${i}/400/300` };
+    }
 
     await prisma.message.create({
-      data: {
-        senderId: sender.id,
-        receiverId: receiver.id,
-        content: messageData.content,
-        type: messageData.type,
-        metadata:
-          messageData.type === 'IMAGE'
-            ? { url: `https://picsum.photos/seed/msg-${i}/400/300` }
-            : undefined,
-        isRead: Math.random() > 0.3,
-      },
+      data: messageCreateData,
     });
   }
 }
 
-async function createNotifications(users: any[]) {
+async function createNotifications(users: UserData[]) {
   const notificationTemplates = [
     {
       type: 'LIKE' as const,
@@ -1365,9 +1450,9 @@ async function createNotifications(users: any[]) {
 
     for (let i = 0; i < notificationCount; i++) {
       const template =
-        notificationTemplates[Math.floor(Math.random() * notificationTemplates.length)];
+        notificationTemplates[Math.floor(Math.random() * notificationTemplates.length)]!;
       const otherUsers = users.filter((u) => u.id !== user.id);
-      const sender = otherUsers[Math.floor(Math.random() * otherUsers.length)];
+      const sender = otherUsers[Math.floor(Math.random() * otherUsers.length)]!;
 
       let message = template.message;
       let data: any = {};
@@ -1422,19 +1507,25 @@ function getRandomLocation(): string {
     'Hải Phòng',
     'Quảng Ninh',
   ];
-  return locations[Math.floor(Math.random() * locations.length)];
+  return locations[Math.floor(Math.random() * locations.length)]!;
 }
 
 function generatePhoneNumber(): string {
   const prefixes = ['090', '091', '092', '093', '094', '096', '097', '098', '086', '088'];
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)]!;
   const number = Math.floor(Math.random() * 10000000)
     .toString()
     .padStart(7, '0');
   return prefix + number;
 }
 
-function generateAddress() {
+function generateAddress(): {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+} {
   const streets = [
     'Nguyễn Huệ',
     'Lê Lợi',
@@ -1457,11 +1548,11 @@ function generateAddress() {
     },
   ];
 
-  const cityData = districts[Math.floor(Math.random() * districts.length)];
-  const district = cityData.districts[Math.floor(Math.random() * cityData.districts.length)];
+  const cityData = districts[Math.floor(Math.random() * districts.length)]!;
+  const district = cityData.districts[Math.floor(Math.random() * cityData.districts.length)]!;
 
   return {
-    street: `${Math.floor(Math.random() * 200) + 1} ${streets[Math.floor(Math.random() * streets.length)]}`,
+    street: `${Math.floor(Math.random() * 200) + 1} ${streets[Math.floor(Math.random() * streets.length)]!}`,
     city: cityData.city,
     state: district,
     zipCode: (100000 + Math.floor(Math.random() * 900000)).toString(),
@@ -1507,7 +1598,7 @@ function generateOrderNumber(): string {
 
 function generateTrackingNumber(): string {
   const carriers = ['VNP', 'GHN', 'JT', 'SPX'];
-  const carrier = carriers[Math.floor(Math.random() * carriers.length)];
+  const carrier = carriers[Math.floor(Math.random() * carriers.length)]!;
   const number = Math.floor(Math.random() * 1000000000)
     .toString()
     .padStart(9, '0');
@@ -1516,22 +1607,22 @@ function generateTrackingNumber(): string {
 
 function getRandomOrderStatus(): any {
   const statuses = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'];
-  return statuses[Math.floor(Math.random() * statuses.length)];
+  return statuses[Math.floor(Math.random() * statuses.length)]!;
 }
 
 function getRandomPaymentStatus(): any {
   const statuses = ['PENDING', 'COMPLETED', 'FAILED'];
-  return statuses[Math.floor(Math.random() * statuses.length)];
+  return statuses[Math.floor(Math.random() * statuses.length)]!;
 }
 
 function getRandomPaymentMethod(): any {
   const methods = ['BANK_TRANSFER', 'CASH_ON_DELIVERY', 'DIGITAL_WALLET'];
-  return methods[Math.floor(Math.random() * methods.length)];
+  return methods[Math.floor(Math.random() * methods.length)]!;
 }
 
 function getRandomQuoteStatus(): any {
   const statuses = ['PENDING', 'ACCEPTED', 'REJECTED', 'COUNTER_OFFERED'];
-  return statuses[Math.floor(Math.random() * statuses.length)];
+  return statuses[Math.floor(Math.random() * statuses.length)]!;
 }
 
 // Run seeding

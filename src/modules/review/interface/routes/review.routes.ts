@@ -13,6 +13,7 @@ import { GetProductReviewsController } from '../controllers/GetProductReviewsCon
 import { GetUserReviewsController } from '../controllers/GetUserReviewsController';
 import { GetProductReviewStatisticsController } from '../controllers/GetProductReviewStatisticsController';
 import { GetReviewableProductsController } from '../controllers/GetReviewableProductsController';
+import { GetUserProductReviewController } from '../controllers/GetUserProductReviewController';
 
 // Validators
 import {
@@ -33,30 +34,34 @@ const getProductReviewsController = new GetProductReviewsController();
 const getUserReviewsController = new GetUserReviewsController();
 const getProductReviewStatisticsController = new GetProductReviewStatisticsController();
 const getReviewableProductsController = new GetReviewableProductsController();
+const getUserProductReviewController = new GetUserProductReviewController();
 
 // === PUBLIC ROUTES ===
-// Get review by ID
-router.get('/:id', validateIdParam(), getReviewController.execute);
 
 // Get reviews with filtering
 router.get('/', validate(getReviewsSchema, 'query'), getReviewsController.execute);
 
-// Get product reviews
-router.get(
-  '/product/:productId',
-  validateIdParam('productId'),
-  getProductReviewsController.execute,
-);
+// Get product reviews (Remove validateIdParam - accept both UUID and slug)
+router.get('/product/:productId', getProductReviewsController.execute);
 
-// Get product review statistics
-router.get(
-  '/product/:productId/statistics',
-  validateIdParam('productId'),
-  getProductReviewStatisticsController.execute,
-);
+// Get product review statistics (Remove validateIdParam - accept both UUID and slug)
+router.get('/product/:productId/statistics', getProductReviewStatisticsController.execute);
 
 // === AUTHENTICATED ROUTES ===
 router.use(authenticate);
+
+// Get user's review for a specific product
+router.get(
+  '/user-product/:productId',
+  validateIdParam('productId'),
+  getUserProductReviewController.execute,
+);
+
+// Get user's reviews
+router.get('/user/me', getUserReviewsController.execute);
+
+// Get reviewable products
+router.get('/user/reviewable-products', getReviewableProductsController.execute);
 
 // Create review
 router.post('/', validate(createReviewSchema), createReviewController.execute);
@@ -72,10 +77,7 @@ router.patch(
 // Delete review
 router.delete('/:id', validateIdParam(), deleteReviewController.execute);
 
-// Get user's reviews
-router.get('/user/me', getUserReviewsController.execute);
-
-// Get reviewable products
-router.get('/user/reviewable-products', getReviewableProductsController.execute);
+// Get review by ID
+router.get('/:id', validateIdParam(), getReviewController.execute);
 
 export default router;
