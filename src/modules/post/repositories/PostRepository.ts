@@ -110,19 +110,26 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       const slug = await this.generateSlug(data.title);
       const contentText = this.extractTextContent(data.content);
 
+      // Clean content - remove id field, only keep necessary fields
+      const cleanedContent = (data.content || []).map((block: any, index: number) => ({
+        type: block.type,
+        data: block.data || {},
+        order: block.order !== undefined ? block.order : index,
+      }));
+
       const post = await this.prisma.post.create({
         data: {
           userId,
           title: data.title,
           slug,
           summary: data.summary,
-          content: data.content as any,
+          content: cleanedContent as any, // Clean content without id
           contentText,
           type: data.type,
           status: data.publishNow ? PostStatus.PUBLISHED : data.status || PostStatus.DRAFT,
           thumbnailUrl: data.thumbnailUrl,
           coverImage: data.coverImage,
-          mediaUrls: this.extractMediaUrls(data.content),
+          mediaUrls: this.extractMediaUrls(cleanedContent),
           tags: data.tags || [],
           viewCount: 0,
           likeCount: 0,
@@ -179,8 +186,16 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       }
 
       if (data.content) {
-        updateData.contentText = this.extractTextContent(data.content);
-        updateData.mediaUrls = this.extractMediaUrls(data.content);
+        // Clean content - remove id field
+        const cleanedContent = data.content.map((block: any, index: number) => ({
+          type: block.type,
+          data: block.data || {},
+          order: block.order !== undefined ? block.order : index,
+        }));
+
+        updateData.content = cleanedContent;
+        updateData.contentText = this.extractTextContent(cleanedContent);
+        updateData.mediaUrls = this.extractMediaUrls(cleanedContent);
       }
 
       const post = await this.prisma.post.update({
@@ -483,30 +498,6 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
     return `${baseSlug}-${randomStr}`;
   }
 
-  extractTextContent(content: any[]): string {
-    let text = '';
-
-    for (const block of content) {
-      switch (block.type) {
-        case BlockType.PARAGRAPH:
-        case BlockType.HEADING:
-          text += block.data.text + ' ';
-          break;
-        case BlockType.QUOTE:
-          text += block.data.text + ' ';
-          if (block.data.author) text += '- ' + block.data.author + ' ';
-          break;
-        case BlockType.LIST:
-          if (block.data.items) {
-            block.data.items.forEach((item: string) => (text += item + ' '));
-          }
-          break;
-      }
-    }
-
-    return text.trim();
-  }
-
   async getPostStatusCounts(userId: string): Promise<Record<string, number>> {
     try {
       const counts = await this.prisma.post.groupBy({
@@ -539,24 +530,52 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
     }
   }
 
+  extractTextContent(content: any[]): string {
+    let text = '';
+
+    for (const block of content) {
+      if (block.data) {
+        switch (block.type) {
+          case 'paragraph':
+          case 'heading':
+            if (block.data.text) text += block.data.text + ' ';
+            break;
+          case 'quote':
+            if (block.data.text) text += block.data.text + ' ';
+            if (block.data.author) text += '- ' + block.data.author + ' ';
+            break;
+          case 'list':
+            if (block.data.items && Array.isArray(block.data.items)) {
+              block.data.items.forEach((item: string) => (text += item + ' '));
+            }
+            break;
+        }
+      }
+    }
+
+    return text.trim();
+  }
+
   private extractMediaUrls(content: any[]): string[] {
     const urls: string[] = [];
 
     for (const block of content) {
-      switch (block.type) {
-        case BlockType.IMAGE:
-          if (block.data.url) urls.push(block.data.url);
-          break;
-        case BlockType.GALLERY:
-          if (block.data.images) {
-            block.data.images.forEach((img: any) => {
-              if (img.url) urls.push(img.url);
-            });
-          }
-          break;
-        case BlockType.VIDEO:
-          if (block.data.url) urls.push(block.data.url);
-          break;
+      if (block.data) {
+        switch (block.type) {
+          case 'image':
+            if (block.data.url) urls.push(block.data.url);
+            break;
+          case 'gallery':
+            if (block.data.images && Array.isArray(block.data.images)) {
+              block.data.images.forEach((img: any) => {
+                if (img.url) urls.push(img.url);
+              });
+            }
+            break;
+          case 'video':
+            if (block.data.url) urls.push(block.data.url);
+            break;
+        }
       }
     }
 

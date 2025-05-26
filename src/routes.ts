@@ -17,6 +17,7 @@ import orderRoutes from './modules/order/interface/routes/order.routes';
 import reviewRoutes from './modules/review/interface/routes/review.routes';
 import notificationRoutes from './modules/notification/interface/routes/notification.routes';
 import messageRoutes from './modules/messaging/interface/routes/message.routes';
+import uploadRoutes from './modules/upload/interface/routes/upload.routes';
 
 const logger = Logger.getInstance();
 const apiPrefix = Config.API_PREFIX;
@@ -41,6 +42,8 @@ export const registerRoutes = (app: Express) => {
 
     app.use(`${apiPrefix}/notifications`, notificationRoutes);
     app.use(`${apiPrefix}/messages`, messageRoutes);
+
+    app.use(`${apiPrefix}/upload`, uploadRoutes);
     // Thêm routes khác
 
     // API documentation route
