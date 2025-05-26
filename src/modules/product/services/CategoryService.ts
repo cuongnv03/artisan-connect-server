@@ -1,6 +1,7 @@
 import { ICategoryService } from './CategoryService.interface';
 import {
   Category,
+  CategoryQueryOptions,
   CategoryWithChildren,
   CreateCategoryDto,
   UpdateCategoryDto,
@@ -97,7 +98,7 @@ export class CategoryService implements ICategoryService {
     }
   }
 
-  async getCategoryBySlug(slug: string): Promise<Category | null> {
+  async getCategoryBySlug(slug: string, options?: CategoryQueryOptions): Promise<Category | null> {
     try {
       return await this.categoryRepository.getCategoryBySlug(slug);
     } catch (error) {

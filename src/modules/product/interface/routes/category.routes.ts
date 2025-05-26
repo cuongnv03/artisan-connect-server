@@ -7,6 +7,7 @@ import { validateIdParam } from '../../../../shared/middlewares/request-validati
 import { CreateCategoryController } from '../controllers/category/CreateCategoryController';
 import { UpdateCategoryController } from '../controllers/category/UpdateCategoryController';
 import { GetCategoryController } from '../controllers/category/GetCategoryController';
+import { GetCategoryBySlugController } from '../controllers/category/GetCategoryBySlugController';
 import { GetAllCategoriesController } from '../controllers/category/GetAllCategoriesController';
 import { GetCategoryTreeController } from '../controllers/category/GetCategoryTreeController';
 import { DeleteCategoryController } from '../controllers/category/DeleteCategoryController';
@@ -20,6 +21,7 @@ const router = Router();
 const createCategoryController = new CreateCategoryController();
 const updateCategoryController = new UpdateCategoryController();
 const getCategoryController = new GetCategoryController();
+const getCategoryBySlugController = new GetCategoryBySlugController();
 const getAllCategoriesController = new GetAllCategoriesController();
 const getCategoryTreeController = new GetCategoryTreeController();
 const deleteCategoryController = new DeleteCategoryController();
@@ -30,6 +32,9 @@ router.get('/', getAllCategoriesController.execute);
 
 // Get category tree
 router.get('/tree', getCategoryTreeController.execute);
+
+// Get category by slug
+router.get('/slug/:slug', getCategoryBySlugController.execute);
 
 // Get category by ID
 router.get('/:id', validateIdParam(), getCategoryController.execute);

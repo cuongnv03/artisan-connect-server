@@ -17,6 +17,12 @@ export class GetCategoryBySlugController extends BaseController {
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { slug } = req.params;
+
+      // Validate slug parameter
+      if (!slug || slug.trim().length === 0) {
+        throw AppError.badRequest('Category slug is required');
+      }
+
       const options: CategoryQueryOptions = {
         includeParent: req.query.includeParent === 'true',
         includeChildren: req.query.includeChildren === 'true',

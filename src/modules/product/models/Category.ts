@@ -15,6 +15,12 @@ export interface CategoryWithChildren extends Category {
   productCount?: number;
 }
 
+export interface CategoryQueryOptions {
+  includeParent?: boolean;
+  includeChildren?: boolean;
+  includeProductCount?: boolean;
+}
+
 export interface CreateCategoryDto {
   name: string;
   description?: string;

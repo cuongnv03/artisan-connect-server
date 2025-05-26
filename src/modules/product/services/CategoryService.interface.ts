@@ -1,5 +1,6 @@
 import {
   Category,
+  CategoryQueryOptions,
   CategoryWithChildren,
   CreateCategoryDto,
   UpdateCategoryDto,
@@ -12,5 +13,5 @@ export interface ICategoryService {
   getAllCategories(): Promise<Category[]>;
   getCategoryTree(): Promise<CategoryWithChildren[]>;
   getCategoryById(id: string): Promise<Category | null>;
-  getCategoryBySlug(slug: string): Promise<Category | null>;
+  getCategoryBySlug(slug: string, options?: CategoryQueryOptions): Promise<Category | null>;
 }

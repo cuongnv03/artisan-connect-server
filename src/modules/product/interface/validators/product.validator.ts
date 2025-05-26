@@ -68,10 +68,13 @@ export const getProductsQuerySchema = Joi.object({
   search: Joi.string().max(100).allow(''),
   status: Joi.string().valid(...Object.values(ProductStatus)),
   sortBy: Joi.string()
-    .valid('createdAt', 'updatedAt', 'price', 'name', 'viewCount', 'salesCount')
+    .valid('createdAt', 'updatedAt', 'price', 'name', 'viewCount', 'salesCount', 'avgRating')
     .default('createdAt'),
   sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
   inStock: Joi.boolean(),
+  isCustomizable: Joi.boolean(),
+  minDiscountPercent: Joi.number().min(0).max(100),
+  freeShipping: Joi.boolean(),
 });
 
 export const searchProductsQuerySchema = Joi.object({
