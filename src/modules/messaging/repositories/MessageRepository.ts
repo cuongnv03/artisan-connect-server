@@ -32,6 +32,8 @@ export class MessageRepository implements IMessageRepository {
               firstName: true,
               lastName: true,
               avatarUrl: true,
+              role: true,
+              lastSeenAt: true,
             },
           },
           receiver: {
@@ -41,6 +43,8 @@ export class MessageRepository implements IMessageRepository {
               firstName: true,
               lastName: true,
               avatarUrl: true,
+              role: true,
+              lastSeenAt: true,
             },
           },
         },
@@ -62,6 +66,8 @@ export class MessageRepository implements IMessageRepository {
               firstName: true,
               lastName: true,
               avatarUrl: true,
+              role: true,
+              lastSeenAt: true,
             },
           },
           receiver: {
@@ -71,6 +77,8 @@ export class MessageRepository implements IMessageRepository {
               firstName: true,
               lastName: true,
               avatarUrl: true,
+              role: true,
+              lastSeenAt: true,
             },
           },
         },
@@ -125,6 +133,8 @@ export class MessageRepository implements IMessageRepository {
                 firstName: true,
                 lastName: true,
                 avatarUrl: true,
+                role: true,
+                lastSeenAt: true,
               },
             },
             receiver: {
@@ -134,6 +144,8 @@ export class MessageRepository implements IMessageRepository {
                 firstName: true,
                 lastName: true,
                 avatarUrl: true,
+                role: true,
+                lastSeenAt: true,
               },
             },
           },
@@ -177,6 +189,8 @@ export class MessageRepository implements IMessageRepository {
                 firstName: true,
                 lastName: true,
                 avatarUrl: true,
+                role: true,
+                lastSeenAt: true,
               },
             },
             receiver: {
@@ -186,6 +200,8 @@ export class MessageRepository implements IMessageRepository {
                 firstName: true,
                 lastName: true,
                 avatarUrl: true,
+                role: true,
+                lastSeenAt: true,
               },
             },
           },
@@ -241,70 +257,69 @@ export class MessageRepository implements IMessageRepository {
 
   async getConversations(userId: string): Promise<Conversation[]> {
     try {
-      // Get all unique conversation partners
-      const conversations = await this.prisma.$queryRaw<any[]>`
-        SELECT DISTINCT
-          CASE 
-            WHEN m.sender_id = ${userId} THEN m.receiver_id
-            ELSE m.sender_id
-          END as participant_id,
-          MAX(m.created_at) as last_activity
-        FROM "Message" m
-        WHERE m.sender_id = ${userId} OR m.receiver_id = ${userId}
-        GROUP BY participant_id
-        ORDER BY last_activity DESC
-      `;
-
-      // Get detailed information for each conversation
-      const result: Conversation[] = [];
-
-      for (const conv of conversations) {
-        const participantId = conv.participant_id;
-
-        // Get participant details
-        const participant = await this.prisma.user.findUnique({
-          where: { id: participantId },
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            avatarUrl: true,
+      // Get all unique conversation partners using Prisma groupBy
+      const messages = await this.prisma.message.findMany({
+        where: {
+          OR: [{ senderId: userId }, { receiverId: userId }],
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+              role: true,
+              lastSeenAt: true,
+            },
           },
-        });
-
-        if (!participant) continue;
-
-        // Get last message
-        const lastMessage = await this.prisma.message.findFirst({
-          where: {
-            OR: [
-              { senderId: userId, receiverId: participantId },
-              { senderId: participantId, receiverId: userId },
-            ],
+          receiver: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+              role: true,
+              lastSeenAt: true,
+            },
           },
-          orderBy: { createdAt: 'desc' },
-        });
+        },
+      });
 
-        // Get unread count
-        const unreadCount = await this.prisma.message.count({
-          where: {
-            senderId: participantId,
-            receiverId: userId,
-            isRead: false,
-          },
-        });
+      // Group by conversation partner
+      const conversationMap = new Map<string, any>();
 
-        result.push({
-          participantId,
-          participant,
-          lastMessage: lastMessage || undefined,
-          unreadCount,
-          lastActivity: conv.last_activity,
-        });
-      }
+      messages.forEach((message) => {
+        const partnerId = message.senderId === userId ? message.receiverId : message.senderId;
+        const partner = message.senderId === userId ? message.receiver : message.sender;
 
-      return result;
+        if (!conversationMap.has(partnerId)) {
+          conversationMap.set(partnerId, {
+            participantId: partnerId,
+            participant: partner,
+            lastMessage: message,
+            lastActivity: message.createdAt,
+            unreadCount: 0,
+          });
+        }
+
+        // Count unread messages from this partner
+        if (message.receiverId === userId && !message.isRead) {
+          conversationMap.get(partnerId).unreadCount++;
+        }
+      });
+
+      // Convert to array and sort by last activity
+      const conversations = Array.from(conversationMap.values()).sort(
+        (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime(),
+      );
+
+      return conversations;
     } catch (error) {
       throw new AppError('Failed to get conversations', 500, 'CONVERSATION_LIST_FAILED');
     }
