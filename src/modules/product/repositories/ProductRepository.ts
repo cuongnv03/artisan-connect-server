@@ -270,11 +270,28 @@ export class ProductRepository
       };
 
       // Filters
-      if (sellerId) where.sellerId = sellerId;
-      if (status) {
-        where.status = Array.isArray(status) ? { in: status } : status;
-      } else if (!sellerId) {
-        where.status = ProductStatus.PUBLISHED; // Default to published for public
+      if (sellerId) {
+        where.sellerId = sellerId;
+        // Nếu là seller query, cho phép tất cả status
+        if (status) {
+          where.status = Array.isArray(status) ? { in: status } : status;
+        }
+      } else {
+        // Đối với public query, chỉ hiển thị PUBLISHED và OUT_OF_STOCK
+        if (status) {
+          const allowedStatuses = Array.isArray(status) ? status : [status];
+          const publicStatuses = allowedStatuses.filter((s) =>
+            [ProductStatus.PUBLISHED, ProductStatus.OUT_OF_STOCK].includes(s),
+          );
+          if (publicStatuses.length > 0) {
+            where.status = publicStatuses.length === 1 ? publicStatuses[0] : { in: publicStatuses };
+          } else {
+            where.status = { in: [ProductStatus.PUBLISHED, ProductStatus.OUT_OF_STOCK] };
+          }
+        } else {
+          // Default: hiển thị cả PUBLISHED và OUT_OF_STOCK
+          where.status = { in: [ProductStatus.PUBLISHED, ProductStatus.OUT_OF_STOCK] };
+        }
       }
       if (inStock !== undefined) {
         where.quantity = inStock ? { gt: 0 } : { lte: 0 };
