@@ -341,6 +341,11 @@ export class PostAnalyticsRepository
     totalUniqueViewers: number;
     totalConversions: number;
     avgReadTime: number | null;
+    totalLikes: number;
+    totalComments: number;
+    totalShares: number;
+    followerGrowth: number;
+    engagementRate: number;
   }> {
     try {
       // Get user's posts
@@ -364,6 +369,11 @@ export class PostAnalyticsRepository
           totalUniqueViewers: 0,
           totalConversions: 0,
           avgReadTime: null,
+          totalLikes: 0,
+          totalComments: 0,
+          totalShares: 0,
+          followerGrowth: 0,
+          engagementRate: 0,
         };
       }
 
