@@ -4,7 +4,7 @@ import Joi from 'joi';
 const proposalSchema = Joi.object({
   productName: Joi.string().required().min(3).max(200),
   description: Joi.string().required().min(10).max(2000),
-  estimatedPrice: Joi.number().positive().max(50000).required(),
+  estimatedPrice: Joi.number().positive().max(50000000).required(),
   estimatedDuration: Joi.string().required().min(3).max(100),
   specifications: Joi.object().default({}),
   images: Joi.array().items(Joi.string().uri()).max(10),
@@ -19,7 +19,7 @@ const responseSchema = Joi.object({
   accepted: Joi.boolean().required(),
   message: Joi.string().required().min(1).max(2000),
   counterOffer: Joi.object({
-    price: Joi.number().positive().max(50000).required(),
+    price: Joi.number().positive().max(50000000).required(),
     duration: Joi.string().required().min(3).max(100),
     modifications: Joi.string().required().min(10).max(1000),
     conditions: Joi.array().items(Joi.string().max(200)).max(10),
@@ -95,7 +95,7 @@ export const updateCustomOrderProposalSchema = Joi.object({
   updates: Joi.object({
     productName: Joi.string().min(3).max(200),
     description: Joi.string().min(10).max(2000),
-    estimatedPrice: Joi.number().positive().max(50000),
+    estimatedPrice: Joi.number().positive().max(50000000),
     estimatedDuration: Joi.string().min(3).max(100),
     specifications: Joi.object(),
     images: Joi.array().items(Joi.string().uri()).max(10),

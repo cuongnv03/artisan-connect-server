@@ -41,6 +41,41 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
               },
             },
           },
+          // Thêm product mentions
+          productMentions: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  images: true,
+                  price: true,
+                  discountPrice: true,
+                  status: true,
+                  avgRating: true,
+                  reviewCount: true,
+                  seller: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      avatarUrl: true,
+                      artisanProfile: {
+                        select: {
+                          shopName: true,
+                          isVerified: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: {
+              position: 'asc',
+            },
+          },
           likes: requestUserId
             ? {
                 where: { userId: requestUserId, commentId: null },
@@ -83,6 +118,41 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
               },
             },
           },
+          // Thêm product mentions
+          productMentions: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  images: true,
+                  price: true,
+                  discountPrice: true,
+                  status: true,
+                  avgRating: true,
+                  reviewCount: true,
+                  seller: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      avatarUrl: true,
+                      artisanProfile: {
+                        select: {
+                          shopName: true,
+                          isVerified: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: {
+              position: 'asc',
+            },
+          },
           likes: requestUserId
             ? {
                 where: { userId: requestUserId, commentId: null },
@@ -105,58 +175,63 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
     }
   }
 
+  // src/modules/post/repositories/PostRepository.ts
+
   async createPost(userId: string, data: CreatePostDto): Promise<PostWithUser> {
     try {
       const slug = await this.generateSlug(data.title);
       const contentText = this.extractTextContent(data.content);
 
-      // Clean content - remove id field, only keep necessary fields
       const cleanedContent = (data.content || []).map((block: any, index: number) => ({
         type: block.type,
         data: block.data || {},
         order: block.order !== undefined ? block.order : index,
       }));
 
-      const post = await this.prisma.post.create({
-        data: {
-          userId,
-          title: data.title,
-          slug,
-          summary: data.summary,
-          content: cleanedContent as any, // Clean content without id
-          contentText,
-          type: data.type,
-          status: data.publishNow ? PostStatus.PUBLISHED : data.status || PostStatus.DRAFT,
-          thumbnailUrl: data.thumbnailUrl,
-          coverImage: data.coverImage,
-          mediaUrls: this.extractMediaUrls(cleanedContent),
-          tags: data.tags || [],
-          viewCount: 0,
-          likeCount: 0,
-          commentCount: 0,
-          shareCount: 0,
-          publishedAt: data.publishNow ? new Date() : null,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              avatarUrl: true,
-              artisanProfile: {
-                select: {
-                  shopName: true,
-                  isVerified: true,
-                },
-              },
-            },
+      const post = await this.prisma.$transaction(async (tx) => {
+        // Create post
+        const newPost = await tx.post.create({
+          data: {
+            userId,
+            title: data.title,
+            slug,
+            summary: data.summary,
+            content: cleanedContent as any,
+            contentText,
+            type: data.type,
+            status: data.publishNow ? PostStatus.PUBLISHED : data.status || PostStatus.DRAFT,
+            thumbnailUrl: data.thumbnailUrl,
+            coverImage: data.coverImage,
+            mediaUrls: this.extractMediaUrls(cleanedContent),
+            tags: data.tags || [],
+            viewCount: 0,
+            likeCount: 0,
+            commentCount: 0,
+            shareCount: 0,
+            publishedAt: data.publishNow ? new Date() : null,
           },
-        },
+        });
+
+        // Create product mentions if provided
+        if (data.productMentions && data.productMentions.length > 0) {
+          await Promise.all(
+            data.productMentions.map((mention: any) =>
+              tx.productMention.create({
+                data: {
+                  postId: newPost.id,
+                  productId: mention.productId,
+                  contextText: mention.contextText,
+                  position: mention.position,
+                },
+              }),
+            ),
+          );
+        }
+
+        return newPost;
       });
 
-      return this.transformPostWithUser(post, userId);
+      return (await this.findByIdWithUser(post.id, userId)) as PostWithUser;
     } catch (error) {
       this.logger.error(`Error creating post: ${error}`);
       throw new AppError('Failed to create post', 500, 'DATABASE_ERROR');
@@ -186,7 +261,6 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       }
 
       if (data.content) {
-        // Clean content - remove id field
         const cleanedContent = data.content.map((block: any, index: number) => ({
           type: block.type,
           data: block.data || {},
@@ -198,29 +272,39 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
         updateData.mediaUrls = this.extractMediaUrls(cleanedContent);
       }
 
-      const post = await this.prisma.post.update({
-        where: { id },
-        data: updateData,
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              avatarUrl: true,
-              artisanProfile: {
-                select: {
-                  shopName: true,
-                  isVerified: true,
-                },
-              },
-            },
-          },
-        },
+      await this.prisma.$transaction(async (tx) => {
+        // Update post
+        await tx.post.update({
+          where: { id },
+          data: updateData,
+        });
+
+        // Handle product mentions
+        if (data.productMentions !== undefined) {
+          // Delete existing mentions
+          await tx.productMention.deleteMany({
+            where: { postId: id },
+          });
+
+          // Create new mentions
+          if (data.productMentions.length > 0) {
+            await Promise.all(
+              data.productMentions.map((mention: any) =>
+                tx.productMention.create({
+                  data: {
+                    postId: id,
+                    productId: mention.productId,
+                    contextText: mention.contextText,
+                    position: mention.position,
+                  },
+                }),
+              ),
+            );
+          }
+        }
       });
 
-      return this.transformPostWithUser(post, userId);
+      return (await this.findByIdWithUser(id, userId)) as PostWithUser;
     } catch (error) {
       this.logger.error(`Error updating post: ${error}`);
       if (error instanceof AppError) throw error;
@@ -583,11 +667,12 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
   }
 
   private transformPostWithUser(post: any, requestUserId?: string): PostWithUser {
-    const { likes, savedBy, ...postData } = post;
+    const { likes, savedBy, productMentions, ...postData } = post;
 
     return {
       ...postData,
       content: Array.isArray(postData.content) ? postData.content : [],
+      productMentions: productMentions || [],
       isLiked: requestUserId ? likes?.length > 0 : undefined,
       isSaved: requestUserId ? savedBy?.length > 0 : undefined,
       canEdit: requestUserId ? postData.userId === requestUserId : false,

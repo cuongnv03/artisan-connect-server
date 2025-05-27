@@ -86,6 +86,11 @@ export interface CreatePostDto {
   coverImage?: string;
   tags?: string[];
   publishNow?: boolean;
+  productMentions?: Array<{
+    productId: string;
+    contextText?: string;
+    position: number;
+  }>;
 }
 
 export interface UpdatePostDto {
@@ -97,6 +102,11 @@ export interface UpdatePostDto {
   thumbnailUrl?: string;
   coverImage?: string;
   tags?: string[];
+  productMentions?: Array<{
+    productId: string;
+    contextText?: string;
+    position: number;
+  }>;
 }
 
 export interface PostQueryOptions {

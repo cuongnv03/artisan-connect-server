@@ -548,7 +548,7 @@ export class CustomOrderNegotiationService {
       throw new AppError('Estimated price must be greater than 0', 400, 'INVALID_PRICE');
     }
 
-    if (proposal.estimatedPrice > 50000) {
+    if (proposal.estimatedPrice > 50000000) {
       throw new AppError('Estimated price cannot exceed $50,000', 400, 'PRICE_TOO_HIGH');
     }
 

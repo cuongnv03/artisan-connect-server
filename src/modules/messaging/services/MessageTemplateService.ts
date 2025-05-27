@@ -46,26 +46,17 @@ export class MessageTemplateService {
 
   static getCustomOrderTemplates() {
     return {
-      proposal: (productName: string, description: string, price: number) =>
-        `I'd like to request a custom "${productName}". ${description} My budget is around $${price}. Are you interested?`,
+      proposal: (productName: string, price: number, duration: string) =>
+        `🛠️ **Đề xuất Custom Order**\n\nTôi có thể tạo "${productName}" cho bạn với giá $${price}, thời gian hoàn thành khoảng ${duration}.\n\nVui lòng xem chi tiết và cho tôi biết ý kiến của bạn!`,
 
-      specification_details: (specs: Record<string, any>) =>
-        `Here are the detailed specifications:\n${Object.entries(specs)
-          .map(([key, value]) => `• ${key}: ${value}`)
-          .join('\n')}`,
+      accepted: (productName: string) =>
+        `✅ **Đề xuất được chấp nhận**\n\nCảm ơn bạn đã chấp nhận đề xuất "${productName}"! Bạn có thể tiến hành thanh toán để tôi bắt đầu thực hiện.`,
 
-      timeline_request: (deadline: string) =>
-        `Would it be possible to complete this by ${deadline}?`,
+      declined: (productName: string, reason?: string) =>
+        `❌ **Đề xuất bị từ chối**\n\nĐề xuất "${productName}" đã bị từ chối.${reason ? `\n\nLý do: ${reason}` : ''}`,
 
-      material_preference: (materials: string[]) =>
-        `I'd prefer these materials: ${materials.join(', ')}`,
-
-      size_specifications: (dimensions: string) => `The dimensions should be: ${dimensions}`,
-
-      color_preference: (colors: string[]) => `Color preferences: ${colors.join(', ')}`,
-
-      budget_discussion: (minPrice: number, maxPrice: number) =>
-        `My budget range is $${minPrice} - $${maxPrice}. What's possible within this range?`,
+      changes_requested: (productName: string, changes: string) =>
+        `🔄 **Yêu cầu thay đổi**\n\nKhách hàng muốn thay đổi một số điều cho "${productName}":\n\n${changes}\n\nTôi sẽ cập nhật đề xuất và gửi lại cho bạn.`,
     };
   }
 }
