@@ -1,4 +1,10 @@
 import { ProductStatus } from './ProductEnums';
+import {
+  CreateProductAttributeDto,
+  CreateProductVariantDto,
+  ProductAttribute,
+  ProductVariant,
+} from './ProductAttribute';
 
 export interface Product {
   id: string;
@@ -15,6 +21,16 @@ export interface Product {
   isCustomizable: boolean;
   viewCount: number;
   salesCount: number;
+  specifications?: Record<string, any>;
+  customFields?: Record<string, any>;
+  hasVariants: boolean;
+  weight?: number;
+  dimensions?: {
+    length?: number;
+    width?: number;
+    height?: number;
+    unit?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +54,13 @@ export interface ProductWithSeller extends Product {
   }>;
 }
 
+export interface ProductWithDetails extends ProductWithSeller {
+  attributes: ProductAttribute[];
+  variants: ProductVariant[];
+  specifications?: Record<string, any>;
+  customFields?: Record<string, any>;
+}
+
 export interface PriceHistory {
   id: string;
   productId: string;
@@ -52,10 +75,21 @@ export interface CreateProductDto {
   price: number;
   discountPrice?: number;
   quantity: number;
-  categories?: string[];
+  categories: string[];
   images: string[];
   tags?: string[];
   isCustomizable?: boolean;
+  specifications?: Record<string, any>;
+  customFields?: Record<string, any>;
+  weight?: number;
+  dimensions?: {
+    length?: number;
+    width?: number;
+    height?: number;
+    unit?: string;
+  };
+  attributes?: CreateProductAttributeDto[];
+  variants?: CreateProductVariantDto[];
 }
 
 export interface UpdateProductDto {
@@ -69,6 +103,17 @@ export interface UpdateProductDto {
   tags?: string[];
   isCustomizable?: boolean;
   status?: ProductStatus;
+  specifications?: Record<string, any>;
+  customFields?: Record<string, any>;
+  weight?: number;
+  dimensions?: {
+    length?: number;
+    width?: number;
+    height?: number;
+    unit?: string;
+  };
+  attributes?: CreateProductAttributeDto[];
+  variants?: CreateProductVariantDto[];
 }
 
 export interface ProductQueryOptions {

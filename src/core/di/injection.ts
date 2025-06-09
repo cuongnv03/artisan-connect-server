@@ -38,6 +38,7 @@ import { SavedPostRepository } from '../../modules/social/repositories/SavedPost
 
 import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
 import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
+import { ProductAttributeRepository } from '../../modules/product/repositories/ProductAttributeRepository';
 
 import { QuoteRepository } from '../../modules/quote/repositories/QuoteRepository';
 import { OrderRepository } from '../../modules/order/repositories/OrderRepository';
@@ -70,6 +71,7 @@ container.register('savedPostRepository', new SavedPostRepository(prisma));
 
 container.register('productRepository', new ProductRepository(prisma));
 container.register('categoryRepository', new CategoryRepository(prisma));
+container.register('productAttributeRepository', new ProductAttributeRepository(prisma));
 
 container.register('cartRepository', new CartRepository(prisma));
 container.register('quoteRepository', new QuoteRepository(prisma));
@@ -95,6 +97,7 @@ import { SavedPostService } from '../../modules/social/services/SavedPostService
 
 import { ProductService } from '../../modules/product/services/ProductService';
 import { CategoryService } from '../../modules/product/services/CategoryService';
+import { ProductAttributeService } from '../../modules/product/services/ProductAttributeService';
 
 import { QuoteService } from '../../modules/quote/services/QuoteService';
 import { OrderService } from '../../modules/order/services/OrderService';
@@ -123,6 +126,7 @@ container.register('savedPostService', new SavedPostService());
 
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
+container.register('productAttributeService', new ProductAttributeService());
 
 container.register('cartService', new CartService());
 container.register('quoteService', new QuoteService());

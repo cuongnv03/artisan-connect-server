@@ -43,6 +43,17 @@ enum PostStatus {
   DELETED
 }
 
+enum AttributeType {
+  TEXT
+  NUMBER
+  SELECT
+  MULTI_SELECT
+  BOOLEAN
+  DATE
+  URL
+  EMAIL
+}
+
 enum ProductStatus {
   DRAFT
   PUBLISHED
@@ -148,16 +159,17 @@ model User {
   savedPosts     SavedPost[]
 
   // E-commerce relations
-  products            Product[]
-  cartItems           CartItem[]
-  orders              Order[]              @relation("CustomerOrders")
-  sellerOrders        OrderItem[]          @relation("SellerOrderItems")
-  quoteRequests       QuoteRequest[]       @relation("CustomerQuotes")
-  artisanQuotes       QuoteRequest[]       @relation("ArtisanQuotes")
-  reviews             Review[]
-  wishlistItems       Wishlist[]
-  paymentMethods      PaymentMethod[]
-  paymentTransactions PaymentTransaction[]
+  products                 Product[]
+  customAttributeTemplates CustomAttributeTemplate[] @relation("ArtisanCustomAttributes")
+  cartItems                CartItem[]
+  orders                   Order[]                   @relation("CustomerOrders")
+  sellerOrders             OrderItem[]               @relation("SellerOrderItems")
+  quoteRequests            QuoteRequest[]            @relation("CustomerQuotes")
+  artisanQuotes            QuoteRequest[]            @relation("ArtisanQuotes")
+  reviews                  Review[]
+  wishlistItems            Wishlist[]
+  paymentMethods           PaymentMethod[]
+  paymentTransactions      PaymentTransaction[]
 
   // Communication relations
   sentMessages      Message[]      @relation("MessageSender")
@@ -438,6 +450,110 @@ model SavedPost {
 }
 
 // === PRODUCT MODELS ===
+
+// Product Attributes Template theo Category
+model CategoryAttributeTemplate {
+  id          String        @id @default(uuid())
+  categoryId  String
+  name        String // "Material", "Size", "Color"
+  key         String // "material", "size", "color"
+  type        AttributeType // TEXT, NUMBER, SELECT, MULTI_SELECT, BOOLEAN
+  isRequired  Boolean       @default(false)
+  isVariant   Boolean       @default(false) // Dùng để tạo variant
+  options     Json? // ["Cotton", "Silk", "Wool"] cho SELECT
+  unit        String? // "cm", "kg", "inch"
+  sortOrder   Int           @default(0)
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, key])
+  @@index([categoryId])
+  @@index([isVariant])
+}
+
+// Product Attributes thực tế
+model ProductAttribute {
+  id        String        @id @default(uuid())
+  productId String
+  key       String // "material", "size", "color"
+  name      String // "Material", "Size", "Color"
+  value     String // "Cotton", "Large", "Red"
+  type      AttributeType
+  unit      String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, key])
+  @@index([productId])
+  @@index([key])
+}
+
+// Product Variants (combination of attributes)
+model ProductVariant {
+  id            String   @id @default(uuid())
+  productId     String
+  sku           String   @unique
+  name          String? // "Large Red Cotton Shirt"
+  price         Decimal  @db.Decimal(10, 2)
+  discountPrice Decimal? @db.Decimal(10, 2)
+  quantity      Int      @default(0)
+  images        String[]
+  weight        Float?
+  dimensions    Json? // {length, width, height}
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product    Product                   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attributes ProductVariantAttribute[]
+  cartItems  CartItem[]                @relation("VariantCartItems")
+  orderItems OrderItem[]               @relation("VariantOrderItems")
+
+  @@index([productId])
+  @@index([sku])
+  @@index([isActive])
+}
+
+model ProductVariantAttribute {
+  id        String @id @default(uuid())
+  variantId String
+  key       String
+  name      String
+  value     String
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, key])
+  @@index([variantId])
+}
+
+// Custom Attributes cho artisan tự định nghĩa
+model CustomAttributeTemplate {
+  id          String        @id @default(uuid())
+  artisanId   String
+  name        String
+  key         String
+  type        AttributeType
+  options     Json?
+  unit        String?
+  description String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  artisan User @relation("ArtisanCustomAttributes", fields: [artisanId], references: [id], onDelete: Cascade)
+
+  @@unique([artisanId, key])
+  @@index([artisanId])
+}
+
 model Product {
   id             String        @id @default(uuid())
   sellerId       String
@@ -455,11 +571,19 @@ model Product {
   reviewCount    Int           @default(0)
   viewCount      Int           @default(0)
   salesCount     Int           @default(0)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  deletedAt      DateTime?
 
-  seller          User              @relation(fields: [sellerId], references: [id])
+  // New fields
+  specifications Json? // Technical specs as JSON
+  customFields   Json? // Custom fields defined by artisan
+  hasVariants    Boolean @default(false)
+  weight         Float?
+  dimensions     Json? // {length, width, height, unit}
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  seller          User               @relation(fields: [sellerId], references: [id])
   categories      CategoryProduct[]
   priceHistory    PriceHistory[]
   reviews         Review[]
@@ -468,6 +592,8 @@ model Product {
   quoteRequests   QuoteRequest[]
   productMentions ProductMention[]
   wishlistItems   Wishlist[]
+  attributes      ProductAttribute[]
+  variants        ProductVariant[]
 
   @@index([sellerId])
   @@index([status])
@@ -475,6 +601,7 @@ model Product {
   @@index([createdAt])
   @@index([deletedAt])
   @@index([tags])
+  @@index([hasVariants])
 }
 
 model Category {
@@ -490,9 +617,10 @@ model Category {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  parent   Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children Category[]        @relation("CategoryHierarchy")
-  products CategoryProduct[]
+  parent             Category?                   @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children           Category[]                  @relation("CategoryHierarchy")
+  products           CategoryProduct[]
+  attributeTemplates CategoryAttributeTemplate[]
 
   @@index([parentId])
   @@index([level])
@@ -561,15 +689,17 @@ model CartItem {
   id        String   @id @default(uuid())
   userId    String
   productId String
+  variantId String?
   quantity  Int
   price     Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation("VariantCartItems", fields: [variantId], references: [id])
 
-  @@unique([userId, productId])
+  @@unique([userId, productId, variantId])
   @@index([userId])
 }
 
@@ -624,14 +754,16 @@ model OrderItem {
   id        String   @id @default(uuid())
   orderId   String
   productId String
+  variantId String?
   sellerId  String
   quantity  Int
   price     Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now())
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
-  seller  User    @relation("SellerOrderItems", fields: [sellerId], references: [id])
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation("VariantOrderItems", fields: [variantId], references: [id])
+  seller  User            @relation("SellerOrderItems", fields: [sellerId], references: [id])
 
   @@index([orderId])
   @@index([sellerId])

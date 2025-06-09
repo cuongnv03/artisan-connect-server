@@ -33,6 +33,46 @@ export const createProductSchema = Joi.object({
     'string.max': 'Each tag cannot exceed 30 characters',
   }),
   isCustomizable: Joi.boolean().default(false),
+  specifications: Joi.object().pattern(Joi.string(), Joi.any()),
+  customFields: Joi.object().pattern(Joi.string(), Joi.any()),
+  weight: Joi.number().positive(),
+  dimensions: Joi.object({
+    length: Joi.number().positive(),
+    width: Joi.number().positive(),
+    height: Joi.number().positive(),
+    unit: Joi.string().valid('cm', 'mm', 'inch', 'ft').default('cm'),
+  }),
+  attributes: Joi.array().items(
+    Joi.object({
+      key: Joi.string().required(),
+      value: Joi.string().required(),
+      unit: Joi.string().allow(''),
+    }),
+  ),
+  variants: Joi.array().items(
+    Joi.object({
+      name: Joi.string().max(200).allow(''),
+      price: Joi.number().positive(),
+      discountPrice: Joi.number().positive(),
+      quantity: Joi.number().integer().min(0).required(),
+      images: Joi.array().items(Joi.string().uri()).max(10),
+      weight: Joi.number().positive(),
+      dimensions: Joi.object({
+        length: Joi.number().positive(),
+        width: Joi.number().positive(),
+        height: Joi.number().positive(),
+        unit: Joi.string().valid('cm', 'mm', 'inch', 'ft'),
+      }),
+      attributes: Joi.array()
+        .items(
+          Joi.object({
+            key: Joi.string().required(),
+            value: Joi.string().required(),
+          }),
+        )
+        .required(),
+    }),
+  ),
 });
 
 export const updateProductSchema = Joi.object({
@@ -46,6 +86,46 @@ export const updateProductSchema = Joi.object({
   images: Joi.array().items(Joi.string().uri()).min(1).max(10),
   tags: Joi.array().items(Joi.string().max(30)).max(10),
   isCustomizable: Joi.boolean(),
+  specifications: Joi.object().pattern(Joi.string(), Joi.any()),
+  customFields: Joi.object().pattern(Joi.string(), Joi.any()),
+  weight: Joi.number().positive(),
+  dimensions: Joi.object({
+    length: Joi.number().positive(),
+    width: Joi.number().positive(),
+    height: Joi.number().positive(),
+    unit: Joi.string().valid('cm', 'mm', 'inch', 'ft').default('cm'),
+  }),
+  attributes: Joi.array().items(
+    Joi.object({
+      key: Joi.string().required(),
+      value: Joi.string().required(),
+      unit: Joi.string().allow(''),
+    }),
+  ),
+  variants: Joi.array().items(
+    Joi.object({
+      name: Joi.string().max(200).allow(''),
+      price: Joi.number().positive(),
+      discountPrice: Joi.number().positive(),
+      quantity: Joi.number().integer().min(0).required(),
+      images: Joi.array().items(Joi.string().uri()).max(10),
+      weight: Joi.number().positive(),
+      dimensions: Joi.object({
+        length: Joi.number().positive(),
+        width: Joi.number().positive(),
+        height: Joi.number().positive(),
+        unit: Joi.string().valid('cm', 'mm', 'inch', 'ft'),
+      }),
+      attributes: Joi.array()
+        .items(
+          Joi.object({
+            key: Joi.string().required(),
+            value: Joi.string().required(),
+          }),
+        )
+        .required(),
+    }),
+  ),
 })
   .min(1)
   .messages({

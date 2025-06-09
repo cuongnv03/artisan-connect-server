@@ -12,6 +12,7 @@ import {
 import { IProductRepository } from '../repositories/ProductRepository.interface';
 import { ICategoryRepository } from '../repositories/CategoryRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
+import { IProductAttributeService } from './ProductAttributeService.interface';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -21,12 +22,14 @@ export class ProductService implements IProductService {
   private productRepository: IProductRepository;
   private categoryRepository: ICategoryRepository;
   private userRepository: IUserRepository;
+  private attributeService: IProductAttributeService;
   private logger = Logger.getInstance();
 
   constructor() {
     this.productRepository = container.resolve<IProductRepository>('productRepository');
     this.categoryRepository = container.resolve<ICategoryRepository>('categoryRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
+    this.attributeService = container.resolve<IProductAttributeService>('productAttributeService');
   }
 
   async createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithSeller> {
@@ -53,6 +56,26 @@ export class ProductService implements IProductService {
       }
 
       const product = await this.productRepository.createProduct(sellerId, data);
+
+      // Set attributes if provided
+      if (data.attributes && data.attributes.length > 0) {
+        try {
+          await this.attributeService.setProductAttributes(product.id, sellerId, data.attributes);
+        } catch (error) {
+          this.logger.warn(`Failed to set product attributes: ${error}`);
+        }
+      }
+
+      // Create variants if provided
+      if (data.variants && data.variants.length > 0) {
+        try {
+          for (const variantData of data.variants) {
+            await this.attributeService.createProductVariant(product.id, sellerId, variantData);
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to create product variants: ${error}`);
+        }
+      }
 
       this.logger.info(`Product created: ${product.id} "${product.name}" by seller ${sellerId}`);
 
@@ -113,7 +136,11 @@ export class ProductService implements IProductService {
 
   async getProductById(id: string): Promise<ProductWithSeller | null> {
     try {
-      return await this.productRepository.getProductById(id);
+      const product = await this.productRepository.getProductById(id);
+      if (!product) return null;
+
+      // Get enhanced product with attributes and variants
+      return await this.getProductWithDetails(product);
     } catch (error) {
       this.logger.error(`Error getting product by ID: ${error}`);
       return null;
@@ -122,7 +149,11 @@ export class ProductService implements IProductService {
 
   async getProductBySlug(slug: string): Promise<ProductWithSeller | null> {
     try {
-      return await this.productRepository.getProductBySlug(slug);
+      const product = await this.productRepository.getProductBySlug(slug);
+      if (!product) return null;
+
+      // Get enhanced product with attributes and variants
+      return await this.getProductWithDetails(product);
     } catch (error) {
       this.logger.error(`Error getting product by slug: ${error}`);
       return null;
@@ -328,6 +359,25 @@ export class ProductService implements IProductService {
       return true;
     } catch (error) {
       return false;
+    }
+  }
+
+  private async getProductWithDetails(product: ProductWithSeller): Promise<ProductWithSeller> {
+    try {
+      // Get attributes
+      const attributes = await this.attributeService.getProductAttributes(product.id);
+
+      // Get variants
+      const variants = await this.attributeService.getProductVariants(product.id);
+
+      return {
+        ...product,
+        attributes,
+        variants,
+      } as any; // Type assertion since extending the interface
+    } catch (error) {
+      this.logger.warn(`Failed to get product details: ${error}`);
+      return product;
     }
   }
 }
