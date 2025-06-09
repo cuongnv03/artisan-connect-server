@@ -15,15 +15,15 @@ import {
 import { IProductAttributeRepository } from '../repositories/ProductAttributeRepository.interface';
 import { IProductRepository } from '../repositories/ProductRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
-import { BaseService } from '../../../shared/baseClasses/BaseService';
+import { Logger } from '../../../core/logging/Logger';
 import container from '../../../core/di/container';
 
-export class ProductAttributeService extends BaseService implements IProductAttributeService {
+export class ProductAttributeService implements IProductAttributeService {
   private attributeRepository: IProductAttributeRepository;
   private productRepository: IProductRepository;
+  private logger = Logger.getInstance();
 
   constructor() {
-    super();
     this.attributeRepository = container.resolve<IProductAttributeRepository>(
       'productAttributeRepository',
     );
@@ -58,7 +58,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
       this.logger.info(`Category attribute template created: ${template.id} - ${template.name}`);
       return template;
     } catch (error) {
-      this.handleError(error, 'Failed to create category attribute template');
+      this.logger.error(`Error creating category attribute template: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to create category attribute template', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -79,7 +83,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
       this.logger.info(`Category attribute template updated: ${id}`);
       return template;
     } catch (error) {
-      this.handleError(error, 'Failed to update category attribute template');
+      this.logger.error(`Error updating category attribute template: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to update category attribute template', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -93,7 +101,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
 
       return result;
     } catch (error) {
-      this.handleError(error, 'Failed to delete category attribute template');
+      this.logger.error(`Error deleting category attribute template: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to delete category attribute template', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -101,7 +113,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
     try {
       return await this.attributeRepository.getCategoryAttributeTemplates(categoryId);
     } catch (error) {
-      this.handleError(error, 'Failed to get category attribute templates');
+      this.logger.error(`Error getting category attribute templates: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to get category attribute templates', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -128,7 +144,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
       this.logger.info(`Product attributes set: ${productId} - ${attributes.length} attributes`);
       return savedAttributes;
     } catch (error) {
-      this.handleError(error, 'Failed to set product attributes');
+      this.logger.error(`Error setting product attributes: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to set product attributes', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -136,7 +156,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
     try {
       return await this.attributeRepository.getProductAttributes(productId);
     } catch (error) {
-      this.handleError(error, 'Failed to get product attributes');
+      this.logger.error(`Error getting product attributes: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to get product attributes', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -171,7 +195,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
       this.logger.info(`Product variant created: ${variant.id} - ${variant.sku}`);
       return variant;
     } catch (error) {
-      this.handleError(error, 'Failed to create product variant');
+      this.logger.error(`Error creating product variant: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to create product variant', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -201,7 +229,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
       this.logger.info(`Product variant updated: ${id}`);
       return updatedVariant;
     } catch (error) {
-      this.handleError(error, 'Failed to update product variant');
+      this.logger.error(`Error updating product variant: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to update product variant', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -226,7 +258,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
 
       return result;
     } catch (error) {
-      this.handleError(error, 'Failed to delete product variant');
+      this.logger.error(`Error deleting product variant: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to delete product variant', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -234,7 +270,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
     try {
       return await this.attributeRepository.getProductVariants(productId);
     } catch (error) {
-      this.handleError(error, 'Failed to get product variants');
+      this.logger.error(`Error getting product variants: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to get product variants', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -273,7 +313,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
       this.logger.info(`Custom attribute template created: ${template.id} - ${template.name}`);
       return template;
     } catch (error) {
-      this.handleError(error, 'Failed to create custom attribute template');
+      this.logger.error(`Error creating custom attribute template: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to create custom attribute template', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -281,7 +325,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
     try {
       return await this.attributeRepository.getCustomAttributeTemplates(artisanId);
     } catch (error) {
-      this.handleError(error, 'Failed to get custom attribute templates');
+      this.logger.error(`Error getting custom attribute templates: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to get custom attribute templates', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -296,7 +344,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
 
       return result;
     } catch (error) {
-      this.handleError(error, 'Failed to delete custom attribute template');
+      this.logger.error(`Error deleting custom attribute template: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to delete custom attribute template', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -358,7 +410,11 @@ export class ProductAttributeService extends BaseService implements IProductAttr
       this.logger.info(`Generated ${createdVariants.length} variants for product ${productId}`);
       return createdVariants;
     } catch (error) {
-      this.handleError(error, 'Failed to generate variants from attributes');
+      this.logger.error(`Error generating variants from attributes: ${error}`);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to generate variants from attributes', 500, 'SERVICE_ERROR');
     }
   }
 

@@ -124,9 +124,9 @@ container.register('likeService', new LikeService());
 container.register('commentService', new CommentService());
 container.register('savedPostService', new SavedPostService());
 
+container.register('productAttributeService', new ProductAttributeService());
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
-container.register('productAttributeService', new ProductAttributeService());
 
 container.register('cartService', new CartService());
 container.register('quoteService', new QuoteService());
