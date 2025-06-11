@@ -38,6 +38,7 @@ export class LoginController extends BaseController {
         {
           user: authResult.user,
           accessToken: authResult.accessToken,
+          refreshToken: authResult.refreshToken,
         },
         'Login successful',
       );

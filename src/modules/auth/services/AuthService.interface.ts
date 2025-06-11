@@ -12,7 +12,7 @@ export interface IAuthService {
   register(data: RegisterUserDto): Promise<Omit<User, 'password'>>;
   login(credentials: LoginUserDto): Promise<AuthResultDto | null>;
   logout(refreshToken: string): Promise<boolean>;
-  refreshToken(refreshToken: string): Promise<string | null>;
+  refreshToken(refreshToken: string): Promise<{ accessToken: string; user?: any } | null>;
   getUserById(id: string): Promise<Omit<User, 'password'> | null>;
   forgotPassword(data: ForgotPasswordDto): Promise<boolean>;
   resetPassword(data: ResetPasswordDto): Promise<boolean>;

@@ -9,8 +9,13 @@ import {
 export interface ICartService {
   // Core operations
   addToCart(userId: string, data: AddToCartDto): Promise<CartItem>;
-  updateCartItem(userId: string, productId: string, data: UpdateCartItemDto): Promise<CartItem>;
-  removeFromCart(userId: string, productId: string): Promise<boolean>;
+  updateCartItem(
+    userId: string,
+    productId: string,
+    data: UpdateCartItemDto,
+    variantId?: string,
+  ): Promise<CartItem>;
+  removeFromCart(userId: string, productId: string, variantId?: string): Promise<boolean>;
   clearCart(userId: string): Promise<boolean>;
 
   // Get cart data

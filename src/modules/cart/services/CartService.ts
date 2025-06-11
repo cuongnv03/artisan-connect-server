@@ -44,9 +44,16 @@ export class CartService implements ICartService {
         throw new AppError('Cart is full. Maximum 50 items allowed', 400, 'CART_LIMIT_EXCEEDED');
       }
 
-      const cartItem = await this.cartRepository.addToCart(userId, data.productId, data.quantity);
+      const cartItem = await this.cartRepository.addToCart(
+        userId,
+        data.productId,
+        data.quantity,
+        data.variantId,
+      );
 
-      this.logger.info(`User ${userId} added ${data.quantity}x product ${data.productId} to cart`);
+      this.logger.info(
+        `User ${userId} added ${data.quantity}x product ${data.productId}${data.variantId ? ` variant ${data.variantId}` : ''} to cart`,
+      );
 
       return cartItem;
     } catch (error) {
@@ -60,6 +67,7 @@ export class CartService implements ICartService {
     userId: string,
     productId: string,
     data: UpdateCartItemDto,
+    variantId?: string,
   ): Promise<CartItem> {
     try {
       if (data.quantity <= 0 || data.quantity > 10) {
@@ -70,9 +78,12 @@ export class CartService implements ICartService {
         userId,
         productId,
         data.quantity,
+        variantId,
       );
 
-      this.logger.info(`User ${userId} updated product ${productId} quantity to ${data.quantity}`);
+      this.logger.info(
+        `User ${userId} updated product ${productId}${variantId ? ` variant ${variantId}` : ''} quantity to ${data.quantity}`,
+      );
 
       return updatedItem;
     } catch (error) {
@@ -82,12 +93,14 @@ export class CartService implements ICartService {
     }
   }
 
-  async removeFromCart(userId: string, productId: string): Promise<boolean> {
+  async removeFromCart(userId: string, productId: string, variantId?: string): Promise<boolean> {
     try {
-      const result = await this.cartRepository.removeFromCart(userId, productId);
+      const result = await this.cartRepository.removeFromCart(userId, productId, variantId);
 
       if (result) {
-        this.logger.info(`User ${userId} removed product ${productId} from cart`);
+        this.logger.info(
+          `User ${userId} removed product ${productId}${variantId ? ` variant ${variantId}` : ''} from cart`,
+        );
       }
 
       return result;

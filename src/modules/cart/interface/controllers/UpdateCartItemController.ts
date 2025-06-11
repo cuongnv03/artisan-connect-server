@@ -16,7 +16,14 @@ export class UpdateCartItemController extends BaseController {
     this.validateAuth(req);
 
     const { productId } = req.params;
-    const cartItem = await this.cartService.updateCartItem(req.user!.id, productId, req.body);
+    const { variantId } = req.query;
+
+    const cartItem = await this.cartService.updateCartItem(
+      req.user!.id,
+      productId,
+      req.body,
+      variantId as string | undefined,
+    );
 
     ApiResponse.success(res, cartItem, 'Cart item updated successfully');
   }

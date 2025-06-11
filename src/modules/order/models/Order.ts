@@ -46,6 +46,7 @@ export interface OrderItem {
   id: string;
   orderId: string;
   productId: string;
+  variantId?: string | null;
   sellerId: string;
   quantity: number;
   price: number;
@@ -59,6 +60,16 @@ export interface OrderItemWithDetails extends OrderItem {
     slug?: string;
     images: string[];
     isCustomizable: boolean;
+  };
+  variant?: {
+    id: string;
+    sku: string;
+    name?: string;
+    attributes: Array<{
+      key: string;
+      name: string;
+      value: string;
+    }>;
   };
   seller: {
     id: string;

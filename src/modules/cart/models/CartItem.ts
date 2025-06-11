@@ -2,11 +2,13 @@ export interface CartItem {
   id: string;
   userId: string;
   productId: string;
+  variantId?: string | null;
   quantity: number;
   price: number; // Price at time of adding to cart
   createdAt: Date;
   updatedAt: Date;
   product?: ProductInCart;
+  variant?: ProductVariantInCart;
 }
 
 export interface ProductInCart {
@@ -28,6 +30,20 @@ export interface ProductInCart {
       isVerified: boolean;
     };
   };
+}
+
+export interface ProductVariantInCart {
+  id: string;
+  sku: string;
+  name?: string;
+  price: number;
+  discountPrice?: number;
+  images: string[];
+  attributes: Array<{
+    key: string;
+    name: string;
+    value: string;
+  }>;
 }
 
 export interface CartSummary {
@@ -56,6 +72,7 @@ export interface SellerCartGroup {
 // DTOs
 export interface AddToCartDto {
   productId: string;
+  variantId?: string;
   quantity: number;
 }
 

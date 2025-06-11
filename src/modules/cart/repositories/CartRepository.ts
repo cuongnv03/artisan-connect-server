@@ -22,7 +22,12 @@ export class CartRepository
     super(prisma, 'cartItem');
   }
 
-  async addToCart(userId: string, productId: string, quantity: number): Promise<CartItem> {
+  async addToCart(
+    userId: string,
+    productId: string,
+    quantity: number,
+    variantId?: string,
+  ): Promise<CartItem> {
     try {
       // Check if product exists and is available
       const product = await this.prisma.product.findUnique({
@@ -35,6 +40,11 @@ export class CartRepository
               },
             },
           },
+          variants: variantId
+            ? {
+                where: { id: variantId },
+              }
+            : undefined,
         },
       });
 
@@ -54,9 +64,22 @@ export class CartRepository
         );
       }
 
-      if (product.quantity < quantity) {
+      let availableQuantity = product.quantity;
+      let price = product.discountPrice || product.price;
+
+      // Handle variant-specific logic
+      if (variantId) {
+        const variant = product.variants?.[0];
+        if (!variant) {
+          throw new AppError('Product variant not found', 404, 'VARIANT_NOT_FOUND');
+        }
+        availableQuantity = variant.quantity;
+        price = variant.discountPrice || variant.price || price;
+      }
+
+      if (availableQuantity < quantity) {
         throw new AppError(
-          `Insufficient stock. Only ${product.quantity} available.`,
+          `Insufficient stock. Only ${availableQuantity} available.`,
           400,
           'INSUFFICIENT_STOCK',
         );
@@ -64,7 +87,13 @@ export class CartRepository
 
       // Check if item already exists in cart
       const existingCartItem = await this.prisma.cartItem.findUnique({
-        where: { userId_productId: { userId, productId } },
+        where: {
+          userId_productId_variantId: {
+            userId,
+            productId,
+            variantId: variantId || null,
+          },
+        },
       });
 
       let cartItem: any;
@@ -73,19 +102,25 @@ export class CartRepository
         // Update existing item
         const newQuantity = existingCartItem.quantity + quantity;
 
-        if (product.quantity < newQuantity) {
+        if (availableQuantity < newQuantity) {
           throw new AppError(
-            `Cannot add ${quantity} more. Total would be ${newQuantity}, but only ${product.quantity} available.`,
+            `Cannot add ${quantity} more. Total would be ${newQuantity}, but only ${availableQuantity} available.`,
             400,
             'INSUFFICIENT_STOCK',
           );
         }
 
         cartItem = await this.prisma.cartItem.update({
-          where: { userId_productId: { userId, productId } },
+          where: {
+            userId_productId_variantId: {
+              userId,
+              productId,
+              variantId: variantId || null,
+            },
+          },
           data: {
             quantity: newQuantity,
-            price: product.discountPrice || product.price,
+            price,
             updatedAt: new Date(),
           },
         });
@@ -95,14 +130,15 @@ export class CartRepository
           data: {
             userId,
             productId,
+            variantId: variantId || null,
             quantity,
-            price: product.discountPrice || product.price,
+            price,
           },
         });
       }
 
       // Return cart item with product details
-      return this.enrichCartItemWithProduct(cartItem, product);
+      return this.enrichCartItemWithProduct(cartItem, product, variantId);
     } catch (error) {
       this.logger.error(`Error adding to cart: ${error}`);
       if (error instanceof AppError) throw error;
@@ -110,32 +146,54 @@ export class CartRepository
     }
   }
 
-  async updateCartItem(userId: string, productId: string, quantity: number): Promise<CartItem> {
+  async updateCartItem(
+    userId: string,
+    productId: string,
+    quantity: number,
+    variantId?: string,
+  ): Promise<CartItem> {
     try {
       if (quantity <= 0) {
         throw new AppError('Quantity must be greater than 0', 400, 'INVALID_QUANTITY');
       }
 
-      // Check product stock
-      const product = await this.prisma.product.findUnique({
-        where: { id: productId },
-        select: { quantity: true, status: true },
+      // Check product and variant stock
+      const whereClause = variantId
+        ? { id: productId, variants: { some: { id: variantId } } }
+        : { id: productId };
+
+      const product = await this.prisma.product.findFirst({
+        where: whereClause,
+        include: {
+          variants: variantId ? { where: { id: variantId } } : undefined,
+        },
       });
 
       if (!product || product.status !== 'PUBLISHED') {
         throw new AppError('Product is not available', 400, 'PRODUCT_UNAVAILABLE');
       }
 
-      if (product.quantity < quantity) {
+      let availableQuantity = product.quantity;
+      if (variantId && product.variants?.[0]) {
+        availableQuantity = product.variants[0].quantity;
+      }
+
+      if (availableQuantity < quantity) {
         throw new AppError(
-          `Insufficient stock. Only ${product.quantity} available.`,
+          `Insufficient stock. Only ${availableQuantity} available.`,
           400,
           'INSUFFICIENT_STOCK',
         );
       }
 
       const updatedItem = await this.prisma.cartItem.update({
-        where: { userId_productId: { userId, productId } },
+        where: {
+          userId_productId_variantId: {
+            userId,
+            productId,
+            variantId: variantId || null,
+          },
+        },
         data: { quantity, updatedAt: new Date() },
         include: {
           product: {
@@ -147,6 +205,7 @@ export class CartRepository
                   },
                 },
               },
+              variants: variantId ? { where: { id: variantId } } : undefined,
             },
           },
         },
@@ -160,10 +219,16 @@ export class CartRepository
     }
   }
 
-  async removeFromCart(userId: string, productId: string): Promise<boolean> {
+  async removeFromCart(userId: string, productId: string, variantId?: string): Promise<boolean> {
     try {
       await this.prisma.cartItem.delete({
-        where: { userId_productId: { userId, productId } },
+        where: {
+          userId_productId_variantId: {
+            userId,
+            productId,
+            variantId: variantId || null,
+          },
+        },
       });
       return true;
     } catch (error) {
@@ -343,34 +408,52 @@ export class CartRepository
 
   // Helper methods
   private transformCartItem(cartItem: any): CartItem {
-    return {
+    const baseItem = {
       id: cartItem.id,
       userId: cartItem.userId,
       productId: cartItem.productId,
+      variantId: cartItem.variantId,
       quantity: cartItem.quantity,
       price: cartItem.price,
       createdAt: cartItem.createdAt,
       updatedAt: cartItem.updatedAt,
-      product: cartItem.product
-        ? {
-            id: cartItem.product.id,
-            name: cartItem.product.name,
-            slug: cartItem.product.slug,
-            price: cartItem.product.price,
-            discountPrice: cartItem.product.discountPrice,
-            images: cartItem.product.images,
-            status: cartItem.product.status,
-            quantity: cartItem.product.quantity,
-            seller: {
-              id: cartItem.product.seller.id,
-              firstName: cartItem.product.seller.firstName,
-              lastName: cartItem.product.seller.lastName,
-              username: cartItem.product.seller.username,
-              artisanProfile: cartItem.product.seller.artisanProfile,
-            },
-          }
-        : undefined,
     };
+
+    if (cartItem.product) {
+      baseItem.product = {
+        id: cartItem.product.id,
+        name: cartItem.product.name,
+        slug: cartItem.product.slug,
+        price: cartItem.product.price,
+        discountPrice: cartItem.product.discountPrice,
+        images: cartItem.product.images,
+        status: cartItem.product.status,
+        quantity: cartItem.product.quantity,
+        seller: {
+          id: cartItem.product.seller.id,
+          firstName: cartItem.product.seller.firstName,
+          lastName: cartItem.product.seller.lastName,
+          username: cartItem.product.seller.username,
+          artisanProfile: cartItem.product.seller.artisanProfile,
+        },
+      };
+
+      // Add variant info if available
+      if (cartItem.variantId && cartItem.product.variants?.[0]) {
+        const variant = cartItem.product.variants[0];
+        baseItem.variant = {
+          id: variant.id,
+          sku: variant.sku,
+          name: variant.name,
+          price: variant.price,
+          discountPrice: variant.discountPrice,
+          images: variant.images,
+          attributes: variant.attributes || [],
+        };
+      }
+    }
+
+    return baseItem as CartItem;
   }
 
   private enrichCartItemWithProduct(cartItem: any, product: any): CartItem {

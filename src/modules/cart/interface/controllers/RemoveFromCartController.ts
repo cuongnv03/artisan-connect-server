@@ -16,7 +16,13 @@ export class RemoveFromCartController extends BaseController {
     this.validateAuth(req);
 
     const { productId } = req.params;
-    const result = await this.cartService.removeFromCart(req.user!.id, productId);
+    const { variantId } = req.query;
+
+    const result = await this.cartService.removeFromCart(
+      req.user!.id,
+      productId,
+      variantId as string | undefined,
+    );
 
     if (result) {
       ApiResponse.success(res, null, 'Item removed from cart successfully');

@@ -153,7 +153,7 @@ export class AuthService implements IAuthService {
     }
   }
 
-  async refreshToken(refreshToken: string): Promise<string | null> {
+  async refreshToken(refreshToken: string): Promise<{ accessToken: string; user?: any } | null> {
     try {
       // Validate token
       const payload = this.jwtService.verifyRefreshToken(refreshToken);
@@ -174,10 +174,23 @@ export class AuthService implements IAuthService {
       }
 
       // Generate new access token
-      return this.jwtService.generateAccessToken({
+      const accessToken = this.jwtService.generateAccessToken({
         userId: user.id,
         role: user.role,
       });
+
+      return {
+        accessToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          avatarUrl: user.avatarUrl,
+        },
+      };
     } catch (error) {
       this.logger.error(`Refresh token error: ${error}`);
       return null;

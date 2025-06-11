@@ -35,7 +35,7 @@ export class OrderRepository
   ): Promise<OrderWithDetails> {
     try {
       const createdOrder = await this.prisma.$transaction(async (tx) => {
-        // Get cart items
+        // Get cart items with variants
         const cartItems = await tx.cartItem.findMany({
           where: { userId },
           include: {
@@ -50,6 +50,11 @@ export class OrderRepository
                 },
               },
             },
+            variant: {
+              include: {
+                attributes: true,
+              },
+            },
           },
         });
 
@@ -57,7 +62,7 @@ export class OrderRepository
           throw new AppError('Cart is empty', 400, 'EMPTY_CART');
         }
 
-        // Validate products and calculate totals
+        // Validate products and variants, calculate totals
         let subtotal = 0;
         const orderItems: any[] = [];
 
@@ -72,25 +77,46 @@ export class OrderRepository
             );
           }
 
-          if (product.quantity < item.quantity) {
-            throw new AppError(`Insufficient stock for ${product.name}`, 400, 'INSUFFICIENT_STOCK');
+          let availableQuantity = product.quantity;
+          let price = product.discountPrice || product.price;
+
+          // Handle variant-specific validation
+          if (item.variantId && item.variant) {
+            availableQuantity = item.variant.quantity;
+            price = item.variant.discountPrice || item.variant.price || price;
+
+            if (!item.variant.isActive) {
+              throw new AppError(`Product variant is not available`, 400, 'VARIANT_UNAVAILABLE');
+            }
           }
 
-          const price = product.discountPrice || product.price;
+          if (availableQuantity < item.quantity) {
+            const productName = item.variant?.name || product.name;
+            throw new AppError(`Insufficient stock for ${productName}`, 400, 'INSUFFICIENT_STOCK');
+          }
+
           subtotal += Number(price) * item.quantity;
 
           orderItems.push({
             productId: item.productId,
+            variantId: item.variantId, // NEW: Include variant ID
             sellerId: product.sellerId,
             quantity: item.quantity,
             price: price,
           });
 
-          // Update product quantity
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { quantity: { decrement: item.quantity } },
-          });
+          // Update stock - choose between product or variant
+          if (item.variantId) {
+            await tx.productVariant.update({
+              where: { id: item.variantId },
+              data: { quantity: { decrement: item.quantity } },
+            });
+          } else {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { quantity: { decrement: item.quantity } },
+            });
+          }
         }
 
         // Validate address
@@ -279,8 +305,6 @@ export class OrderRepository
     }
   }
 
-  // src/modules/order/repositories/OrderRepository.ts
-
   async findByIdWithDetails(id: string): Promise<OrderWithDetails | null> {
     try {
       const order = await this.prisma.order.findUnique({
@@ -305,6 +329,14 @@ export class OrderRepository
                   slug: true,
                   images: true,
                   isCustomizable: true,
+                },
+              },
+              variant: {
+                select: {
+                  id: true,
+                  sku: true,
+                  name: true,
+                  attributes: true,
                 },
               },
               seller: {

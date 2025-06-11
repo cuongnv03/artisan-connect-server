@@ -26,15 +26,17 @@ export class RefreshTokenController extends BaseController {
       }
 
       // Generate new access token
-      const accessToken = await this.authService.refreshToken(refreshToken);
+      const result = await this.authService.refreshToken(refreshToken);
 
-      if (!accessToken) {
+      if (!result) {
         // Clear invalid refresh token cookie
         res.clearCookie(this.cookieConfig.refreshTokenName);
         throw AppError.unauthorized('Invalid refresh token');
       }
 
-      ApiResponse.success(res, { accessToken }, 'Token refreshed successfully');
+      const responseData = typeof result === 'string' ? { accessToken: result } : result;
+
+      ApiResponse.success(res, responseData, 'Token refreshed successfully');
     } catch (error) {
       next(error);
     }

@@ -5,6 +5,9 @@ export const addToCartSchema = Joi.object({
     'string.uuid': 'Product ID must be a valid UUID',
     'any.required': 'Product ID is required',
   }),
+  variantId: Joi.string().uuid().optional().messages({
+    'string.uuid': 'Variant ID must be a valid UUID',
+  }),
   quantity: Joi.number().integer().min(1).max(10).required().messages({
     'number.min': 'Quantity must be at least 1',
     'number.max': 'Maximum 10 items per product allowed',
