@@ -85,16 +85,27 @@ export class CartRepository
         );
       }
 
-      // Check if item already exists in cart
-      const existingCartItem = await this.prisma.cartItem.findUnique({
-        where: {
-          userId_productId_variantId: {
+      // Check if item already exists in cart - UPDATED LOGIC
+      let existingCartItem;
+      if (variantId) {
+        // Query with variantId
+        existingCartItem = await this.prisma.cartItem.findFirst({
+          where: {
             userId,
             productId,
-            variantId: variantId || null,
+            variantId,
           },
-        },
-      });
+        });
+      } else {
+        // Query without variantId (variantId is null)
+        existingCartItem = await this.prisma.cartItem.findFirst({
+          where: {
+            userId,
+            productId,
+            variantId: null,
+          },
+        });
+      }
 
       let cartItem: any;
 
@@ -111,13 +122,7 @@ export class CartRepository
         }
 
         cartItem = await this.prisma.cartItem.update({
-          where: {
-            userId_productId_variantId: {
-              userId,
-              productId,
-              variantId: variantId || null,
-            },
-          },
+          where: { id: existingCartItem.id },
           data: {
             quantity: newQuantity,
             price,
@@ -186,14 +191,24 @@ export class CartRepository
         );
       }
 
+      // Find cart item - UPDATED LOGIC
+      let cartItemWhere;
+      if (variantId) {
+        cartItemWhere = { userId, productId, variantId };
+      } else {
+        cartItemWhere = { userId, productId, variantId: null };
+      }
+
+      const existingItem = await this.prisma.cartItem.findFirst({
+        where: cartItemWhere,
+      });
+
+      if (!existingItem) {
+        throw new AppError('Cart item not found', 404, 'CART_ITEM_NOT_FOUND');
+      }
+
       const updatedItem = await this.prisma.cartItem.update({
-        where: {
-          userId_productId_variantId: {
-            userId,
-            productId,
-            variantId: variantId || null,
-          },
-        },
+        where: { id: existingItem.id },
         data: { quantity, updatedAt: new Date() },
         include: {
           product: {
@@ -221,21 +236,29 @@ export class CartRepository
 
   async removeFromCart(userId: string, productId: string, variantId?: string): Promise<boolean> {
     try {
-      await this.prisma.cartItem.delete({
-        where: {
-          userId_productId_variantId: {
-            userId,
-            productId,
-            variantId: variantId || null,
-          },
-        },
+      // Find cart item - UPDATED LOGIC
+      let cartItemWhere;
+      if (variantId) {
+        cartItemWhere = { userId, productId, variantId };
+      } else {
+        cartItemWhere = { userId, productId, variantId: null };
+      }
+
+      const existingItem = await this.prisma.cartItem.findFirst({
+        where: cartItemWhere,
       });
+
+      if (!existingItem) {
+        return false; // Item not found
+      }
+
+      await this.prisma.cartItem.delete({
+        where: { id: existingItem.id },
+      });
+
       return true;
     } catch (error) {
       this.logger.error(`Error removing from cart: ${error}`);
-      if ((error as any).code === 'P2025') {
-        return false; // Item not found
-      }
       throw new AppError('Failed to remove item from cart', 500, 'CART_REMOVE_ERROR');
     }
   }
