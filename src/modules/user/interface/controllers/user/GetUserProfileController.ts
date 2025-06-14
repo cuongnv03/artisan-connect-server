@@ -23,14 +23,9 @@ export class GetUserProfileController extends BaseController {
         throw AppError.notFound('User not found');
       }
 
-      // Track profile view if authenticated and not own profile
-      if (req.user && req.user.id !== id) {
-        await this.userService.trackActivity({
-          userId: req.user.id,
-          activityType: 'profile_view',
-          entityId: id,
-          entityType: 'user',
-        });
+      // BUSINESS RULE: Chỉ ARTISAN mới có public profile
+      if (user.role !== 'ARTISAN') {
+        throw AppError.forbidden('Profile not available', 'PROFILE_NOT_PUBLIC');
       }
 
       ApiResponse.success(res, user, 'User profile retrieved successfully');

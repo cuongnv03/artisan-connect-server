@@ -1,7 +1,6 @@
-import { User, SafeUser, UserUpdateAttributes } from '../../auth';
-import { UserStatus } from '../../auth';
+import { SafeUser, UserUpdateAttributes, UserStatus } from '../../auth';
 import { UserProfileDto, UserListDto, UserSearchDto } from '../models/UserDto';
-import { Profile, ProfileWithUser, UpdateProfileDto } from '../models/Profile';
+import { ProfileWithUser, UpdateProfileDto } from '../models/Profile';
 import { Address, CreateAddressDto, UpdateAddressDto } from '../models/Address';
 import { Follow, FollowStatsDto } from '../models/Follow';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';

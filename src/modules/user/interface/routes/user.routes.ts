@@ -8,8 +8,6 @@ import {
   searchUsersSchema,
   createAddressSchema,
   updateAddressSchema,
-  getUserActivitiesSchema,
-  getActivityStatsSchema,
 } from '../validators/user.validator';
 
 // User Controllers
@@ -37,10 +35,6 @@ import { GetFollowersController } from '../controllers/follow/GetFollowersContro
 import { GetFollowingController } from '../controllers/follow/GetFollowingController';
 import { GetFollowStatsController } from '../controllers/follow/GetFollowStatsController';
 
-// Activity Controllers
-import { GetUserActivitiesController } from '../controllers/activity/GetUserActivitiesController';
-import { GetActivityStatsController } from '../controllers/activity/GetActivityStatsController';
-
 const router = Router();
 
 // Initialize controllers
@@ -65,11 +59,8 @@ const getFollowersController = new GetFollowersController();
 const getFollowingController = new GetFollowingController();
 const getFollowStatsController = new GetFollowStatsController();
 
-const getUserActivitiesController = new GetUserActivitiesController();
-const getActivityStatsController = new GetActivityStatsController();
-
 // === PUBLIC ROUTES ===
-// Search users (public)
+// Search users (public) - chỉ return ARTISAN
 router.get('/search', validate(searchUsersSchema, 'query'), searchUsersController.execute);
 
 // === PROTECTED ROUTES (Specific routes first) ===
@@ -113,31 +104,17 @@ router.post(
   setDefaultAddressController.execute,
 );
 
-// Activity tracking
-router.get(
-  '/activities',
-  authenticate,
-  validate(getUserActivitiesSchema, 'query'),
-  getUserActivitiesController.execute,
-);
-router.get(
-  '/activities/stats',
-  authenticate,
-  validate(getActivityStatsSchema, 'query'),
-  getActivityStatsController.execute,
-);
-
 // Account management
 router.delete('/account', authenticate, deleteAccountController.execute);
 
-// === DYNAMIC USER ROUTES (must be after specific routes) ===
+// === DYNAMIC USER ROUTES (CHỈ CHO ARTISAN) ===
 
-// Get user followers/following (public)
+// Get user followers/following - CHỈ CHO ARTISAN
 router.get('/:userId/followers', validateIdParam('userId'), getFollowersController.execute);
 router.get('/:userId/following', validateIdParam('userId'), getFollowingController.execute);
 router.get('/:userId/follow-stats', validateIdParam('userId'), getFollowStatsController.execute);
 
-// Follow management
+// Follow management - CHỈ CÓ THỂ FOLLOW ARTISAN
 router.post(
   '/:userId/follow',
   authenticate,
@@ -151,10 +128,7 @@ router.delete(
   unfollowUserController.execute,
 );
 
-// Get user profile (public) - MUST BE LAST
+// Get user profile (public) - CHỈ CHO ARTISAN - MUST BE LAST
 router.get('/:id', validateIdParam(), getUserProfileController.execute);
-
-// === ADMIN ROUTES ===
-// Admin user management routes can be added here with proper authorization
 
 export default router;

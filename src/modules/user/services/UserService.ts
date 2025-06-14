@@ -5,14 +5,12 @@ import { UserProfileDto, UserListDto, UserSearchDto } from '../models/UserDto';
 import { ProfileWithUser, UpdateProfileDto } from '../models/Profile';
 import { Address, CreateAddressDto, UpdateAddressDto } from '../models/Address';
 import { Follow, FollowStatsDto } from '../models/Follow';
-import { UserActivity, CreateUserActivityDto, ActivityType } from '../models/UserActivity';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 import { IUserRepository } from '../../auth';
 import { IProfileRepository } from '../repositories/ProfileRepository.interface';
 import { IAddressRepository } from '../repositories/AddressRepository.interface';
 import { IFollowRepository } from '../repositories/FollowRepository.interface';
-import { IUserActivityRepository } from '../repositories/UserActivityRepository.interface';
-import { INotificationService } from '@/modules/notification';
+import { INotificationService } from '../../notification';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import container from '../../../core/di/container';
@@ -22,7 +20,6 @@ export class UserService implements IUserService {
   private profileRepository: IProfileRepository;
   private addressRepository: IAddressRepository;
   private followRepository: IFollowRepository;
-  private userActivityRepository: IUserActivityRepository;
   private logger = Logger.getInstance();
 
   constructor() {
@@ -30,18 +27,6 @@ export class UserService implements IUserService {
     this.profileRepository = container.resolve<IProfileRepository>('profileRepository');
     this.addressRepository = container.resolve<IAddressRepository>('addressRepository');
     this.followRepository = container.resolve<IFollowRepository>('followRepository');
-    this.userActivityRepository =
-      container.resolve<IUserActivityRepository>('userActivityRepository');
-  }
-
-  // Helper method to track activity safely
-  private async trackActivity(data: CreateUserActivityDto): Promise<void> {
-    try {
-      await this.userActivityRepository.createActivity(data);
-    } catch (error) {
-      // Log the error but don't throw to avoid breaking the main operation
-      this.logger.error(`Error tracking activity: ${error}`);
-    }
   }
 
   // User management methods
@@ -52,13 +37,24 @@ export class UserService implements IUserService {
         return null;
       }
 
-      // Get profile and artisan profile if exists
+      // Get profile if exists
       const profile = await this.profileRepository.findByUserId(id);
 
       const userProfile: UserProfileDto = {
         ...toSafeUser(user),
-        profile: profile || null,
-        artisanProfile: null, // Will be populated if user is artisan
+        profile: profile
+          ? {
+              id: profile.id,
+              coverUrl: profile.coverUrl,
+              location: profile.location,
+              website: profile.website,
+              dateOfBirth: profile.dateOfBirth,
+              gender: profile.gender,
+              socialLinks: profile.socialLinks,
+              preferences: profile.preferences,
+            }
+          : null,
+        artisanProfile: null, // Will be populated by artisan module if user is artisan
       };
 
       return userProfile;
@@ -79,13 +75,6 @@ export class UserService implements IUserService {
 
       // Update user
       const updatedUser = await this.userRepository.updateUser(id, data);
-
-      // Track activity safely
-      await this.trackActivity({
-        userId: id,
-        activityType: 'profile_updated',
-        metadata: { updatedFields: Object.keys(data) },
-      });
 
       return toSafeUser(updatedUser);
     } catch (error) {
@@ -125,14 +114,6 @@ export class UserService implements IUserService {
       // Soft delete
       const result = await this.userRepository.softDelete(id);
 
-      // Track activity safely
-      if (result) {
-        await this.trackActivity({
-          userId: id,
-          activityType: 'account_deleted',
-        });
-      }
-
       return result;
     } catch (error) {
       this.logger.error(`Error deleting user account: ${error}`);
@@ -148,11 +129,12 @@ export class UserService implements IUserService {
 
       const { users, total } = await this.userRepository.search(query, limit, offset);
 
-      // Filter by role and status if provided
+      // Filter by role and status if provided, default to ARTISAN for public search
       let filteredUsers = users;
-      if (role) {
-        filteredUsers = filteredUsers.filter((user) => user.role === role);
-      }
+      const searchRole = role || 'ARTISAN'; // BUSINESS RULE: Default search only ARTISAN
+
+      filteredUsers = filteredUsers.filter((user) => user.role === searchRole);
+
       if (status) {
         filteredUsers = filteredUsers.filter((user) => user.status === status);
       }
@@ -165,10 +147,10 @@ export class UserService implements IUserService {
 
       return {
         users: userProfiles,
-        total,
+        total: filteredUsers.length,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(filteredUsers.length / limit),
       };
     } catch (error) {
       this.logger.error(`Error searching users: ${error}`);
@@ -221,13 +203,6 @@ export class UserService implements IUserService {
 
       const profile = await this.profileRepository.updateProfile(userId, data);
 
-      // Track activity safely
-      await this.trackActivity({
-        userId,
-        activityType: 'profile_updated',
-        metadata: { updatedFields: Object.keys(data) },
-      });
-
       this.logger.info(`Profile updated for user: ${userId}`);
 
       return profile;
@@ -261,14 +236,6 @@ export class UserService implements IUserService {
       // Create address
       const address = await this.addressRepository.createAddress(profile.id, data);
 
-      // Track activity safely
-      await this.trackActivity({
-        userId,
-        activityType: 'address_created',
-        entityId: address.id,
-        entityType: 'address',
-      });
-
       this.logger.info(`Address created for user: ${userId}`);
 
       return address;
@@ -292,14 +259,6 @@ export class UserService implements IUserService {
 
       // Update address
       const updatedAddress = await this.addressRepository.updateAddress(id, data);
-
-      // Track activity safely
-      await this.trackActivity({
-        userId,
-        activityType: 'address_updated',
-        entityId: id,
-        entityType: 'address',
-      });
 
       this.logger.info(`Address ${id} updated for user: ${userId}`);
 
@@ -325,16 +284,6 @@ export class UserService implements IUserService {
       // Delete address
       const result = await this.addressRepository.delete(id);
 
-      // Track activity safely
-      if (result) {
-        await this.trackActivity({
-          userId,
-          activityType: 'address_deleted',
-          entityId: id,
-          entityType: 'address',
-        });
-      }
-
       this.logger.info(`Address ${id} deleted for user: ${userId}`);
 
       return result;
@@ -358,14 +307,6 @@ export class UserService implements IUserService {
 
       // Set as default
       const address = await this.addressRepository.setAsDefault(id, profile.id);
-
-      // Track activity safely
-      await this.trackActivity({
-        userId,
-        activityType: 'address_set_default',
-        entityId: id,
-        entityType: 'address',
-      });
 
       this.logger.info(`Address ${id} set as default for user: ${userId}`);
 
@@ -408,21 +349,15 @@ export class UserService implements IUserService {
         throw AppError.notFound('Following user not found', 'USER_NOT_FOUND');
       }
 
-      // Check if already following before creating
-      const existingFollow = await this.followRepository.findByFollowerAndFollowing(
-        followerId,
-        followingId,
-      );
-
-      if (existingFollow) {
-        this.logger.info(`User ${followerId} already follows user ${followingId}`);
-        return existingFollow;
+      // BUSINESS RULE: Chỉ có thể follow ARTISAN
+      if (following.role !== 'ARTISAN') {
+        throw AppError.badRequest('You can only follow artisans', 'INVALID_FOLLOW_TARGET');
       }
 
-      // Create follow relationship
+      // Create follow relationship (repository sẽ handle thêm validation)
       const follow = await this.followRepository.createFollow(followerId, followingId);
 
-      // Send notification and track activity
+      // Send notification
       try {
         const notificationService = container.resolve<INotificationService>('notificationService');
         await notificationService.notifyFollow(followerId, followingId);
@@ -430,22 +365,7 @@ export class UserService implements IUserService {
         this.logger.error(`Error sending follow notification: ${notifError}`);
       }
 
-      await Promise.all([
-        this.trackActivity({
-          userId: followerId,
-          activityType: ActivityType.FOLLOW,
-          entityId: followingId,
-          entityType: 'user',
-        }),
-        this.trackActivity({
-          userId: followingId,
-          activityType: 'new_follower',
-          entityId: followerId,
-          entityType: 'user',
-        }),
-      ]);
-
-      this.logger.info(`User ${followerId} followed user ${followingId}`);
+      this.logger.info(`User ${followerId} followed artisan ${followingId}`);
       return follow;
     } catch (error) {
       this.logger.error(`Error following user: ${error}`);
@@ -459,16 +379,6 @@ export class UserService implements IUserService {
       // Remove follow relationship
       const result = await this.followRepository.removeFollow(followerId, followingId);
 
-      // Track activity safely
-      if (result) {
-        await this.trackActivity({
-          userId: followerId,
-          activityType: ActivityType.UNFOLLOW,
-          entityId: followingId,
-          entityType: 'user',
-        });
-      }
-
       this.logger.info(`User ${followerId} unfollowed user ${followingId}`);
 
       return result;
@@ -481,6 +391,16 @@ export class UserService implements IUserService {
 
   async getFollowers(userId: string, page: number, limit: number): Promise<PaginatedResult<any>> {
     try {
+      // Verify user is ARTISAN
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw AppError.notFound('User not found', 'USER_NOT_FOUND');
+      }
+
+      if (user.role !== 'ARTISAN') {
+        throw AppError.forbidden('Only artisans have followers', 'INVALID_OPERATION');
+      }
+
       const result = await this.followRepository.getFollowers(userId, page, limit);
 
       // Transform data to include only follower information
@@ -536,37 +456,6 @@ export class UserService implements IUserService {
       this.logger.error(`Error getting follow stats: ${error}`);
       if (error instanceof AppError) throw error;
       throw AppError.internal('Failed to get follow stats', 'SERVICE_ERROR');
-    }
-  }
-
-  // Activity tracking methods
-  async getUserActivities(
-    userId: string,
-    activityTypes?: string[],
-    page?: number,
-    limit?: number,
-  ): Promise<PaginatedResult<UserActivity>> {
-    try {
-      return await this.userActivityRepository.getUserActivities(
-        userId,
-        activityTypes,
-        page,
-        limit,
-      );
-    } catch (error) {
-      this.logger.error(`Error getting user activities: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to get user activities', 'SERVICE_ERROR');
-    }
-  }
-
-  async getActivityStats(userId: string, days?: number): Promise<Record<string, number>> {
-    try {
-      return await this.userActivityRepository.getActivityStats(userId, days);
-    } catch (error) {
-      this.logger.error(`Error getting activity stats: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to get activity stats', 'SERVICE_ERROR');
     }
   }
 }

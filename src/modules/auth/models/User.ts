@@ -1,4 +1,3 @@
-import { UserWithArtisanProfile } from './../../user/models/User';
 import { UserRole, UserStatus } from './UserEnums';
 
 export interface User {
@@ -64,9 +63,21 @@ export interface UserUpdateAttributes {
   emailVerified?: boolean;
   isVerified?: boolean;
   lastSeenAt?: Date;
+  password?: string;
 }
 
 export const toSafeUser = (user: User): SafeUser => {
   const { password, ...safeUser } = user;
   return safeUser as SafeUser;
 };
+
+// Interface với ArtisanProfile để sử dụng trong user module
+export interface UserWithArtisanProfile extends SafeUser {
+  artisanProfile?: {
+    id: string;
+    shopName: string;
+    isVerified: boolean;
+    rating?: number | null;
+    reviewCount: number;
+  } | null;
+}

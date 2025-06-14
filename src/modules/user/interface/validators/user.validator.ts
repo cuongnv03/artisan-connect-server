@@ -22,12 +22,12 @@ export const updateUserProfileSchema = Joi.object({
   preferences: Joi.object().allow(null),
 });
 
-// Search users validation
+// Search users validation - CHỈ CHO ARTISAN
 export const searchUsersSchema = Joi.object({
   query: Joi.string().allow('').max(100),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(10),
-  role: Joi.string().valid('ADMIN', 'ARTISAN', 'CUSTOMER'),
+  role: Joi.string().valid('ARTISAN').default('ARTISAN'), // FORCE ARTISAN ONLY
   status: Joi.string().valid('ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED'),
 });
 
@@ -54,15 +54,3 @@ export const updateAddressSchema = Joi.object({
   country: Joi.string().max(50),
   isDefault: Joi.boolean(),
 }).min(1);
-
-// Get activities validation
-export const getUserActivitiesSchema = Joi.object({
-  types: Joi.string().allow(''), // comma-separated activity types
-  page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20),
-});
-
-// Activity stats validation
-export const getActivityStatsSchema = Joi.object({
-  days: Joi.number().integer().min(1).max(365).default(30),
-});

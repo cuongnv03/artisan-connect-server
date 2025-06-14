@@ -9,17 +9,14 @@ export * from './models/Profile';
 export * from './models/Address';
 export * from './models/Follow';
 export * from './models/UserDto';
-export * from './models/UserActivity';
 
 // Export repository interfaces
 export * from './repositories/ProfileRepository.interface';
 export * from './repositories/AddressRepository.interface';
 export * from './repositories/FollowRepository.interface';
-export * from './repositories/UserActivityRepository.interface';
 
 // Export service interfaces
 export * from './services/UserService.interface';
-export * from './services/ActivityTrackingService.interface';
 
 // Export validators
 export * from './interface/validators/user.validator';
@@ -30,6 +27,6 @@ export function registerUserModule() {
 
   return {
     name: 'user',
-    description: 'User (Profile, Address, Follow and User Activity Tracking) module',
+    description: 'User (Profile, Address, Follow) module',
   };
 }

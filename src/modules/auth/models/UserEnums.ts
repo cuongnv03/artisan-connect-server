@@ -10,3 +10,9 @@ export enum UserStatus {
   SUSPENDED = 'SUSPENDED',
   DELETED = 'DELETED',
 }
+
+export enum UpgradeRequestStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}

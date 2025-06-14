@@ -18,13 +18,13 @@ export class SearchUsersController extends BaseController {
         query: (req.query.query as string) || '',
         page: parseInt(req.query.page as string) || 1,
         limit: parseInt(req.query.limit as string) || 10,
-        role: req.query.role as string,
+        role: 'ARTISAN', // FORCE CHỈ TÌM ARTISAN
         status: req.query.status as string,
       };
 
       const result = await this.userService.searchUsers(searchDto);
 
-      ApiResponse.success(res, result, 'Users retrieved successfully');
+      ApiResponse.success(res, result, 'Artisans retrieved successfully');
     } catch (error) {
       next(error);
     }

@@ -4,7 +4,6 @@ import { User, UserCreationAttributes, UserUpdateAttributes } from '../models/Us
 import { UserRole } from '../models/UserEnums';
 import { IUserRepository } from './UserRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
-import { override } from 'joi';
 
 export class UserRepository extends BasePrismaRepository<User, string> implements IUserRepository {
   constructor(prisma: PrismaClient) {
@@ -50,6 +49,9 @@ export class UserRepository extends BasePrismaRepository<User, string> implement
       const user = await this.prisma.user.create({
         data: {
           ...data,
+          // Đảm bảo follower counts được khởi tạo với 0
+          followerCount: 0,
+          followingCount: 0,
           profile: {
             create: {}, // Create empty profile
           },

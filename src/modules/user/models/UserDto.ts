@@ -1,5 +1,3 @@
-import { Profile } from '@prisma/client';
-
 export interface UserProfileDto {
   id: string;
   email: string;
@@ -17,8 +15,24 @@ export interface UserProfileDto {
   followingCount: number;
   createdAt: Date;
   updatedAt: Date;
-  profile?: Profile | null;
-  artisanProfile?: any | null;
+  profile?: {
+    id: string;
+    coverUrl?: string | null;
+    location?: string | null;
+    website?: string | null;
+    dateOfBirth?: Date | null;
+    gender?: string | null;
+    socialLinks?: Record<string, string> | null;
+    preferences?: Record<string, any> | null;
+  } | null;
+  artisanProfile?: {
+    id: string;
+    shopName: string;
+    shopDescription?: string | null;
+    isVerified: boolean;
+    rating?: number | null;
+    reviewCount: number;
+  } | null;
 }
 
 export interface UpdateUserDto {
