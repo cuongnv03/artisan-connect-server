@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// === ENUMS ===
+// ENUMS
 enum UserRole {
   ADMIN
   ARTISAN
@@ -81,12 +81,22 @@ enum PaymentStatus {
   REFUNDED
 }
 
-enum PaymentMethod {
+enum PaymentMethodType {
   CREDIT_CARD
   DEBIT_CARD
   BANK_TRANSFER
   DIGITAL_WALLET
   CASH_ON_DELIVERY
+}
+
+enum DeliveryStatus {
+  PREPARING
+  SHIPPED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_FAILED
+  RETURNED
 }
 
 enum QuoteStatus {
@@ -97,9 +107,52 @@ enum QuoteStatus {
   EXPIRED
 }
 
+// Thương lượng giá cho sản phẩm có sẵn
+enum NegotiationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COUNTER_OFFERED
+  EXPIRED
+}
+
+enum DisputeType {
+  PRODUCT_NOT_RECEIVED
+  PRODUCT_DAMAGED
+  PRODUCT_NOT_AS_DESCRIBED
+  DELIVERY_ISSUE
+  SELLER_ISSUE
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum ReturnReason {
+  DEFECTIVE
+  NOT_AS_DESCRIBED
+  WRONG_ITEM
+  DAMAGED_IN_SHIPPING
+  CHANGED_MIND
+  OTHER
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  PRODUCT_RETURNED
+  REFUND_PROCESSED
+}
+
 enum MessageType {
   TEXT
   IMAGE
+  FILE
   CUSTOM_ORDER
   QUOTE_DISCUSSION
 }
@@ -116,10 +169,17 @@ enum NotificationType {
   QUOTE_RESPONSE
   CUSTOM_ORDER
   MESSAGE
+  DISPUTE
+  RETURN
   SYSTEM
 }
 
-// === USER & AUTH MODELS ===
+enum WishlistItemType {
+  PRODUCT
+  POST
+}
+
+// CORE USER & AUTH MODELS
 model User {
   id             String     @id @default(uuid())
   email          String     @unique
@@ -135,7 +195,8 @@ model User {
   emailVerified  Boolean    @default(false)
   phone          String?
   lastSeenAt     DateTime?
-  followerCount  Int        @default(0)
+  // CHỈ ARTISAN CÓ FOLLOWERS
+  followerCount  Int        @default(0) // Chỉ cập nhật khi role = ARTISAN
   followingCount Int        @default(0)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
@@ -151,35 +212,38 @@ model User {
   // Social relations
   artisanProfile ArtisanProfile?
   upgradeRequest ArtisanUpgradeRequest?
-  posts          Post[]
+  posts          Post[] // CHỈ ARTISAN POST
   followers      Follow[]               @relation("Following")
   following      Follow[]               @relation("Follower")
   likes          Like[]
   comments       Comment[]
-  savedPosts     SavedPost[]
 
   // E-commerce relations
-  products                 Product[]
-  customAttributeTemplates CustomAttributeTemplate[] @relation("ArtisanCustomAttributes")
-  cartItems                CartItem[]
-  orders                   Order[]                   @relation("CustomerOrders")
-  sellerOrders             OrderItem[]               @relation("SellerOrderItems")
-  quoteRequests            QuoteRequest[]            @relation("CustomerQuotes")
-  artisanQuotes            QuoteRequest[]            @relation("ArtisanQuotes")
-  reviews                  Review[]
-  wishlistItems            Wishlist[]
-  paymentMethods           PaymentMethod[]
-  paymentTransactions      PaymentTransaction[]
+  products     Product[] // CHỈ ARTISAN
+  cartItems    CartItem[]
+  orders       Order[]     @relation("CustomerOrders")
+  sellerOrders OrderItem[] @relation("SellerOrderItems")
 
-  // Communication relations
+  // Negotiations & Quotes
+  priceNegotiationsAsCustomer PriceNegotiation[] @relation("CustomerNegotiations")
+  priceNegotiationsAsArtisan  PriceNegotiation[] @relation("ArtisanNegotiations")
+  quoteRequestsAsCustomer     QuoteRequest[]     @relation("CustomerQuotes")
+  quoteRequestsAsArtisan      QuoteRequest[]     @relation("ArtisanQuotes")
+
+  reviews             Review[]
+  wishlistItems       Wishlist[]
+  paymentMethods      PaymentMethod[]
+  paymentTransactions PaymentTransaction[]
+
+  // Dispute & Return
+  disputeComplaints OrderDispute[] @relation("DisputeComplainant")
+  returnRequests    OrderReturn[]  @relation("ReturnRequester")
+
+  // Communication
   sentMessages      Message[]      @relation("MessageSender")
   receivedMessages  Message[]      @relation("MessageReceiver")
   notifications     Notification[] @relation("NotificationRecipient")
   sentNotifications Notification[] @relation("NotificationSender")
-
-  // Activity tracking
-  activities UserActivity[]
-  Payment    Payment[]
 
   @@index([email])
   @@index([username])
@@ -227,6 +291,7 @@ model Address {
   @@index([profileId])
 }
 
+// AUTH SUPPORTING MODELS
 model Session {
   id         String   @id @default(uuid())
   userId     String
@@ -284,7 +349,7 @@ model EmailVerification {
   @@index([userId])
 }
 
-// === ARTISAN MODELS ===
+// ARTISAN MODELS
 model ArtisanProfile {
   id              String   @id @default(uuid())
   userId          String   @unique
@@ -298,6 +363,10 @@ model ArtisanProfile {
   contactEmail    String?
   contactPhone    String?
   socialMedia     Json?
+  businessAddress String?
+  businessHours   Json?
+  shippingInfo    Json?
+  returnPolicy    String?  @db.Text
   isVerified      Boolean  @default(false)
   rating          Float?
   reviewCount     Int      @default(0)
@@ -322,6 +391,9 @@ model ArtisanUpgradeRequest {
   website         String?
   socialMedia     Json?
   reason          String?              @db.Text
+  images          String[]
+  certificates    String[]
+  identityProof   String?
   status          UpgradeRequestStatus @default(PENDING)
   adminNotes      String?              @db.Text
   reviewedBy      String?
@@ -335,12 +407,11 @@ model ArtisanUpgradeRequest {
   @@index([createdAt])
 }
 
-// === SOCIAL MODELS ===
+// SOCIAL MODELS
 model Follow {
   id             String   @id @default(uuid())
   followerId     String
   followingId    String
-  status         String   @default("accepted")
   notifyNewPosts Boolean  @default(true)
   createdAt      DateTime @default(now())
 
@@ -375,13 +446,11 @@ model Post {
   updatedAt    DateTime   @updatedAt
   deletedAt    DateTime?
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes           Like[]
   comments        Comment[]
-  productMentions ProductMention[]
-  savedBy         SavedPost[]
-  analytics       PostAnalytics?
   wishlistItems   Wishlist[]
+  productMentions PostProductMention[]
 
   @@index([userId])
   @@index([type])
@@ -389,6 +458,22 @@ model Post {
   @@index([publishedAt])
   @@index([deletedAt])
   @@index([tags])
+}
+
+// Junction table for Post-Product mentions
+model PostProductMention {
+  id          String  @id @default(uuid())
+  postId      String
+  productId   String
+  contextText String? @db.Text
+  position    Int?
+
+  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, productId])
+  @@index([postId])
+  @@index([productId])
 }
 
 model Comment {
@@ -435,175 +520,25 @@ model Like {
   @@index([commentId])
 }
 
-model SavedPost {
-  id        String   @id @default(uuid())
+model Wishlist {
+  id        String           @id @default(uuid())
   userId    String
-  postId    String
-  createdAt DateTime @default(now())
+  itemType  WishlistItemType
+  productId String?
+  postId    String?
+  createdAt DateTime         @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  post    Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, productId])
   @@unique([userId, postId])
   @@index([userId])
-  @@index([postId])
+  @@index([itemType])
 }
 
-// === PRODUCT MODELS ===
-
-// Product Attributes Template theo Category
-model CategoryAttributeTemplate {
-  id          String        @id @default(uuid())
-  categoryId  String
-  name        String // "Material", "Size", "Color"
-  key         String // "material", "size", "color"
-  type        AttributeType // TEXT, NUMBER, SELECT, MULTI_SELECT, BOOLEAN
-  isRequired  Boolean       @default(false)
-  isVariant   Boolean       @default(false) // Dùng để tạo variant
-  options     Json? // ["Cotton", "Silk", "Wool"] cho SELECT
-  unit        String? // "cm", "kg", "inch"
-  sortOrder   Int           @default(0)
-  description String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-
-  @@unique([categoryId, key])
-  @@index([categoryId])
-  @@index([isVariant])
-}
-
-// Product Attributes thực tế
-model ProductAttribute {
-  id        String        @id @default(uuid())
-  productId String
-  key       String // "material", "size", "color"
-  name      String // "Material", "Size", "Color"
-  value     String // "Cotton", "Large", "Red"
-  type      AttributeType
-  unit      String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([productId, key])
-  @@index([productId])
-  @@index([key])
-}
-
-// Product Variants (combination of attributes)
-model ProductVariant {
-  id            String   @id @default(uuid())
-  productId     String
-  sku           String   @unique
-  name          String? // "Large Red Cotton Shirt"
-  price         Decimal  @db.Decimal(10, 2)
-  discountPrice Decimal? @db.Decimal(10, 2)
-  quantity      Int      @default(0)
-  images        String[]
-  weight        Float?
-  dimensions    Json? // {length, width, height}
-  isActive      Boolean  @default(true)
-  isDefault     Boolean  @default(false)
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  product    Product                   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  attributes ProductVariantAttribute[]
-  cartItems  CartItem[]                @relation("VariantCartItems")
-  orderItems OrderItem[]               @relation("VariantOrderItems")
-
-  @@index([productId])
-  @@index([sku])
-  @@index([isActive])
-}
-
-model ProductVariantAttribute {
-  id        String @id @default(uuid())
-  variantId String
-  key       String
-  name      String
-  value     String
-
-  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-
-  @@unique([variantId, key])
-  @@index([variantId])
-}
-
-// Custom Attributes cho artisan tự định nghĩa
-model CustomAttributeTemplate {
-  id          String        @id @default(uuid())
-  artisanId   String
-  name        String
-  key         String
-  type        AttributeType
-  options     Json?
-  unit        String?
-  description String?
-  isActive    Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  artisan User @relation("ArtisanCustomAttributes", fields: [artisanId], references: [id], onDelete: Cascade)
-
-  @@unique([artisanId, key])
-  @@index([artisanId])
-}
-
-model Product {
-  id             String        @id @default(uuid())
-  sellerId       String
-  name           String
-  slug           String?       @unique
-  description    String?       @db.Text
-  price          Decimal       @db.Decimal(10, 2)
-  discountPrice  Decimal?      @db.Decimal(10, 2)
-  quantity       Int           @default(0)
-  status         ProductStatus @default(DRAFT)
-  images         String[]
-  tags           String[]
-  isCustomizable Boolean       @default(false)
-  avgRating      Float?
-  reviewCount    Int           @default(0)
-  viewCount      Int           @default(0)
-  salesCount     Int           @default(0)
-
-  // New fields
-  specifications Json? // Technical specs as JSON
-  customFields   Json? // Custom fields defined by artisan
-  hasVariants    Boolean @default(false)
-  weight         Float?
-  dimensions     Json? // {length, width, height, unit}
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  seller          User               @relation(fields: [sellerId], references: [id])
-  categories      CategoryProduct[]
-  priceHistory    PriceHistory[]
-  reviews         Review[]
-  cartItems       CartItem[]
-  orderItems      OrderItem[]
-  quoteRequests   QuoteRequest[]
-  productMentions ProductMention[]
-  wishlistItems   Wishlist[]
-  attributes      ProductAttribute[]
-  variants        ProductVariant[]
-
-  @@index([sellerId])
-  @@index([status])
-  @@index([avgRating])
-  @@index([createdAt])
-  @@index([deletedAt])
-  @@index([tags])
-  @@index([hasVariants])
-}
-
+// PRODUCT MODELS
 model Category {
   id          String   @id @default(uuid())
   name        String   @unique
@@ -619,22 +554,134 @@ model Category {
 
   parent             Category?                   @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children           Category[]                  @relation("CategoryHierarchy")
-  products           CategoryProduct[]
   attributeTemplates CategoryAttributeTemplate[]
+  products           CategoryProduct[]
 
   @@index([parentId])
   @@index([level])
   @@index([isActive])
 }
 
+model CategoryAttributeTemplate {
+  id          String        @id @default(uuid())
+  categoryId  String
+  name        String
+  key         String
+  type        AttributeType
+  isRequired  Boolean       @default(false)
+  isVariant   Boolean       @default(false)
+  options     Json?
+  unit        String?
+  sortOrder   Int           @default(0)
+  description String?
+  isCustom    Boolean       @default(false)
+  createdBy   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, key])
+  @@index([categoryId])
+  @@index([isVariant])
+  @@index([isCustom])
+}
+
+// Junction table for Product-Category many-to-many
 model CategoryProduct {
   categoryId String
   productId  String
 
-  category Category @relation(fields: [categoryId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@id([categoryId, productId])
+  @@index([categoryId])
+  @@index([productId])
+}
+
+model Product {
+  id               String        @id @default(uuid())
+  sellerId         String
+  name             String
+  slug             String?       @unique
+  description      String?       @db.Text
+  price            Decimal       @db.Decimal(10, 2)
+  discountPrice    Decimal?      @db.Decimal(10, 2)
+  quantity         Int           @default(0)
+  minOrderQty      Int           @default(1)
+  maxOrderQty      Int?
+  sku              String?       @unique
+  barcode          String?
+  weight           Float?
+  dimensions       Json?
+  isCustomizable   Boolean       @default(false)
+  allowNegotiation Boolean       @default(true)
+  shippingInfo     Json?
+  status           ProductStatus @default(DRAFT)
+  tags             String[]
+  images           String[]
+  featuredImage    String?
+  seoTitle         String?
+  seoDescription   String?
+  attributes       Json?
+  specifications   Json?
+  customFields     Json?
+  hasVariants      Boolean       @default(false)
+  viewCount        Int           @default(0)
+  salesCount       Int           @default(0)
+  avgRating        Float?
+  reviewCount      Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  seller             User                 @relation(fields: [sellerId], references: [id])
+  categories         CategoryProduct[]
+  variants           ProductVariant[]
+  priceHistory       PriceHistory[]
+  reviews            Review[]
+  cartItems          CartItem[]
+  orderItems         OrderItem[]
+  priceNegotiations  PriceNegotiation[]
+  quoteRequestsAsRef QuoteRequest[]       @relation("ReferenceProduct")
+  wishlistItems      Wishlist[]
+  postMentions       PostProductMention[]
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([avgRating])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([tags])
+  @@index([allowNegotiation])
+}
+
+model ProductVariant {
+  id            String   @id @default(uuid())
+  productId     String
+  sku           String   @unique
+  name          String?
+  price         Decimal  @db.Decimal(10, 2)
+  discountPrice Decimal? @db.Decimal(10, 2)
+  quantity      Int      @default(0)
+  images        String[]
+  weight        Float?
+  dimensions    Json?
+  attributes    Json
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]  @relation("VariantCartItems")
+  orderItems OrderItem[] @relation("VariantOrderItems")
+
+  @@index([productId])
+  @@index([sku])
+  @@index([isActive])
 }
 
 model PriceHistory {
@@ -642,6 +689,7 @@ model PriceHistory {
   productId  String
   price      Decimal  @db.Decimal(10, 2)
   changeNote String?
+  changedBy  String?
   createdAt  DateTime @default(now())
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -650,41 +698,65 @@ model PriceHistory {
   @@index([createdAt])
 }
 
-model ProductMention {
-  id          String  @id @default(uuid())
-  postId      String
-  productId   String
-  contextText String? @db.Text
-  position    Int?
+// NEGOTIATION & QUOTE MODELS
+model PriceNegotiation {
+  id                 String            @id @default(uuid())
+  productId          String
+  customerId         String
+  artisanId          String
+  originalPrice      Decimal           @db.Decimal(10, 2)
+  proposedPrice      Decimal           @db.Decimal(10, 2)
+  finalPrice         Decimal?          @db.Decimal(10, 2)
+  quantity           Int               @default(1)
+  customerReason     String?           @db.Text
+  status             NegotiationStatus @default(PENDING)
+  artisanResponse    String?           @db.Text
+  negotiationHistory Json?
+  expiresAt          DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
-  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  product  Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer User    @relation("CustomerNegotiations", fields: [customerId], references: [id])
+  artisan  User    @relation("ArtisanNegotiations", fields: [artisanId], references: [id])
 
-  @@index([postId])
   @@index([productId])
+  @@index([customerId])
+  @@index([artisanId])
+  @@index([status])
 }
 
-model Review {
-  id        String   @id @default(uuid())
-  userId    String
-  productId String
-  rating    Int // 1-5
-  title     String?
-  comment   String?  @db.Text
-  images    String[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model QuoteRequest {
+  id                 String      @id @default(uuid())
+  customerId         String
+  artisanId          String
+  title              String
+  description        String      @db.Text
+  referenceProductId String?
+  specifications     Json?
+  attachmentUrls     String[]
+  estimatedPrice     Decimal?    @db.Decimal(10, 2)
+  customerBudget     Decimal?    @db.Decimal(10, 2)
+  timeline           String?
+  status             QuoteStatus @default(PENDING)
+  artisanResponse    Json?
+  finalPrice         Decimal?    @db.Decimal(10, 2)
+  negotiationHistory Json?
+  expiresAt          DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer         User      @relation("CustomerQuotes", fields: [customerId], references: [id])
+  artisan          User      @relation("ArtisanQuotes", fields: [artisanId], references: [id])
+  referenceProduct Product?  @relation("ReferenceProduct", fields: [referenceProductId], references: [id])
+  messages         Message[]
 
-  @@unique([userId, productId])
-  @@index([productId])
-  @@index([rating])
-  @@index([createdAt])
+  @@index([customerId])
+  @@index([artisanId])
+  @@index([status])
 }
 
-// === CART & WISHLIST ===
+// CART & ORDER MODELS
 model CartItem {
   id        String   @id @default(uuid())
   userId    String
@@ -703,51 +775,48 @@ model CartItem {
   @@index([userId])
 }
 
-model Wishlist {
-  id        String   @id @default(uuid())
-  userId    String
-  productId String?
-  postId    String?
-  createdAt DateTime @default(now())
-
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
-  post    Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, productId])
-  @@unique([userId, postId])
-  @@index([userId])
-}
-
-// === ORDER & PAYMENT ===
 model Order {
-  id                String         @id @default(uuid())
-  orderNumber       String         @unique
+  id                String             @id @default(uuid())
+  orderNumber       String             @unique
   userId            String
   addressId         String?
-  status            OrderStatus    @default(PENDING)
-  paymentStatus     PaymentStatus  @default(PENDING)
-  totalAmount       Decimal        @db.Decimal(10, 2)
-  subtotal          Decimal        @db.Decimal(10, 2)
-  shippingCost      Decimal        @default(0) @db.Decimal(10, 2)
-  paymentMethod     PaymentMethod?
+  status            OrderStatus        @default(PENDING)
+  paymentStatus     PaymentStatus      @default(PENDING)
+  totalAmount       Decimal            @db.Decimal(10, 2)
+  subtotal          Decimal            @db.Decimal(10, 2)
+  shippingCost      Decimal            @default(0) @db.Decimal(10, 2)
+  taxAmount         Decimal?           @db.Decimal(10, 2)
+  discountAmount    Decimal?           @db.Decimal(10, 2)
+  paymentMethod     PaymentMethodType?
   paymentReference  String?
-  notes             String?
-  estimatedDelivery DateTime?
-  deliveredAt       DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  deliveryStatus    DeliveryStatus     @default(PREPARING)
+  expectedDelivery  DateTime?
+  actualDelivery    DateTime?
+  isDeliveryLate    Boolean            @default(false)
+  deliveryNotes     String?            @db.Text
+  trackingNumber    String?
+  canReturn         Boolean            @default(true)
+  returnDeadline    DateTime?
+  hasDispute        Boolean            @default(false)
+  isRated           Boolean            @default(false)
+  buyerSatisfaction Int?
+  notes             String?            @db.Text
+  statusHistory     Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   customer            User                 @relation("CustomerOrders", fields: [userId], references: [id])
   shippingAddress     Address?             @relation("ShippingAddress", fields: [addressId], references: [id])
   items               OrderItem[]
   paymentTransactions PaymentTransaction[]
-  statusHistory       OrderStatusHistory[] @relation("OrderStatusHistory")
+  disputes            OrderDispute[]
+  returns             OrderReturn[]
 
   @@index([userId])
   @@index([status])
   @@index([paymentStatus])
   @@index([orderNumber])
+  @@index([deliveryStatus])
 }
 
 model OrderItem {
@@ -769,25 +838,54 @@ model OrderItem {
   @@index([sellerId])
 }
 
-model OrderStatusHistory {
-  id        String      @id @default(uuid())
-  orderId   String
-  status    OrderStatus
-  note      String?     @db.Text
-  createdBy String?
-  createdAt DateTime    @default(now())
+model OrderDispute {
+  id            String        @id @default(uuid())
+  orderId       String
+  complainantId String
+  type          DisputeType
+  reason        String        @db.Text
+  evidence      String[]
+  status        DisputeStatus @default(OPEN)
+  resolution    String?       @db.Text
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  order Order @relation("OrderStatusHistory", fields: [orderId], references: [id], onDelete: Cascade)
+  order       Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  complainant User  @relation("DisputeComplainant", fields: [complainantId], references: [id])
 
   @@index([orderId])
-  @@index([createdAt])
+  @@index([status])
 }
 
-model Payment {
-  id           String        @id @default(uuid())
+model OrderReturn {
+  id           String       @id @default(uuid())
+  orderId      String
+  requesterId  String
+  reason       ReturnReason
+  description  String?      @db.Text
+  evidence     String[]
+  status       ReturnStatus @default(REQUESTED)
+  approvedBy   String?
+  refundAmount Decimal?     @db.Decimal(10, 2)
+  refundReason String?      @db.Text
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  requester User  @relation("ReturnRequester", fields: [requesterId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+}
+
+// PAYMENT MODELS
+model PaymentMethod {
+  id           String            @id @default(uuid())
   userId       String
-  type         PaymentMethod
-  isDefault    Boolean       @default(false)
+  type         PaymentMethodType
+  isDefault    Boolean           @default(false)
   cardLast4    String?
   cardBrand    String?
   expiryMonth  Int?
@@ -795,9 +893,9 @@ model Payment {
   holderName   String?
   bankName     String?
   accountLast4 String?
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions PaymentTransaction[]
@@ -807,24 +905,25 @@ model Payment {
 }
 
 model PaymentTransaction {
-  id                String        @id @default(uuid())
+  id                String            @id @default(uuid())
   orderId           String
   userId            String
   paymentMethodId   String?
-  amount            Decimal       @db.Decimal(10, 2)
-  currency          String        @default("USD")
-  status            PaymentStatus @default(PENDING)
-  paymentMethod     PaymentMethod
-  reference         String        @unique
+  amount            Decimal           @db.Decimal(10, 2)
+  currency          String            @default("USD")
+  status            PaymentStatus     @default(PENDING)
+  paymentMethodType PaymentMethodType
+  reference         String            @unique
   externalReference String?
   failureReason     String?
+  metadata          Json?
   processedAt       DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  payment Payment? @relation(fields: [paymentMethodId], references: [id])
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
 
   @@index([orderId])
   @@index([userId])
@@ -832,73 +931,60 @@ model PaymentTransaction {
   @@index([reference])
 }
 
-// === QUOTE SYSTEM ===
-model QuoteRequest {
+// REVIEW MODELS
+model Review {
+  id                 String   @id @default(uuid())
+  userId             String
+  productId          String
+  rating             Int
+  title              String?
+  comment            String?  @db.Text
+  images             String[]
+  helpfulCount       Int      @default(0)
+  isVerifiedPurchase Boolean  @default(false)
+  orderItemId        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@index([rating])
+  @@index([createdAt])
+  @@index([isVerifiedPurchase])
+}
+
+// MESSAGING MODELS
+model Message {
   id              String      @id @default(uuid())
-  productId       String
-  customerId      String
-  artisanId       String
-  requestedPrice  Decimal?    @db.Decimal(10, 2)
-  specifications  String?     @db.Text
-  status          QuoteStatus @default(PENDING)
-  counterOffer    Decimal?    @db.Decimal(10, 2)
-  finalPrice      Decimal?    @db.Decimal(10, 2)
-  customerMessage String?     @db.Text
-  artisanMessage  String?     @db.Text
-  expiresAt       DateTime?
+  senderId        String
+  receiverId      String
+  content         String      @db.Text
+  type            MessageType @default(TEXT)
+  attachments     String[]
+  quoteRequestId  String?
+  productMentions Json?
+  isRead          Boolean     @default(false)
+  readAt          DateTime?
+  isEdited        Boolean     @default(false)
+  editedAt        DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  product            Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
-  customer           User               @relation("CustomerQuotes", fields: [customerId], references: [id], onDelete: Cascade)
-  artisan            User               @relation("ArtisanQuotes", fields: [artisanId], references: [id])
-  negotiationHistory QuoteNegotiation[] @relation("QuoteNegotiationHistory")
-
-  @@index([productId])
-  @@index([customerId])
-  @@index([artisanId])
-  @@index([status])
-}
-
-model QuoteNegotiation {
-  id            String   @id @default(uuid())
-  quoteId       String
-  action        String // REQUEST, ACCEPT, REJECT, COUNTER, MESSAGE
-  actor         String // customer, artisan
-  previousPrice Decimal? @db.Decimal(10, 2)
-  newPrice      Decimal? @db.Decimal(10, 2)
-  message       String?  @db.Text
-  metadata      Json? // Additional data like specifications, etc.
-  timestamp     DateTime @default(now())
-
-  quote QuoteRequest @relation("QuoteNegotiationHistory", fields: [quoteId], references: [id], onDelete: Cascade)
-
-  @@index([quoteId])
-  @@index([timestamp])
-}
-
-// === MESSAGING ===
-model Message {
-  id         String      @id @default(uuid())
-  senderId   String
-  receiverId String
-  content    String      @db.Text
-  type       MessageType @default(TEXT)
-  metadata   Json?
-  isRead     Boolean     @default(false)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-
-  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id])
+  sender       User          @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver     User          @relation("MessageReceiver", fields: [receiverId], references: [id])
+  quoteRequest QuoteRequest? @relation(fields: [quoteRequestId], references: [id])
 
   @@index([senderId])
   @@index([receiverId])
   @@index([createdAt])
   @@index([isRead])
+  @@index([quoteRequestId])
 }
 
-// === NOTIFICATIONS ===
+// NOTIFICATION MODELS
 model Notification {
   id          String           @id @default(uuid())
   recipientId String
@@ -907,7 +993,9 @@ model Notification {
   title       String
   message     String           @db.Text
   data        Json?
+  actionUrl   String?
   isRead      Boolean          @default(false)
+  readAt      DateTime?
   createdAt   DateTime         @default(now())
 
   recipient User  @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
@@ -916,39 +1004,5 @@ model Notification {
   @@index([recipientId])
   @@index([type])
   @@index([isRead])
-  @@index([createdAt])
-}
-
-// === ANALYTICS & ACTIVITY ===
-model PostAnalytics {
-  id              String   @id @default(uuid())
-  postId          String   @unique
-  viewCount       Int      @default(0)
-  uniqueViewers   Int      @default(0)
-  avgReadTime     Float?
-  conversionCount Int      @default(0)
-  updatedAt       DateTime @updatedAt
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@index([postId])
-}
-
-model UserActivity {
-  id           String   @id @default(uuid())
-  userId       String
-  activityType String
-  entityId     String?
-  entityType   String?
-  metadata     Json?
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([activityType])
-  @@index([entityId])
   @@index([createdAt])
 }
