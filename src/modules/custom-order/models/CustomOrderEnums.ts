@@ -4,13 +4,13 @@ export enum QuoteStatus {
   REJECTED = 'REJECTED',
   COUNTER_OFFERED = 'COUNTER_OFFERED',
   EXPIRED = 'EXPIRED',
-  COMPLETED = 'COMPLETED', // When converted to order
 }
 
-export enum QuoteAction {
-  REQUEST = 'REQUEST',
+export enum CustomOrderAction {
+  CREATE = 'CREATE',
   ACCEPT = 'ACCEPT',
   REJECT = 'REJECT',
-  COUNTER = 'COUNTER',
+  COUNTER_OFFER = 'COUNTER_OFFER',
+  UPDATE = 'UPDATE',
   MESSAGE = 'MESSAGE',
 }

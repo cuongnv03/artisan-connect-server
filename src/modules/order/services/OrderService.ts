@@ -23,7 +23,7 @@ import {
 import { OrderStatus, DisputeStatus, ReturnStatus } from '../models/OrderEnums';
 import { IOrderRepository } from '../repositories/OrderRepository.interface';
 import { ICartRepository } from '../../cart/repositories/CartRepository.interface';
-import { IQuoteRepository } from '../../quote/repositories/QuoteRepository.interface';
+import { IQuoteRepository } from '../../custom-order/repositories/CustomOrderRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { INotificationService } from '../../notification';
 import { AppError } from '../../../core/errors/AppError';

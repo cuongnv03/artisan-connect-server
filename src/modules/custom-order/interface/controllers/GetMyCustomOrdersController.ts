@@ -1,22 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
-import { IQuoteService } from '../../services/QuoteService.interface';
-import { QuoteQueryOptions } from '../../models/Quote';
+import { ICustomOrderService } from '../../services/CustomOrderService.interface';
+import { CustomOrderQueryOptions } from '../../models/CustomOrder';
 import container from '../../../../core/di/container';
 
-export class GetMyQuoteRequestsController extends BaseController {
-  private quoteService: IQuoteService;
+export class GetMyCustomOrdersController extends BaseController {
+  private customOrderService: ICustomOrderService;
 
   constructor() {
     super();
-    this.quoteService = container.resolve<IQuoteService>('quoteService');
+    this.customOrderService = container.resolve<ICustomOrderService>('customOrderService');
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     this.validateAuth(req);
 
-    const options: Partial<QuoteQueryOptions> = {
+    const options: Partial<CustomOrderQueryOptions> = {
       page: parseInt(req.query.page as string) || 1,
       limit: parseInt(req.query.limit as string) || 10,
       status: req.query.status as any,
@@ -32,22 +32,22 @@ export class GetMyQuoteRequestsController extends BaseController {
       options.dateTo = new Date(req.query.dateTo as string);
     }
 
-    const quotes = await this.quoteService.getMyQuoteRequests(
+    const customOrders = await this.customOrderService.getMyCustomOrders(
       req.user!.id,
       req.user!.role,
       options,
     );
 
     const roleMessage = {
-      CUSTOMER: 'My quote requests retrieved successfully',
-      ARTISAN: 'My received quote requests retrieved successfully',
-      ADMIN: 'All quote requests retrieved successfully',
+      CUSTOMER: 'My custom order requests retrieved successfully',
+      ARTISAN: 'My received custom order requests retrieved successfully',
+      ADMIN: 'All custom order requests retrieved successfully',
     };
 
     ApiResponse.success(
       res,
-      quotes,
-      roleMessage[req.user!.role] || 'Quote requests retrieved successfully',
+      customOrders,
+      roleMessage[req.user!.role] || 'Custom orders retrieved successfully',
     );
   }
 }

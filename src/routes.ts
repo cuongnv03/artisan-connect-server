@@ -13,7 +13,7 @@ import productRoutes from './modules/product/interface/routes/product.routes';
 import categoryRoutes from './modules/product/interface/routes/category.routes';
 import cartRoutes from './modules/cart/interface/routes/cart.routes';
 import negotiationRoutes from './modules/price-negotiation/interface/routes/negotiation.routes';
-import quoteRoutes from './modules/quote/interface/routes/quote.routes';
+import customOrderRoutes from './modules/custom-order/interface/routes/custom-order.routes';
 import orderRoutes from './modules/order/interface/routes/order.routes';
 import reviewRoutes from './modules/review/interface/routes/review.routes';
 import notificationRoutes from './modules/notification/interface/routes/notification.routes';
@@ -36,9 +36,9 @@ export const registerRoutes = (app: Express) => {
 
     app.use(`${apiPrefix}/products`, productRoutes);
     app.use(`${apiPrefix}/categories`, categoryRoutes);
-    app.use(`${apiPrefix}/cart`, cartRoutes);
     app.use(`${apiPrefix}/negotiations`, negotiationRoutes);
-    app.use(`${apiPrefix}/quotes`, quoteRoutes);
+    app.use(`${apiPrefix}/cart`, cartRoutes);
+    app.use(`${apiPrefix}/customs`, customOrderRoutes);
     app.use(`${apiPrefix}/orders`, orderRoutes);
     app.use(`${apiPrefix}/reviews`, reviewRoutes);
 
@@ -62,9 +62,9 @@ export const registerRoutes = (app: Express) => {
           social: `${apiPrefix}/social`,
           products: `${apiPrefix}/products`,
           orders: `${apiPrefix}/orders`,
-          cart: `${apiPrefix}/cart`,
           negotiations: `${apiPrefix}/negotiations`,
-          quotes: `${apiPrefix}/quotes`,
+          cart: `${apiPrefix}/cart`,
+          customs: `${apiPrefix}/customs`,
           reviews: `${apiPrefix}/reviews`,
           analytics: `${apiPrefix}/analytics`,
           notifications: `${apiPrefix}/notifications`,

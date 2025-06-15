@@ -1,5 +1,5 @@
 import { IMessageService } from './MessageService.interface';
-import { IQuoteService } from '../../quote/services/QuoteService.interface';
+import { IQuoteService } from '../../custom-order/services/CustomOrderService.interface';
 import { INotificationService } from '../../notification/services/NotificationService.interface';
 import { IProductService } from '../../product/services/ProductService.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
