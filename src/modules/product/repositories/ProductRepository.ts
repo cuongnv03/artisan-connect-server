@@ -10,6 +10,7 @@ import {
   ProductPaginationResult,
   PriceHistory,
   ProductStats,
+  ProductVariant,
 } from '../models/Product';
 import { ProductStatus } from '../models/ProductEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -41,19 +42,35 @@ export class ProductRepository
             price: data.price,
             discountPrice: data.discountPrice,
             quantity: data.quantity,
-            status: ProductStatus.DRAFT,
-            images: data.images,
-            tags: data.tags || [],
+            minOrderQty: data.minOrderQty || 1,
+            maxOrderQty: data.maxOrderQty,
+            sku: data.sku,
+            barcode: data.barcode,
+            weight: data.weight,
+            dimensions: data.dimensions,
             isCustomizable: data.isCustomizable || false,
+            allowNegotiation: data.allowNegotiation ?? true,
+            shippingInfo: data.shippingInfo,
+            status: ProductStatus.DRAFT,
+            tags: data.tags || [],
+            images: data.images,
+            featuredImage: data.featuredImage,
+            seoTitle: data.seoTitle,
+            seoDescription: data.seoDescription,
+            attributes: data.attributes,
+            specifications: data.specifications,
+            customFields: data.customFields,
+            hasVariants: (data.variants && data.variants.length > 0) || false,
             viewCount: 0,
             salesCount: 0,
+            reviewCount: 0,
           },
         });
 
-        // Link categories if provided
-        if (data.categories && data.categories.length > 0) {
+        // Link categories
+        if (data.categoryIds && data.categoryIds.length > 0) {
           await Promise.all(
-            data.categories.map((categoryId) =>
+            data.categoryIds.map((categoryId) =>
               tx.categoryProduct.create({
                 data: { productId: product.id, categoryId },
               }),
@@ -61,14 +78,38 @@ export class ProductRepository
           );
         }
 
-        // Create initial price history
+        // Create price history
         await tx.priceHistory.create({
           data: {
             productId: product.id,
             price: data.price,
             changeNote: 'Initial price',
+            changedBy: sellerId,
           },
         });
+
+        // Create variants if provided
+        if (data.variants && data.variants.length > 0) {
+          for (const [index, variantData] of data.variants.entries()) {
+            await tx.productVariant.create({
+              data: {
+                productId: product.id,
+                sku: await this.generateVariantSku(product.id, variantData.attributes),
+                name: variantData.name,
+                price: variantData.price || data.price,
+                discountPrice: variantData.discountPrice,
+                quantity: variantData.quantity,
+                images: variantData.images || [],
+                weight: variantData.weight,
+                dimensions: variantData.dimensions,
+                attributes: variantData.attributes,
+                isActive: variantData.isActive ?? true,
+                isDefault: variantData.isDefault ?? index === 0,
+                sortOrder: variantData.sortOrder ?? index,
+              },
+            });
+          }
+        }
 
         return product;
       });
@@ -76,7 +117,7 @@ export class ProductRepository
       return (await this.getProductById(product.id)) as ProductWithSeller;
     } catch (error) {
       this.logger.error(`Error creating product: ${error}`);
-      throw new AppError('Failed to create product', 500, 'PRODUCT_CREATE_ERROR');
+      throw AppError.internal('Failed to create product', 'PRODUCT_CREATE_ERROR');
     }
   }
 
@@ -93,11 +134,11 @@ export class ProductRepository
       });
 
       if (!existingProduct) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
       }
 
       if (existingProduct.sellerId !== sellerId) {
-        throw new AppError('You can only update your own products', 403, 'FORBIDDEN');
+        throw AppError.forbidden('You can only update your own products', 'FORBIDDEN');
       }
 
       const updateData: any = { ...data };
@@ -109,11 +150,11 @@ export class ProductRepository
 
       await this.prisma.$transaction(async (tx) => {
         // Update categories if provided
-        if (data.categories !== undefined) {
+        if (data.categoryIds !== undefined) {
           await tx.categoryProduct.deleteMany({ where: { productId: id } });
-          if (data.categories.length > 0) {
+          if (data.categoryIds.length > 0) {
             await Promise.all(
-              data.categories.map((categoryId) =>
+              data.categoryIds.map((categoryId) =>
                 tx.categoryProduct.create({
                   data: { productId: id, categoryId },
                 }),
@@ -135,6 +176,7 @@ export class ProductRepository
               productId: id,
               price: data.price,
               changeNote: 'Price updated',
+              changedBy: sellerId,
             },
           });
         }
@@ -144,38 +186,7 @@ export class ProductRepository
     } catch (error) {
       this.logger.error(`Error updating product: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update product', 500, 'PRODUCT_UPDATE_ERROR');
-    }
-  }
-
-  async deleteProduct(id: string, sellerId: string): Promise<boolean> {
-    try {
-      const product = await this.prisma.product.findUnique({
-        where: { id, deletedAt: null },
-        select: { sellerId: true },
-      });
-
-      if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
-      }
-
-      if (product.sellerId !== sellerId) {
-        throw new AppError('You can only delete your own products', 403, 'FORBIDDEN');
-      }
-
-      await this.prisma.product.update({
-        where: { id },
-        data: {
-          status: ProductStatus.DELETED,
-          deletedAt: new Date(),
-        },
-      });
-
-      return true;
-    } catch (error) {
-      this.logger.error(`Error deleting product: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to delete product', 500, 'PRODUCT_DELETE_ERROR');
+      throw AppError.internal('Failed to update product', 'PRODUCT_UPDATE_ERROR');
     }
   }
 
@@ -202,6 +213,13 @@ export class ProductRepository
                 select: { id: true, name: true, slug: true },
               },
             },
+          },
+          variants: {
+            orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
+          },
+          priceHistory: {
+            orderBy: { createdAt: 'desc' },
+            take: 10,
           },
         },
       });
@@ -239,6 +257,9 @@ export class ProductRepository
               },
             },
           },
+          variants: {
+            orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
+          },
         },
       });
 
@@ -257,12 +278,14 @@ export class ProductRepository
         page = 1,
         limit = 10,
         sellerId,
-        categoryId,
+        categoryIds,
         search,
         status,
         sortBy = 'createdAt',
         sortOrder = 'desc',
         inStock,
+        priceRange,
+        hasVariants,
       } = options;
 
       const where: Prisma.ProductWhereInput = {
@@ -272,34 +295,32 @@ export class ProductRepository
       // Filters
       if (sellerId) {
         where.sellerId = sellerId;
-        // Nếu là seller query, cho phép tất cả status
         if (status) {
           where.status = Array.isArray(status) ? { in: status } : status;
         }
       } else {
-        // Đối với public query, chỉ hiển thị PUBLISHED và OUT_OF_STOCK
-        if (status) {
-          const allowedStatuses = Array.isArray(status) ? status : [status];
-          const publicStatuses = allowedStatuses.filter((s) =>
-            [ProductStatus.PUBLISHED, ProductStatus.OUT_OF_STOCK].includes(s),
-          );
-          if (publicStatuses.length > 0) {
-            where.status = publicStatuses.length === 1 ? publicStatuses[0] : { in: publicStatuses };
-          } else {
-            where.status = { in: [ProductStatus.PUBLISHED, ProductStatus.OUT_OF_STOCK] };
-          }
-        } else {
-          // Default: hiển thị cả PUBLISHED và OUT_OF_STOCK
-          where.status = { in: [ProductStatus.PUBLISHED, ProductStatus.OUT_OF_STOCK] };
-        }
+        // Public query - only show published products
+        where.status = { in: [ProductStatus.PUBLISHED, ProductStatus.OUT_OF_STOCK] };
       }
+
       if (inStock !== undefined) {
         where.quantity = inStock ? { gt: 0 } : { lte: 0 };
       }
 
+      if (hasVariants !== undefined) {
+        where.hasVariants = hasVariants;
+      }
+
       // Category filter
-      if (categoryId) {
-        where.categories = { some: { categoryId } };
+      if (categoryIds && categoryIds.length > 0) {
+        where.categories = { some: { categoryId: { in: categoryIds } } };
+      }
+
+      // Price range filter
+      if (priceRange) {
+        where.price = {};
+        if (priceRange.min !== undefined) where.price.gte = priceRange.min;
+        if (priceRange.max !== undefined) where.price.lte = priceRange.max;
       }
 
       // Search
@@ -308,6 +329,7 @@ export class ProductRepository
           { name: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } },
           { tags: { hasSome: [search] } },
+          { sku: { contains: search, mode: 'insensitive' } },
         ];
       }
 
@@ -348,7 +370,7 @@ export class ProductRepository
       };
     } catch (error) {
       this.logger.error(`Error getting products: ${error}`);
-      throw new AppError('Failed to get products', 500, 'PRODUCT_GET_ERROR');
+      throw AppError.internal('Failed to get products', 'PRODUCT_GET_ERROR');
     }
   }
 
@@ -366,6 +388,37 @@ export class ProductRepository
     return this.getProducts({ ...options, search: query, status: ProductStatus.PUBLISHED });
   }
 
+  async deleteProduct(id: string, sellerId: string): Promise<boolean> {
+    try {
+      const product = await this.prisma.product.findUnique({
+        where: { id, deletedAt: null },
+        select: { sellerId: true },
+      });
+
+      if (!product) {
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
+      }
+
+      if (product.sellerId !== sellerId) {
+        throw AppError.forbidden('You can only delete your own products', 'FORBIDDEN');
+      }
+
+      await this.prisma.product.update({
+        where: { id },
+        data: {
+          status: ProductStatus.DELETED,
+          deletedAt: new Date(),
+        },
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting product: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to delete product', 'PRODUCT_DELETE_ERROR');
+    }
+  }
+
   async updatePrice(
     id: string,
     sellerId: string,
@@ -379,11 +432,11 @@ export class ProductRepository
       });
 
       if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
       }
 
       if (product.sellerId !== sellerId) {
-        throw new AppError('You can only update your own products', 403, 'FORBIDDEN');
+        throw AppError.forbidden('You can only update your own products', 'FORBIDDEN');
       }
 
       await this.prisma.$transaction(async (tx) => {
@@ -397,6 +450,7 @@ export class ProductRepository
             productId: id,
             price,
             changeNote: note || 'Price updated',
+            changedBy: sellerId,
           },
         });
       });
@@ -405,7 +459,7 @@ export class ProductRepository
     } catch (error) {
       this.logger.error(`Error updating price: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update price', 500, 'PRICE_UPDATE_ERROR');
+      throw AppError.internal('Failed to update price', 'PRICE_UPDATE_ERROR');
     }
   }
 
@@ -435,7 +489,7 @@ export class ProductRepository
       };
     } catch (error) {
       this.logger.error(`Error getting price history: ${error}`);
-      throw new AppError('Failed to get price history', 500, 'PRICE_HISTORY_ERROR');
+      throw AppError.internal('Failed to get price history', 'PRICE_HISTORY_ERROR');
     }
   }
 
@@ -447,11 +501,11 @@ export class ProductRepository
       });
 
       if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
       }
 
       if (product.sellerId !== sellerId) {
-        throw new AppError('You can only publish your own products', 403, 'FORBIDDEN');
+        throw AppError.forbidden('You can only publish your own products', 'FORBIDDEN');
       }
 
       const status = product.quantity > 0 ? ProductStatus.PUBLISHED : ProductStatus.OUT_OF_STOCK;
@@ -465,7 +519,7 @@ export class ProductRepository
     } catch (error) {
       this.logger.error(`Error publishing product: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to publish product', 500, 'PRODUCT_PUBLISH_ERROR');
+      throw AppError.internal('Failed to publish product', 'PRODUCT_PUBLISH_ERROR');
     }
   }
 
@@ -477,11 +531,11 @@ export class ProductRepository
       });
 
       if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
       }
 
       if (product.sellerId !== sellerId) {
-        throw new AppError('You can only unpublish your own products', 403, 'FORBIDDEN');
+        throw AppError.forbidden('You can only unpublish your own products', 'FORBIDDEN');
       }
 
       await this.prisma.product.update({
@@ -493,7 +547,7 @@ export class ProductRepository
     } catch (error) {
       this.logger.error(`Error unpublishing product: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to unpublish product', 500, 'PRODUCT_UNPUBLISH_ERROR');
+      throw AppError.internal('Failed to unpublish product', 'PRODUCT_UNPUBLISH_ERROR');
     }
   }
 
@@ -505,17 +559,17 @@ export class ProductRepository
       });
     } catch (error) {
       this.logger.error(`Error incrementing view count: ${error}`);
-      // Don't throw for view count updates
     }
   }
 
   async getProductStats(sellerId: string): Promise<ProductStats> {
     try {
-      const [totalStats, publishedCount, draftCount] = await Promise.all([
+      const [totalStats, publishedCount, draftCount, outOfStockCount] = await Promise.all([
         this.prisma.product.aggregate({
           where: { sellerId, deletedAt: null },
           _count: { id: true },
           _sum: { viewCount: true, salesCount: true },
+          _avg: { avgRating: true },
         }),
         this.prisma.product.count({
           where: { sellerId, status: ProductStatus.PUBLISHED, deletedAt: null },
@@ -523,18 +577,23 @@ export class ProductRepository
         this.prisma.product.count({
           where: { sellerId, status: ProductStatus.DRAFT, deletedAt: null },
         }),
+        this.prisma.product.count({
+          where: { sellerId, status: ProductStatus.OUT_OF_STOCK, deletedAt: null },
+        }),
       ]);
 
       return {
         totalProducts: totalStats._count.id || 0,
         publishedProducts: publishedCount,
         draftProducts: draftCount,
+        outOfStockProducts: outOfStockCount,
         totalViews: totalStats._sum.viewCount || 0,
         totalSales: totalStats._sum.salesCount || 0,
+        avgRating: totalStats._avg.avgRating || undefined,
       };
     } catch (error) {
       this.logger.error(`Error getting product stats: ${error}`);
-      throw new AppError('Failed to get product stats', 500, 'PRODUCT_STATS_ERROR');
+      throw AppError.internal('Failed to get product stats', 'PRODUCT_STATS_ERROR');
     }
   }
 
@@ -559,6 +618,41 @@ export class ProductRepository
     return `${baseSlug}-${randomStr}`;
   }
 
+  async generateVariantSku(productId: string, attributes: Record<string, any>): Promise<string> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true },
+    });
+
+    if (!product) {
+      throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
+    }
+
+    const baseSku = product.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 10);
+
+    const attrPart = Object.entries(attributes)
+      .map(([key, value]) => `${key.substring(0, 3)}${String(value).substring(0, 3)}`)
+      .join('-')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '');
+
+    const sku = `${baseSku}-${attrPart}`;
+
+    const existing = await this.prisma.productVariant.findUnique({
+      where: { sku },
+    });
+
+    if (!existing) return sku;
+
+    const randomSuffix = Math.random().toString(36).substring(2, 6);
+    return `${sku}-${randomSuffix}`;
+  }
+
   async isProductOwner(productId: string, sellerId: string): Promise<boolean> {
     try {
       const product = await this.prisma.product.findUnique({
@@ -574,7 +668,20 @@ export class ProductRepository
   private transformProductWithSeller(product: any): ProductWithSeller {
     return {
       ...product,
+      price: Number(product.price),
+      discountPrice: product.discountPrice ? Number(product.discountPrice) : null,
       categories: product.categories?.map((c: any) => c.category) || [],
+      variants:
+        product.variants?.map((v: any) => ({
+          ...v,
+          price: Number(v.price),
+          discountPrice: v.discountPrice ? Number(v.discountPrice) : null,
+        })) || [],
+      priceHistory:
+        product.priceHistory?.map((p: any) => ({
+          ...p,
+          price: Number(p.price),
+        })) || [],
     };
   }
 }

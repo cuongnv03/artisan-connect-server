@@ -37,7 +37,6 @@ import { WishlistRepository } from '../../modules/social/repositories/WishlistRe
 
 import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
 import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
-import { ProductAttributeRepository } from '../../modules/product/repositories/ProductAttributeRepository';
 
 import { QuoteRepository } from '../../modules/quote/repositories/QuoteRepository';
 import { OrderRepository } from '../../modules/order/repositories/OrderRepository';
@@ -68,7 +67,6 @@ container.register('commentRepository', new CommentRepository(prisma));
 
 container.register('productRepository', new ProductRepository(prisma));
 container.register('categoryRepository', new CategoryRepository(prisma));
-container.register('productAttributeRepository', new ProductAttributeRepository(prisma));
 container.register('wishlistRepository', new WishlistRepository(prisma));
 
 container.register('cartRepository', new CartRepository(prisma));
@@ -90,7 +88,6 @@ import { CommentService } from '../../modules/social/services/CommentService';
 import { WishlistService } from '../../modules/social/services/WishlistService';
 import { ProductService } from '../../modules/product/services/ProductService';
 import { CategoryService } from '../../modules/product/services/CategoryService';
-import { ProductAttributeService } from '../../modules/product/services/ProductAttributeService';
 import { QuoteService } from '../../modules/quote/services/QuoteService';
 import { OrderService } from '../../modules/order/services/OrderService';
 import { CartService } from '../../modules/cart/services/CartService';
@@ -108,7 +105,6 @@ container.register('artisanProfileService', new ArtisanProfileService());
 container.register('postService', new PostService());
 container.register('likeService', new LikeService());
 container.register('commentService', new CommentService());
-container.register('productAttributeService', new ProductAttributeService());
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
 container.register('wishlistService', new WishlistService());

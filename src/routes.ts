@@ -11,8 +11,6 @@ import socialRoutes from './modules/social/interface/routes/social.routes';
 import analyticsRoutes from './modules/analytics/interface/routes/analytics.routes';
 import productRoutes from './modules/product/interface/routes/product.routes';
 import categoryRoutes from './modules/product/interface/routes/category.routes';
-import attributeRoutes from './modules/product/interface/routes/attribute.routes';
-import variantRoutes from './modules/product/interface/routes/variant.routes';
 import cartRoutes from './modules/cart/interface/routes/cart.routes';
 import quoteRoutes from './modules/quote/interface/routes/quote.routes';
 import orderRoutes from './modules/order/interface/routes/order.routes';
@@ -37,8 +35,6 @@ export const registerRoutes = (app: Express) => {
 
     app.use(`${apiPrefix}/products`, productRoutes);
     app.use(`${apiPrefix}/categories`, categoryRoutes);
-    app.use(`${apiPrefix}/attributes`, attributeRoutes);
-    app.use(`${apiPrefix}/variants`, variantRoutes);
     app.use(`${apiPrefix}/cart`, cartRoutes);
     app.use(`${apiPrefix}/quotes`, quoteRoutes);
     app.use(`${apiPrefix}/orders`, orderRoutes);

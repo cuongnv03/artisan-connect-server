@@ -2,53 +2,29 @@ import Joi from 'joi';
 import { ProductStatus } from '../../models/ProductEnums';
 
 export const createProductSchema = Joi.object({
-  name: Joi.string().required().min(3).max(200).messages({
-    'string.empty': 'Product name is required',
-    'string.min': 'Product name must be at least 3 characters',
-    'string.max': 'Product name cannot exceed 200 characters',
-  }),
+  name: Joi.string().required().min(3).max(200),
   description: Joi.string().max(2000).allow(''),
-  price: Joi.number().positive().required().messages({
-    'number.positive': 'Price must be greater than 0',
-    'any.required': 'Price is required',
-  }),
-  discountPrice: Joi.number().positive().allow(null).less(Joi.ref('price')).messages({
-    'number.positive': 'Discount price must be greater than 0',
-    'number.less': 'Discount price must be less than regular price',
-  }),
-  quantity: Joi.number().integer().min(0).required().messages({
-    'number.min': 'Quantity cannot be negative',
-    'any.required': 'Quantity is required',
-  }),
-  categories: Joi.array().items(Joi.string().uuid()).max(5).messages({
-    'array.max': 'Maximum 5 categories allowed',
-  }),
-  images: Joi.array().items(Joi.string().uri()).min(1).max(10).required().messages({
-    'array.min': 'At least one product image is required',
-    'array.max': 'Maximum 10 images allowed',
-    'any.required': 'Product images are required',
-  }),
-  tags: Joi.array().items(Joi.string().max(30)).max(10).messages({
-    'array.max': 'Maximum 10 tags allowed',
-    'string.max': 'Each tag cannot exceed 30 characters',
-  }),
+  price: Joi.number().positive().required(),
+  discountPrice: Joi.number().positive().allow(null).less(Joi.ref('price')),
+  quantity: Joi.number().integer().min(0).required(),
+  minOrderQty: Joi.number().integer().min(1).default(1),
+  maxOrderQty: Joi.number().integer().min(Joi.ref('minOrderQty')).allow(null),
+  sku: Joi.string().max(100).allow(''),
+  barcode: Joi.string().max(100).allow(''),
+  weight: Joi.number().positive().allow(null),
+  dimensions: Joi.object().allow(null),
   isCustomizable: Joi.boolean().default(false),
-  specifications: Joi.object().pattern(Joi.string(), Joi.any()),
-  customFields: Joi.object().pattern(Joi.string(), Joi.any()),
-  weight: Joi.number().positive(),
-  dimensions: Joi.object({
-    length: Joi.number().positive(),
-    width: Joi.number().positive(),
-    height: Joi.number().positive(),
-    unit: Joi.string().valid('cm', 'mm', 'inch', 'ft').default('cm'),
-  }),
-  attributes: Joi.array().items(
-    Joi.object({
-      key: Joi.string().required(),
-      value: Joi.string().required(),
-      unit: Joi.string().allow(''),
-    }),
-  ),
+  allowNegotiation: Joi.boolean().default(true),
+  shippingInfo: Joi.object().allow(null),
+  categoryIds: Joi.array().items(Joi.string().uuid()).max(5).required(),
+  images: Joi.array().items(Joi.string().uri()).min(1).max(10).required(),
+  featuredImage: Joi.string().uri().allow(''),
+  tags: Joi.array().items(Joi.string().max(30)).max(10),
+  seoTitle: Joi.string().max(60).allow(''),
+  seoDescription: Joi.string().max(160).allow(''),
+  attributes: Joi.object().allow(null),
+  specifications: Joi.object().allow(null),
+  customFields: Joi.object().allow(null),
   variants: Joi.array().items(
     Joi.object({
       name: Joi.string().max(200).allow(''),
@@ -57,86 +33,23 @@ export const createProductSchema = Joi.object({
       quantity: Joi.number().integer().min(0).required(),
       images: Joi.array().items(Joi.string().uri()).max(10),
       weight: Joi.number().positive(),
-      dimensions: Joi.object({
-        length: Joi.number().positive(),
-        width: Joi.number().positive(),
-        height: Joi.number().positive(),
-        unit: Joi.string().valid('cm', 'mm', 'inch', 'ft'),
-      }),
-      attributes: Joi.array()
-        .items(
-          Joi.object({
-            key: Joi.string().required(),
-            value: Joi.string().required(),
-          }),
-        )
-        .required(),
+      dimensions: Joi.object(),
+      attributes: Joi.object().required(),
+      isActive: Joi.boolean().default(true),
+      isDefault: Joi.boolean().default(false),
+      sortOrder: Joi.number().integer().min(0),
     }),
   ),
 });
 
-export const updateProductSchema = Joi.object({
-  name: Joi.string().min(3).max(200),
-  description: Joi.string().max(2000).allow('', null),
-  price: Joi.number().positive(),
-  discountPrice: Joi.number().positive().allow(null).less(Joi.ref('price')),
-  quantity: Joi.number().integer().min(0),
-  categories: Joi.array().items(Joi.string().uuid()).max(5),
-  status: Joi.string().valid(...Object.values(ProductStatus)),
-  images: Joi.array().items(Joi.string().uri()).min(1).max(10),
-  tags: Joi.array().items(Joi.string().max(30)).max(10),
-  isCustomizable: Joi.boolean(),
-  specifications: Joi.object().pattern(Joi.string(), Joi.any()),
-  customFields: Joi.object().pattern(Joi.string(), Joi.any()),
-  weight: Joi.number().positive(),
-  dimensions: Joi.object({
-    length: Joi.number().positive(),
-    width: Joi.number().positive(),
-    height: Joi.number().positive(),
-    unit: Joi.string().valid('cm', 'mm', 'inch', 'ft').default('cm'),
-  }),
-  attributes: Joi.array().items(
-    Joi.object({
-      key: Joi.string().required(),
-      value: Joi.string().required(),
-      unit: Joi.string().allow(''),
-    }),
-  ),
-  variants: Joi.array().items(
-    Joi.object({
-      name: Joi.string().max(200).allow(''),
-      price: Joi.number().positive(),
-      discountPrice: Joi.number().positive(),
-      quantity: Joi.number().integer().min(0).required(),
-      images: Joi.array().items(Joi.string().uri()).max(10),
-      weight: Joi.number().positive(),
-      dimensions: Joi.object({
-        length: Joi.number().positive(),
-        width: Joi.number().positive(),
-        height: Joi.number().positive(),
-        unit: Joi.string().valid('cm', 'mm', 'inch', 'ft'),
-      }),
-      attributes: Joi.array()
-        .items(
-          Joi.object({
-            key: Joi.string().required(),
-            value: Joi.string().required(),
-          }),
-        )
-        .required(),
-    }),
-  ),
-})
-  .min(1)
-  .messages({
-    'object.min': 'At least one field must be provided for update',
+export const updateProductSchema = createProductSchema
+  .fork(['name', 'price', 'quantity', 'categoryIds', 'images'], (schema) => schema.optional())
+  .append({
+    status: Joi.string().valid(...Object.values(ProductStatus)),
   });
 
 export const updatePriceSchema = Joi.object({
-  price: Joi.number().positive().required().messages({
-    'number.positive': 'Price must be greater than 0',
-    'any.required': 'Price is required',
-  }),
+  price: Joi.number().positive().required(),
   note: Joi.string().max(100),
 });
 
@@ -144,7 +57,7 @@ export const getProductsQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(10),
   sellerId: Joi.string().uuid(),
-  categoryId: Joi.string().uuid(),
+  categoryIds: Joi.alternatives().try(Joi.string().uuid(), Joi.array().items(Joi.string().uuid())),
   search: Joi.string().max(100).allow(''),
   status: Joi.string().valid(...Object.values(ProductStatus)),
   sortBy: Joi.string()
@@ -152,20 +65,16 @@ export const getProductsQuerySchema = Joi.object({
     .default('createdAt'),
   sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
   inStock: Joi.boolean(),
-  isCustomizable: Joi.boolean(),
-  minDiscountPercent: Joi.number().min(0).max(100),
-  freeShipping: Joi.boolean(),
+  hasVariants: Joi.boolean(),
+  minPrice: Joi.number().min(0),
+  maxPrice: Joi.number().min(Joi.ref('minPrice')),
 });
 
 export const searchProductsQuerySchema = Joi.object({
-  q: Joi.string().required().min(2).max(100).messages({
-    'string.empty': 'Search query is required',
-    'string.min': 'Search query must be at least 2 characters',
-    'string.max': 'Search query cannot exceed 100 characters',
-  }),
+  q: Joi.string().required().min(2).max(100),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(10),
-  categoryId: Joi.string().uuid(),
+  categoryIds: Joi.alternatives().try(Joi.string().uuid(), Joi.array().items(Joi.string().uuid())),
   sortBy: Joi.string().valid('createdAt', 'price', 'name', 'viewCount').default('createdAt'),
   sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
 });

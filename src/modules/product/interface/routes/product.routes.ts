@@ -47,31 +47,20 @@ const getProductStatsController = new GetProductStatsController();
 const viewProductController = new ViewProductController();
 
 // === PUBLIC ROUTES ===
-// Get products (public with filtering)
 router.get('/', validate(getProductsQuerySchema, 'query'), getProductsController.execute);
-
-// Search products (public)
 router.get(
   '/search',
   validate(searchProductsQuerySchema, 'query'),
   searchProductsController.execute,
 );
-
-// Get product by slug (public)
 router.get('/slug/:slug', getProductBySlugController.execute);
-
-// Get product by ID (public)
 router.get('/:id', validateIdParam(), getProductController.execute);
-
-// Get price history (public)
 router.get('/:id/price-history', validateIdParam(), getPriceHistoryController.execute);
 
 // === PROTECTED ROUTES ===
-// My products management (artisan only)
 router.get('/my/products', authenticate, getMyProductsController.execute);
 router.get('/my/stats', authenticate, getProductStatsController.execute);
 
-// Product CRUD (artisan only)
 router.post('/', authenticate, validate(createProductSchema), createProductController.execute);
 router.patch(
   '/:id',
@@ -82,7 +71,6 @@ router.patch(
 );
 router.delete('/:id', authenticate, validateIdParam(), deleteProductController.execute);
 
-// Price management (artisan only)
 router.patch(
   '/:id/price',
   authenticate,
@@ -90,11 +78,8 @@ router.patch(
   validate(updatePriceSchema),
   updatePriceController.execute,
 );
-
-// Product status management (artisan only)
 router.post('/:id/publish', authenticate, validateIdParam(), publishProductController.execute);
 router.post('/:id/unpublish', authenticate, validateIdParam(), unpublishProductController.execute);
-
 router.post('/:id/view', validateIdParam(), viewProductController.execute);
 
 export default router;

@@ -233,4 +233,32 @@ export class CategoryRepository
     const randomStr = Math.random().toString(36).substring(2, 6);
     return `${baseSlug}-${randomStr}`;
   }
+
+  async getCategoryAttributeTemplates(categoryId: string): Promise<any[]> {
+    try {
+      const templates = await this.prisma.categoryAttributeTemplate.findMany({
+        where: { categoryId },
+        orderBy: { sortOrder: 'asc' },
+      });
+      return templates;
+    } catch (error) {
+      this.logger.error(`Error getting category attribute templates: ${error}`);
+      throw AppError.internal('Failed to get category attribute templates', 'DATABASE_ERROR');
+    }
+  }
+
+  async createCategoryAttributeTemplate(categoryId: string, data: any): Promise<any> {
+    try {
+      const template = await this.prisma.categoryAttributeTemplate.create({
+        data: {
+          categoryId,
+          ...data,
+        },
+      });
+      return template;
+    } catch (error) {
+      this.logger.error(`Error creating category attribute template: ${error}`);
+      throw AppError.internal('Failed to create category attribute template', 'DATABASE_ERROR');
+    }
+  }
 }

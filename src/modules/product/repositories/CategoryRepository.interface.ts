@@ -14,4 +14,6 @@ export interface ICategoryRepository extends BaseRepository<Category, string> {
   getCategoryTree(): Promise<CategoryWithChildren[]>;
   getCategoryBySlug(slug: string): Promise<Category | null>;
   generateSlug(name: string): Promise<string>;
+  getCategoryAttributeTemplates(categoryId: string): Promise<any[]>;
+  createCategoryAttributeTemplate(categoryId: string, data: any): Promise<any>;
 }
