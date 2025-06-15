@@ -1,3 +1,5 @@
+import { Decimal } from '@prisma/client/runtime/library';
+
 export interface ArtisanProfile {
   id: string;
   userId: string;
@@ -11,11 +13,14 @@ export interface ArtisanProfile {
   contactEmail?: string | null;
   contactPhone?: string | null;
   socialMedia?: Record<string, string> | null;
-  templateId?: string | null;
-  templateData?: Record<string, any> | null;
+  businessAddress?: string | null;
+  businessHours?: Record<string, any> | null;
+  shippingInfo?: Record<string, any> | null;
+  returnPolicy?: string | null;
   isVerified: boolean;
   rating?: number | null;
   reviewCount: number;
+  totalSales: Decimal; // Decimal type
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +46,10 @@ export interface CreateArtisanProfileDto {
   contactEmail?: string;
   contactPhone?: string;
   socialMedia?: Record<string, string>;
+  businessAddress?: string;
+  businessHours?: Record<string, any>;
+  shippingInfo?: Record<string, any>;
+  returnPolicy?: string;
 }
 
 export interface UpdateArtisanProfileDto {
@@ -54,8 +63,10 @@ export interface UpdateArtisanProfileDto {
   contactEmail?: string;
   contactPhone?: string;
   socialMedia?: Record<string, string>;
-  templateId?: string;
-  templateData?: Record<string, any>;
+  businessAddress?: string;
+  businessHours?: Record<string, any>;
+  shippingInfo?: Record<string, any>;
+  returnPolicy?: string;
 }
 
 export interface ArtisanSearchFilters {
@@ -64,21 +75,21 @@ export interface ArtisanSearchFilters {
   minRating?: number;
   isVerified?: boolean;
   location?: string;
-  sortBy?: 'rating' | 'reviewCount' | 'createdAt' | 'followCount';
+  sortBy?: 'rating' | 'reviewCount' | 'createdAt' | 'followCount' | 'totalSales';
   sortOrder?: 'asc' | 'desc';
 }
 
-export interface TemplateCustomizationDto {
-  templateId: string;
-  colorScheme?: string;
-  fontFamily?: string;
-  layout?: string;
-  customCss?: string;
-  showSections?: string[];
-}
+// Helper để convert Decimal sang number cho API response
+export const transformArtisanProfile = (
+  profile: ArtisanProfile,
+): Omit<ArtisanProfile, 'totalSales'> & { totalSales: number } => ({
+  ...profile,
+  totalSales: Number(profile.totalSales),
+});
 
-export interface TemplateResult {
-  templateId: string;
-  templateData: Record<string, any>;
-  previewUrl: string;
-}
+export const transformArtisanProfileWithUser = (
+  profile: ArtisanProfileWithUser,
+): Omit<ArtisanProfileWithUser, 'totalSales'> & { totalSales: number } => ({
+  ...profile,
+  totalSales: Number(profile.totalSales),
+});

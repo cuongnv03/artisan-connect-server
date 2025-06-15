@@ -5,8 +5,6 @@ import {
   CreateArtisanProfileDto,
   UpdateArtisanProfileDto,
   ArtisanSearchFilters,
-  TemplateCustomizationDto,
-  TemplateResult,
 } from '../models/ArtisanProfile';
 import {
   ArtisanUpgradeRequest,
@@ -240,98 +238,6 @@ export class ArtisanProfileService implements IArtisanProfileService {
     }
   }
 
-  // Template Management
-  async getAvailableTemplates(): Promise<any[]> {
-    try {
-      // Return predefined templates
-      return [
-        {
-          id: 'modern',
-          name: 'Modern',
-          description: 'Clean and contemporary design',
-          previewUrl: '/templates/previews/modern.jpg',
-          features: ['Responsive', 'Gallery', 'Contact Form'],
-        },
-        {
-          id: 'vintage',
-          name: 'Vintage',
-          description: 'Classic and timeless look',
-          previewUrl: '/templates/previews/vintage.jpg',
-          features: ['Elegant Typography', 'Photo Gallery', 'About Section'],
-        },
-        {
-          id: 'minimalist',
-          name: 'Minimalist',
-          description: 'Simple and focused design',
-          previewUrl: '/templates/previews/minimalist.jpg',
-          features: ['Clean Layout', 'Portfolio Grid', 'Simple Navigation'],
-        },
-        {
-          id: 'artistic',
-          name: 'Artistic',
-          description: 'Creative and expressive layout',
-          previewUrl: '/templates/previews/artistic.jpg',
-          features: ['Creative Layout', 'Image Showcase', 'Custom Colors'],
-        },
-      ];
-    } catch (error) {
-      this.logger.error(`Error getting available templates: ${error}`);
-      throw AppError.internal('Failed to get available templates', 'SERVICE_ERROR');
-    }
-  }
-
-  async customizeTemplate(userId: string, data: TemplateCustomizationDto): Promise<TemplateResult> {
-    try {
-      // Get artisan profile
-      const profile = await this.artisanProfileRepository.findByUserId(userId);
-      if (!profile) {
-        throw AppError.notFound('Artisan profile not found');
-      }
-
-      // Generate template data
-      const templateData = {
-        templateId: data.templateId,
-        colorScheme: data.colorScheme || 'default',
-        fontFamily: data.fontFamily || 'Inter',
-        layout: data.layout || 'standard',
-        customCss: data.customCss || '',
-        showSections: data.showSections || ['about', 'gallery', 'contact'],
-        customizedAt: new Date(),
-      };
-
-      // Update profile with template data
-      await this.artisanProfileRepository.updateProfile(userId, {
-        templateId: data.templateId,
-        templateData,
-      });
-
-      // Generate preview URL (in a real implementation, this would generate actual preview)
-      const previewUrl = `/artisan/${profile.id}/preview?template=${data.templateId}`;
-
-      this.logger.info(`Template customized for artisan ${userId}`);
-
-      return {
-        templateId: data.templateId,
-        templateData,
-        previewUrl,
-      };
-    } catch (error) {
-      this.logger.error(`Error customizing template: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to customize template', 'SERVICE_ERROR');
-    }
-  }
-
-  async getTemplatePreview(templateId: string, customData: any): Promise<string> {
-    try {
-      // In a real implementation, this would generate actual HTML preview
-      return `<div>Preview for template ${templateId} with custom data</div>`;
-    } catch (error) {
-      this.logger.error(`Error generating template preview: ${error}`);
-      throw AppError.internal('Failed to generate template preview', 'SERVICE_ERROR');
-    }
-  }
-
   // Upgrade Request Management
   async requestUpgrade(
     userId: string,
@@ -519,31 +425,7 @@ export class ArtisanProfileService implements IArtisanProfileService {
     }
   }
 
-  // Analytics
-  async getArtisanStats(userId: string): Promise<any> {
-    try {
-      const profile = await this.artisanProfileRepository.findByUserId(userId);
-      if (!profile) {
-        throw AppError.notFound('Artisan profile not found');
-      }
-
-      // In a real implementation, this would aggregate various statistics
-      return {
-        profileViews: 0, // Would come from analytics service
-        productCount: 0, // Would come from product service
-        orderCount: 0, // Would come from order service
-        totalRevenue: 0, // Would come from order service
-        rating: profile.rating,
-        reviewCount: profile.reviewCount,
-        followerCount: profile.user.followerCount,
-      };
-    } catch (error) {
-      this.logger.error(`Error getting artisan stats: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to get artisan stats', 'SERVICE_ERROR');
-    }
-  }
-
+  // Utility Methods
   async updateArtisanRating(
     profileId: string,
     newRating: number,
@@ -555,6 +437,16 @@ export class ArtisanProfileService implements IArtisanProfileService {
       this.logger.error(`Error updating artisan rating: ${error}`);
       if (error instanceof AppError) throw error;
       throw AppError.internal('Failed to update artisan rating', 'SERVICE_ERROR');
+    }
+  }
+
+  async updateTotalSales(profileId: string, totalSales: number): Promise<void> {
+    try {
+      await this.artisanProfileRepository.updateTotalSales(profileId, totalSales);
+    } catch (error) {
+      this.logger.error(`Error updating total sales: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to update total sales', 'SERVICE_ERROR');
     }
   }
 

@@ -50,6 +50,9 @@ export class UpgradeRequestRepository
           website: data.website,
           socialMedia: data.socialMedia || {},
           reason: data.reason,
+          images: data.images || [], // Mới thêm
+          certificates: data.certificates || [], // Mới thêm
+          identityProof: data.identityProof, // Mới thêm
           status: UpgradeRequestStatus.PENDING,
         },
       });
@@ -201,6 +204,7 @@ export class UpgradeRequestRepository
             experience: request.experience,
             website: request.website,
             socialMedia: request.socialMedia || {},
+            totalSales: 0, // Khởi tạo = 0
           },
         });
 

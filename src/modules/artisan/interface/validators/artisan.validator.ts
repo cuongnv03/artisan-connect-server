@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { ArtisanSpecialty, TemplateStyle } from '../../models/ArtisanEnums';
+import { ArtisanSpecialty } from '../../models/ArtisanEnums';
 
 // Create artisan profile validation
 export const createArtisanProfileSchema = Joi.object({
@@ -36,6 +36,10 @@ export const createArtisanProfileSchema = Joi.object({
   socialMedia: Joi.object().pattern(Joi.string(), Joi.string().uri()).messages({
     'object.pattern.match': 'Social media links must be valid URLs',
   }),
+  businessAddress: Joi.string().max(500).allow(''),
+  businessHours: Joi.object().allow(null),
+  shippingInfo: Joi.object().allow(null),
+  returnPolicy: Joi.string().max(2000).allow(''),
 });
 
 // Update artisan profile validation
@@ -52,8 +56,10 @@ export const updateArtisanProfileSchema = Joi.object({
   contactEmail: Joi.string().email(),
   contactPhone: Joi.string().pattern(/^[+]?[1-9][\d\s\-()]{7,15}$/),
   socialMedia: Joi.object().pattern(Joi.string(), Joi.string().uri()),
-  templateId: Joi.string(),
-  templateData: Joi.object(),
+  businessAddress: Joi.string().max(500).allow(''),
+  businessHours: Joi.object().allow(null),
+  shippingInfo: Joi.object().allow(null),
+  returnPolicy: Joi.string().max(2000).allow(''),
 }).min(1);
 
 // Search artisans validation
@@ -63,24 +69,10 @@ export const searchArtisansSchema = Joi.object({
   minRating: Joi.number().min(0).max(5),
   isVerified: Joi.boolean(),
   location: Joi.string().max(100),
-  sortBy: Joi.string().valid('rating', 'reviewCount', 'createdAt', 'followCount'),
+  sortBy: Joi.string().valid('rating', 'reviewCount', 'createdAt', 'followCount', 'totalSales'),
   sortOrder: Joi.string().valid('asc', 'desc'),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(10),
-});
-
-// Template customization validation
-export const templateCustomizationSchema = Joi.object({
-  templateId: Joi.string().required().messages({
-    'any.required': 'Template ID is required',
-  }),
-  colorScheme: Joi.string().valid('light', 'dark', 'warm', 'cool', 'neutral'),
-  fontFamily: Joi.string().valid('Inter', 'Poppins', 'Roboto', 'Open Sans', 'Playfair Display'),
-  layout: Joi.string().valid('standard', 'grid', 'masonry', 'minimal'),
-  customCss: Joi.string().max(5000),
-  showSections: Joi.array().items(
-    Joi.string().valid('about', 'gallery', 'products', 'contact', 'testimonials'),
-  ),
 });
 
 // Upgrade request validation
@@ -96,6 +88,9 @@ export const upgradeRequestSchema = Joi.object({
   reason: Joi.string().max(1000).messages({
     'string.max': 'Reason cannot exceed 1000 characters',
   }),
+  images: Joi.array().items(Joi.string().uri()).max(10), // Mới thêm
+  certificates: Joi.array().items(Joi.string().uri()).max(10), // Mới thêm
+  identityProof: Joi.string().uri().allow(''), // Mới thêm
 });
 
 // Admin review validation

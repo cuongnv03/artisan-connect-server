@@ -6,7 +6,6 @@ import {
   createArtisanProfileSchema,
   updateArtisanProfileSchema,
   searchArtisansSchema,
-  templateCustomizationSchema,
   upgradeRequestSchema,
   adminReviewSchema,
   verifyArtisanSchema,
@@ -28,11 +27,6 @@ import { GetTopArtisansController } from '../controllers/discovery/GetTopArtisan
 import { GetArtisansBySpecialtyController } from '../controllers/discovery/GetArtisansBySpecialtyController';
 import { GetFeaturedArtisansController } from '../controllers/discovery/GetFeaturedArtisansController';
 
-// Template Controllers
-import { GetAvailableTemplatesController } from '../controllers/template/GetAvailableTemplatesController';
-import { CustomizeTemplateController } from '../controllers/template/CustomizeTemplateController';
-import { GetTemplatePreviewController } from '../controllers/template/GetTemplatePreviewController';
-
 // Upgrade Controllers
 import { RequestUpgradeController } from '../controllers/upgrade/RequestUpgradeController';
 import { GetUpgradeRequestStatusController } from '../controllers/upgrade/GetUpgradeRequestStatusController';
@@ -43,9 +37,6 @@ import { GetUpgradeRequestsController } from '../controllers/upgrade/GetUpgradeR
 import { ApproveUpgradeRequestController } from '../controllers/upgrade/ApproveUpgradeRequestController';
 import { RejectUpgradeRequestController } from '../controllers/upgrade/RejectUpgradeRequestController';
 import { VerifyArtisanController } from '../controllers/upgrade/VerifyArtisanController';
-
-// Analytics Controllers
-import { GetArtisanStatsController } from '../controllers/analytics/GetArtisanStatsController';
 
 const router = Router();
 
@@ -62,10 +53,6 @@ const getTopArtisansController = new GetTopArtisansController();
 const getArtisansBySpecialtyController = new GetArtisansBySpecialtyController();
 const getFeaturedArtisansController = new GetFeaturedArtisansController();
 
-const getAvailableTemplatesController = new GetAvailableTemplatesController();
-const customizeTemplateController = new CustomizeTemplateController();
-const getTemplatePreviewController = new GetTemplatePreviewController();
-
 const requestUpgradeController = new RequestUpgradeController();
 const getUpgradeRequestStatusController = new GetUpgradeRequestStatusController();
 const updateUpgradeRequestController = new UpdateUpgradeRequestController();
@@ -74,8 +61,6 @@ const getUpgradeRequestsController = new GetUpgradeRequestsController();
 const approveUpgradeRequestController = new ApproveUpgradeRequestController();
 const rejectUpgradeRequestController = new RejectUpgradeRequestController();
 const verifyArtisanController = new VerifyArtisanController();
-
-const getArtisanStatsController = new GetArtisanStatsController();
 
 // === PUBLIC ROUTES ===
 // Discovery routes
@@ -94,14 +79,6 @@ router.get(
   '/profile/user/:userId',
   validateIdParam('userId'),
   getArtisanProfileByUserIdController.execute,
-);
-
-// Template routes (public)
-router.get('/templates', getAvailableTemplatesController.execute);
-router.post(
-  '/templates/:templateId/preview',
-  validateIdParam('templateId'),
-  getTemplatePreviewController.execute,
 );
 
 // === PROTECTED ROUTES ===
@@ -127,15 +104,6 @@ router.delete(
   deleteArtisanProfileController.execute,
 );
 
-// Template customization
-router.post(
-  '/templates/customize',
-  authenticate,
-  authorize(['ARTISAN']),
-  validate(templateCustomizationSchema),
-  customizeTemplateController.execute,
-);
-
 // Upgrade requests
 router.post(
   '/upgrade-request',
@@ -150,9 +118,6 @@ router.patch(
   validate(upgradeRequestSchema),
   updateUpgradeRequestController.execute,
 );
-
-// Analytics
-router.get('/stats', authenticate, authorize(['ARTISAN']), getArtisanStatsController.execute);
 
 // === ADMIN ROUTES ===
 // Upgrade request management

@@ -64,6 +64,11 @@ export class ArtisanProfileRepository
           contactEmail: data.contactEmail,
           contactPhone: data.contactPhone,
           socialMedia: data.socialMedia || {},
+          businessAddress: data.businessAddress,
+          businessHours: data.businessHours || {},
+          shippingInfo: data.shippingInfo || {},
+          returnPolicy: data.returnPolicy,
+          totalSales: 0, // Khởi tạo = 0
         },
         include: {
           user: {
@@ -188,6 +193,10 @@ export class ArtisanProfileRepository
         where.isVerified = filters.isVerified;
       }
 
+      if (filters.location) {
+        where.businessAddress = { contains: filters.location, mode: 'insensitive' };
+      }
+
       // Build order by clause
       const orderBy: Prisma.ArtisanProfileOrderByWithRelationInput = {};
 
@@ -200,6 +209,9 @@ export class ArtisanProfileRepository
           break;
         case 'followCount':
           orderBy.user = { followerCount: filters.sortOrder || 'desc' };
+          break;
+        case 'totalSales':
+          orderBy.totalSales = filters.sortOrder || 'desc';
           break;
         case 'createdAt':
         default:
@@ -261,6 +273,18 @@ export class ArtisanProfileRepository
     }
   }
 
+  async updateTotalSales(profileId: string, totalSales: number): Promise<void> {
+    try {
+      await this.prisma.artisanProfile.update({
+        where: { id: profileId },
+        data: { totalSales },
+      });
+    } catch (error) {
+      this.logger.error(`Error updating total sales: ${error}`);
+      throw AppError.internal('Failed to update total sales', 'DATABASE_ERROR');
+    }
+  }
+
   async getTopArtisans(limit: number): Promise<ArtisanProfileWithUser[]> {
     try {
       const profiles = await this.prisma.artisanProfile.findMany({
@@ -281,7 +305,12 @@ export class ArtisanProfileRepository
             },
           },
         },
-        orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }, { user: { followerCount: 'desc' } }],
+        orderBy: [
+          { totalSales: 'desc' },
+          { rating: 'desc' },
+          { reviewCount: 'desc' },
+          { user: { followerCount: 'desc' } },
+        ],
         take: limit,
       });
 
@@ -315,7 +344,7 @@ export class ArtisanProfileRepository
             },
           },
         },
-        orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
+        orderBy: [{ totalSales: 'desc' }, { rating: 'desc' }, { reviewCount: 'desc' }],
         take: limit,
       });
 

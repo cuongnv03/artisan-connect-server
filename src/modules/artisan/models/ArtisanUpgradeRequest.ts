@@ -10,6 +10,9 @@ export interface ArtisanUpgradeRequest {
   website?: string | null;
   socialMedia?: Record<string, string> | null;
   reason?: string | null;
+  images: string[];
+  certificates: string[];
+  identityProof?: string | null;
   status: UpgradeRequestStatus;
   adminNotes?: string | null;
   reviewedBy?: string | null;
@@ -37,6 +40,9 @@ export interface CreateUpgradeRequestDto {
   website?: string;
   socialMedia?: Record<string, string>;
   reason?: string;
+  images?: string[];
+  certificates?: string[];
+  identityProof?: string;
 }
 
 export interface ReviewUpgradeRequestDto {

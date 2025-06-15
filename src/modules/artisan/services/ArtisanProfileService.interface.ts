@@ -4,8 +4,6 @@ import {
   CreateArtisanProfileDto,
   UpdateArtisanProfileDto,
   ArtisanSearchFilters,
-  TemplateCustomizationDto,
-  TemplateResult,
 } from '../models/ArtisanProfile';
 import {
   ArtisanUpgradeRequest,
@@ -40,11 +38,6 @@ export interface IArtisanProfileService {
   getArtisansBySpecialty(specialty: string, limit?: number): Promise<ArtisanProfileWithUser[]>;
   getFeaturedArtisans(): Promise<ArtisanProfileWithUser[]>;
 
-  // Template Management
-  getAvailableTemplates(): Promise<any[]>;
-  customizeTemplate(userId: string, data: TemplateCustomizationDto): Promise<TemplateResult>;
-  getTemplatePreview(templateId: string, customData: any): Promise<string>;
-
   // Upgrade Request Management
   requestUpgrade(userId: string, data: CreateUpgradeRequestDto): Promise<ArtisanUpgradeRequest>;
   getUpgradeRequestStatus(userId: string): Promise<any>;
@@ -71,7 +64,7 @@ export interface IArtisanProfileService {
   ): Promise<ArtisanUpgradeRequest>;
   verifyArtisan(profileId: string, isVerified: boolean): Promise<ArtisanProfile>;
 
-  // Analytics
-  getArtisanStats(userId: string): Promise<any>;
+  // Utility methods
   updateArtisanRating(profileId: string, newRating: number, reviewCount: number): Promise<void>;
+  updateTotalSales(profileId: string, totalSales: number): Promise<void>;
 }
