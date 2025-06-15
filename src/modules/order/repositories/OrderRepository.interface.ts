@@ -3,7 +3,6 @@ import {
   Order,
   OrderWithDetails,
   OrderSummary,
-  OrderStatusHistory,
   PaymentTransaction,
   CreateOrderFromCartDto,
   CreateOrderFromQuoteDto,
@@ -11,6 +10,16 @@ import {
   ProcessPaymentDto,
   OrderQueryOptions,
   OrderStats,
+  OrderDispute,
+  OrderDisputeWithDetails,
+  CreateDisputeDto,
+  UpdateDisputeDto,
+  DisputeQueryOptions,
+  OrderReturn,
+  OrderReturnWithDetails,
+  CreateReturnDto,
+  UpdateReturnDto,
+  ReturnQueryOptions,
 } from '../models/Order';
 import { OrderStatus, PaymentStatus } from '../models/OrderEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -45,17 +54,53 @@ export interface IOrderRepository extends BaseRepository<Order, string> {
   processPayment(id: string, data: ProcessPaymentDto): Promise<OrderWithDetails>;
   refundPayment(id: string, reason?: string): Promise<OrderWithDetails>;
 
-  // Status tracking
-  getOrderStatusHistory(orderId: string): Promise<OrderStatusHistory[]>;
-  addStatusHistory(
+  // Status history (Json field thay vì bảng riêng)
+  addStatusToHistory(
     orderId: string,
     status: OrderStatus,
     note?: string,
-    createdBy?: string,
-  ): Promise<OrderStatusHistory>;
+    updatedBy?: string,
+  ): Promise<void>;
+  getStatusHistory(orderId: string): Promise<any[]>; // Return Json array
 
   // Utilities
   generateOrderNumber(): Promise<string>;
   getOrderStats(userId?: string, sellerId?: string): Promise<OrderStats>;
   isUserInvolvedInOrder(orderId: string, userId: string): Promise<boolean>;
+
+  // Dispute methods
+  createDispute(
+    data: CreateDisputeDto & { complainantId: string },
+  ): Promise<OrderDisputeWithDetails>;
+  updateDispute(
+    id: string,
+    data: UpdateDisputeDto,
+    updatedBy?: string,
+  ): Promise<OrderDisputeWithDetails>;
+  getDisputes(options: DisputeQueryOptions): Promise<PaginatedResult<OrderDisputeWithDetails>>;
+  getUserDisputes(
+    userId: string,
+    options?: Partial<DisputeQueryOptions>,
+  ): Promise<PaginatedResult<OrderDisputeWithDetails>>;
+  getDisputeById(id: string): Promise<OrderDisputeWithDetails | null>;
+
+  // Return methods
+  createReturn(data: CreateReturnDto & { requesterId: string }): Promise<OrderReturnWithDetails>;
+  updateReturn(
+    id: string,
+    data: UpdateReturnDto,
+    updatedBy?: string,
+  ): Promise<OrderReturnWithDetails>;
+  getReturns(options: ReturnQueryOptions): Promise<PaginatedResult<OrderReturnWithDetails>>;
+  getUserReturns(
+    userId: string,
+    options?: Partial<ReturnQueryOptions>,
+  ): Promise<PaginatedResult<OrderReturnWithDetails>>;
+  getReturnById(id: string): Promise<OrderReturnWithDetails | null>;
+
+  // Access control and validation methods
+  canUserAccessDispute(disputeId: string, userId: string): Promise<boolean>;
+  canUserAccessReturn(returnId: string, userId: string): Promise<boolean>;
+  canUserCreateDispute(orderId: string, userId: string): Promise<boolean>;
+  canUserCreateReturn(orderId: string, userId: string): Promise<boolean>;
 }

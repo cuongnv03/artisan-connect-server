@@ -37,7 +37,7 @@ export class GetSellerOrdersController extends BaseController {
       options.dateTo = new Date(req.query.dateTo as string);
     }
 
-    const orders = await this.orderService.getSellerOrders(req.user!.id, options);
+    const orders = await this.orderService.getArtisanOrders(req.user!.id, options);
 
     ApiResponse.success(res, orders, 'Seller orders retrieved successfully');
   }

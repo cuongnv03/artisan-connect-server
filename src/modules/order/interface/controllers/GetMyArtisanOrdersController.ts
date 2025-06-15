@@ -14,31 +14,28 @@ export class GetMyArtisanOrdersController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      // Ensure user is an artisan
-      if (req.user!.role !== 'ARTISAN') {
-        throw AppError.forbidden('Only artisans can access this endpoint');
-      }
-
-      // Parse query parameters
-      const options = {
-        page: parseInt(req.query.page as string) || 1,
-        limit: parseInt(req.query.limit as string) || 10,
-        status: req.query.status as any,
-        dateFrom: req.query.dateFrom ? new Date(req.query.dateFrom as string) : undefined,
-        dateTo: req.query.dateTo ? new Date(req.query.dateTo as string) : undefined,
-        sortBy: (req.query.sortBy as string) || 'createdAt',
-        sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
-        includeCancelled: req.query.includeCancelled === 'true',
-      };
-
-      const orders = await this.orderService.getArtisanOrders(req.user!.id, options);
-
-      ApiResponse.success(res, orders, 'Artisan orders retrieved successfully');
-    } catch (error) {
-      next(error);
+    // Ensure user is an artisan
+    if (req.user!.role !== 'ARTISAN') {
+      throw AppError.forbidden('Only artisans can access this endpoint');
     }
+
+    // Parse query parameters with new deliveryStatus support
+    const options = {
+      page: parseInt(req.query.page as string) || 1,
+      limit: parseInt(req.query.limit as string) || 10,
+      status: req.query.status as any,
+      paymentStatus: req.query.paymentStatus as any,
+      deliveryStatus: req.query.deliveryStatus as any,
+      dateFrom: req.query.dateFrom ? new Date(req.query.dateFrom as string) : undefined,
+      dateTo: req.query.dateTo ? new Date(req.query.dateTo as string) : undefined,
+      sortBy: (req.query.sortBy as string) || 'createdAt',
+      sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
+    };
+
+    const orders = await this.orderService.getArtisanOrders(req.user!.id, options);
+
+    ApiResponse.success(res, orders, 'Artisan orders retrieved successfully');
   }
 }

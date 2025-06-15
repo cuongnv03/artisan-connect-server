@@ -910,7 +910,7 @@ model PaymentTransaction {
   userId            String
   paymentMethodId   String?
   amount            Decimal           @db.Decimal(10, 2)
-  currency          String            @default("USD")
+  currency          String            @default("VND")
   status            PaymentStatus     @default(PENDING)
   paymentMethodType PaymentMethodType
   reference         String            @unique

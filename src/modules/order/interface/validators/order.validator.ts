@@ -1,5 +1,14 @@
 import Joi from 'joi';
-import { OrderStatus, PaymentMethod, PaymentStatus } from '../../models/OrderEnums';
+import {
+  OrderStatus,
+  PaymentMethodType,
+  PaymentStatus,
+  DeliveryStatus,
+  DisputeType,
+  DisputeStatus,
+  ReturnReason,
+  ReturnStatus,
+} from '../../models/OrderEnums';
 
 export const createOrderFromCartSchema = Joi.object({
   addressId: Joi.string().uuid().required().messages({
@@ -7,7 +16,7 @@ export const createOrderFromCartSchema = Joi.object({
     'any.required': 'Shipping address is required',
   }),
   paymentMethod: Joi.string()
-    .valid(...Object.values(PaymentMethod))
+    .valid(...Object.values(PaymentMethodType))
     .required()
     .messages({
       'any.required': 'Payment method is required',
@@ -28,7 +37,7 @@ export const createOrderFromQuoteSchema = Joi.object({
     'any.required': 'Shipping address is required',
   }),
   paymentMethod: Joi.string()
-    .valid(...Object.values(PaymentMethod))
+    .valid(...Object.values(PaymentMethodType))
     .required()
     .messages({
       'any.required': 'Payment method is required',
@@ -84,6 +93,10 @@ export const getOrdersQuerySchema = Joi.object({
     Joi.string().valid(...Object.values(PaymentStatus)),
     Joi.array().items(Joi.string().valid(...Object.values(PaymentStatus))),
   ),
+  deliveryStatus: Joi.alternatives().try(
+    Joi.string().valid(...Object.values(DeliveryStatus)),
+    Joi.array().items(Joi.string().valid(...Object.values(DeliveryStatus))),
+  ),
   dateFrom: Joi.date().iso(),
   dateTo: Joi.date().iso().min(Joi.ref('dateFrom')),
   sortBy: Joi.string()
@@ -95,6 +108,98 @@ export const getOrdersQuerySchema = Joi.object({
 export const getOrderStatsQuerySchema = Joi.object({
   userId: Joi.string().uuid(),
   sellerId: Joi.string().uuid(),
+  dateFrom: Joi.date().iso(),
+  dateTo: Joi.date().iso().min(Joi.ref('dateFrom')),
+});
+
+// Dispute validators
+export const createDisputeSchema = Joi.object({
+  orderId: Joi.string().uuid().required().messages({
+    'string.uuid': 'Order ID must be a valid UUID',
+    'any.required': 'Order ID is required',
+  }),
+  type: Joi.string()
+    .valid(...Object.values(DisputeType))
+    .required()
+    .messages({
+      'any.required': 'Dispute type is required',
+      'any.only': 'Invalid dispute type',
+    }),
+  reason: Joi.string().required().max(1000).messages({
+    'any.required': 'Dispute reason is required',
+    'string.max': 'Dispute reason cannot exceed 1000 characters',
+  }),
+  evidence: Joi.array().items(Joi.string().uri()).max(10).messages({
+    'array.max': 'Maximum 10 evidence files allowed',
+    'string.uri': 'Evidence must be valid URLs',
+  }),
+});
+
+export const updateDisputeSchema = Joi.object({
+  status: Joi.string()
+    .valid(...Object.values(DisputeStatus))
+    .required()
+    .messages({
+      'any.required': 'Dispute status is required',
+      'any.only': 'Invalid dispute status',
+    }),
+  resolution: Joi.string().max(1000).messages({
+    'string.max': 'Resolution cannot exceed 1000 characters',
+  }),
+});
+
+export const getDisputesQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+  status: Joi.string().valid(...Object.values(DisputeStatus)),
+  type: Joi.string().valid(...Object.values(DisputeType)),
+  dateFrom: Joi.date().iso(),
+  dateTo: Joi.date().iso().min(Joi.ref('dateFrom')),
+});
+
+// Return validators
+export const createReturnSchema = Joi.object({
+  orderId: Joi.string().uuid().required().messages({
+    'string.uuid': 'Order ID must be a valid UUID',
+    'any.required': 'Order ID is required',
+  }),
+  reason: Joi.string()
+    .valid(...Object.values(ReturnReason))
+    .required()
+    .messages({
+      'any.required': 'Return reason is required',
+      'any.only': 'Invalid return reason',
+    }),
+  description: Joi.string().max(1000).messages({
+    'string.max': 'Description cannot exceed 1000 characters',
+  }),
+  evidence: Joi.array().items(Joi.string().uri()).max(10).messages({
+    'array.max': 'Maximum 10 evidence files allowed',
+    'string.uri': 'Evidence must be valid URLs',
+  }),
+});
+
+export const updateReturnSchema = Joi.object({
+  status: Joi.string()
+    .valid(...Object.values(ReturnStatus))
+    .required()
+    .messages({
+      'any.required': 'Return status is required',
+      'any.only': 'Invalid return status',
+    }),
+  refundAmount: Joi.number().positive().messages({
+    'number.positive': 'Refund amount must be positive',
+  }),
+  refundReason: Joi.string().max(500).messages({
+    'string.max': 'Refund reason cannot exceed 500 characters',
+  }),
+});
+
+export const getReturnsQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+  status: Joi.string().valid(...Object.values(ReturnStatus)),
+  reason: Joi.string().valid(...Object.values(ReturnReason)),
   dateFrom: Joi.date().iso(),
   dateTo: Joi.date().iso().min(Joi.ref('dateFrom')),
 });

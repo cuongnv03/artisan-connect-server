@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { validate } from '../../../../shared/middlewares/validate.middleware';
-import { authenticate } from '../../../../shared/middlewares/auth.middleware';
+import { authenticate, authorize } from '../../../../shared/middlewares/auth.middleware';
 import { validateIdParam } from '../../../../shared/middlewares/request-validation.middleware';
 
 // Controllers
@@ -9,12 +9,28 @@ import { CreateOrderFromQuoteController } from '../controllers/CreateOrderFromQu
 import { GetOrderController } from '../controllers/GetOrderController';
 import { GetOrderByNumberController } from '../controllers/GetOrderByNumberController';
 import { GetMyOrdersController } from '../controllers/GetMyOrdersController';
-import { GetSellerOrdersController } from '../controllers/GetSellerOrdersController';
+import { GetMyArtisanOrdersController } from '../controllers/GetMyArtisanOrdersController';
 import { UpdateOrderStatusController } from '../controllers/UpdateOrderStatusController';
 import { CancelOrderController } from '../controllers/CancelOrderController';
 import { ProcessPaymentController } from '../controllers/ProcessPaymentController';
-import { GetOrderStatusHistoryController } from '../controllers/GetOrderStatusHistoryController';
 import { GetOrderStatsController } from '../controllers/GetOrderStatsController';
+import { GetOrderStatusHistoryController } from '../controllers/GetOrderStatusHistoryController';
+
+// Dispute Controllers
+import { CreateDisputeController } from '../controllers/dispute/CreateDisputeController';
+import { GetMyDisputesController } from '../controllers/dispute/GetMyDisputesController';
+import { UpdateDisputeController } from '../controllers/dispute/UpdateDisputeController';
+import { GetDisputeController } from '../controllers/dispute/GetDisputeController';
+
+// Return Controllers
+import { CreateReturnController } from '../controllers/return/CreateReturnController';
+import { GetMyReturnsController } from '../controllers/return/GetMyReturnsController';
+import { UpdateReturnController } from '../controllers/return/UpdateReturnController';
+import { GetReturnController } from '../controllers/return/GetReturnController';
+
+// Admin Controllers
+import { GetAllDisputesController } from '../controllers/dispute/GetAllDisputesController';
+import { GetAllReturnsController } from '../controllers/return/GetAllReturnsController';
 
 // Validators
 import {
@@ -25,6 +41,12 @@ import {
   processPaymentSchema,
   getOrdersQuerySchema,
   getOrderStatsQuerySchema,
+  createDisputeSchema,
+  updateDisputeSchema,
+  getDisputesQuerySchema,
+  createReturnSchema,
+  updateReturnSchema,
+  getReturnsQuerySchema,
 } from '../validators/order.validator';
 
 const router = Router();
@@ -35,12 +57,25 @@ const createOrderFromQuoteController = new CreateOrderFromQuoteController();
 const getOrderController = new GetOrderController();
 const getOrderByNumberController = new GetOrderByNumberController();
 const getMyOrdersController = new GetMyOrdersController();
-const getSellerOrdersController = new GetSellerOrdersController();
+const getMyArtisanOrdersController = new GetMyArtisanOrdersController();
 const updateOrderStatusController = new UpdateOrderStatusController();
 const cancelOrderController = new CancelOrderController();
 const processPaymentController = new ProcessPaymentController();
-const getOrderStatusHistoryController = new GetOrderStatusHistoryController();
 const getOrderStatsController = new GetOrderStatsController();
+const getOrderStatusHistoryController = new GetOrderStatusHistoryController();
+
+const createDisputeController = new CreateDisputeController();
+const getMyDisputesController = new GetMyDisputesController();
+const updateDisputeController = new UpdateDisputeController();
+const getDisputeController = new GetDisputeController();
+
+const createReturnController = new CreateReturnController();
+const getMyReturnsController = new GetMyReturnsController();
+const updateReturnController = new UpdateReturnController();
+const getReturnController = new GetReturnController();
+
+const getAllDisputesController = new GetAllDisputesController();
+const getAllReturnsController = new GetAllReturnsController();
 
 // All routes require authentication
 router.use(authenticate);
@@ -62,9 +97,9 @@ router.post(
 router.get('/my-orders', validate(getOrdersQuerySchema, 'query'), getMyOrdersController.execute);
 
 router.get(
-  '/seller-orders',
+  '/my-artisan-orders',
   validate(getOrdersQuerySchema, 'query'),
-  getSellerOrdersController.execute,
+  getMyArtisanOrdersController.execute,
 );
 
 router.get('/stats', validate(getOrderStatsQuerySchema, 'query'), getOrderStatsController.execute);
@@ -95,6 +130,47 @@ router.post(
   validateIdParam(),
   validate(processPaymentSchema),
   processPaymentController.execute,
+);
+
+// === DISPUTE ROUTES ===
+router.post('/disputes', validate(createDisputeSchema), createDisputeController.execute);
+router.get(
+  '/disputes/my',
+  validate(getDisputesQuerySchema, 'query'),
+  getMyDisputesController.execute,
+);
+router.get('/disputes/:id', validateIdParam(), getDisputeController.execute);
+router.patch(
+  '/disputes/:id',
+  validateIdParam(),
+  validate(updateDisputeSchema),
+  updateDisputeController.execute,
+);
+
+// === RETURN ROUTES ===
+router.post('/returns', validate(createReturnSchema), createReturnController.execute);
+router.get('/returns/my', validate(getReturnsQuerySchema, 'query'), getMyReturnsController.execute);
+router.get('/returns/:id', validateIdParam(), getReturnController.execute);
+router.patch(
+  '/returns/:id',
+  validateIdParam(),
+  validate(updateReturnSchema),
+  updateReturnController.execute,
+);
+
+// === ADMIN ROUTES ===
+router.get(
+  '/admin/disputes',
+  authorize(['ADMIN']),
+  validate(getDisputesQuerySchema, 'query'),
+  getAllDisputesController.execute,
+);
+
+router.get(
+  '/admin/returns',
+  authorize(['ADMIN']),
+  validate(getReturnsQuerySchema, 'query'),
+  getAllReturnsController.execute,
 );
 
 export default router;

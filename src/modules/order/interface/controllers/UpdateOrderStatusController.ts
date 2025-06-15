@@ -16,7 +16,16 @@ export class UpdateOrderStatusController extends BaseController {
     this.validateAuth(req);
 
     const { id } = req.params;
-    const order = await this.orderService.updateOrderStatus(id, req.body, req.user!.id);
+
+    // Validate and parse estimatedDelivery if provided
+    const updateData = {
+      ...req.body,
+      estimatedDelivery: req.body.estimatedDelivery
+        ? new Date(req.body.estimatedDelivery)
+        : undefined,
+    };
+
+    const order = await this.orderService.updateOrderStatus(id, updateData, req.user!.id);
 
     ApiResponse.success(res, order, 'Order status updated successfully');
   }

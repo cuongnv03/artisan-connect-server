@@ -3,19 +3,29 @@ import {
   Order,
   OrderWithDetails,
   OrderSummary,
-  OrderStatusHistory,
   CreateOrderFromCartDto,
   CreateOrderFromQuoteDto,
   UpdateOrderStatusDto,
   ProcessPaymentDto,
   OrderQueryOptions,
   OrderStats,
+  OrderDispute,
+  OrderDisputeWithDetails,
+  CreateDisputeDto,
+  UpdateDisputeDto,
+  DisputeQueryOptions,
+  OrderReturn,
+  OrderReturnWithDetails,
+  CreateReturnDto,
+  UpdateReturnDto,
+  ReturnQueryOptions,
 } from '../models/Order';
-import { OrderStatus } from '../models/OrderEnums';
+import { OrderStatus, DisputeStatus, ReturnStatus } from '../models/OrderEnums';
 import { IOrderRepository } from '../repositories/OrderRepository.interface';
 import { ICartRepository } from '../../cart/repositories/CartRepository.interface';
 import { IQuoteRepository } from '../../quote/repositories/QuoteRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
+import { INotificationService } from '../../notification';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -26,6 +36,7 @@ export class OrderService implements IOrderService {
   private cartRepository: ICartRepository;
   private quoteRepository: IQuoteRepository;
   private userRepository: IUserRepository;
+  private notificationService: INotificationService;
   private logger = Logger.getInstance();
 
   constructor() {
@@ -33,8 +44,10 @@ export class OrderService implements IOrderService {
     this.cartRepository = container.resolve<ICartRepository>('cartRepository');
     this.quoteRepository = container.resolve<IQuoteRepository>('quoteRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
+    this.notificationService = container.resolve<INotificationService>('notificationService');
   }
 
+  // ORDER CREATION METHODS
   async createOrderFromCart(
     userId: string,
     data: CreateOrderFromCartDto,
@@ -43,21 +56,25 @@ export class OrderService implements IOrderService {
       // Validate user
       const user = await this.userRepository.findById(userId);
       if (!user) {
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+        throw AppError.notFound('User not found', 'USER_NOT_FOUND');
       }
 
-      // Validate cart is not empty
+      // Validate cart is not empty and valid
       const cartValidation = await this.cartRepository.validateCartItems(userId);
       if (!cartValidation.isValid) {
         const errors = cartValidation.errors.map((e) => e.message).join(', ');
-        throw new AppError(`Cart validation failed: ${errors}`, 400, 'INVALID_CART');
+        throw AppError.badRequest(`Cart validation failed: ${errors}`, 'INVALID_CART');
       }
 
+      // Create order
       const order = await this.orderRepository.createOrderFromCart(userId, data);
 
-      // Add null check
-      if (!order) {
-        throw new AppError('Failed to retrieve created order', 500, 'ORDER_RETRIEVAL_FAILED');
+      // Send notifications to sellers
+      try {
+        await this.notifyOrderCreated(order);
+      } catch (notifError) {
+        this.logger.error(`Error sending order notifications: ${notifError}`);
+        // Don't fail order creation if notification fails
       }
 
       this.logger.info(
@@ -68,7 +85,7 @@ export class OrderService implements IOrderService {
     } catch (error) {
       this.logger.error(`Error creating order from cart: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to create order from cart', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to create order from cart', 'SERVICE_ERROR');
     }
   }
 
@@ -80,20 +97,35 @@ export class OrderService implements IOrderService {
       // Validate user
       const user = await this.userRepository.findById(userId);
       if (!user) {
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+        throw AppError.notFound('User not found', 'USER_NOT_FOUND');
       }
 
       // Validate quote exists and belongs to user
       const quote = await this.quoteRepository.findById(data.quoteRequestId);
       if (!quote) {
-        throw new AppError('Quote request not found', 404, 'QUOTE_NOT_FOUND');
+        throw AppError.notFound('Quote request not found', 'QUOTE_NOT_FOUND');
       }
 
       if (quote.customerId !== userId) {
-        throw new AppError('You can only create orders from your own quotes', 403, 'FORBIDDEN');
+        throw AppError.forbidden('You can only create orders from your own quotes', 'FORBIDDEN');
       }
 
+      if (quote.status !== 'ACCEPTED') {
+        throw AppError.badRequest(
+          'Only accepted quotes can be converted to orders',
+          'INVALID_QUOTE_STATUS',
+        );
+      }
+
+      // Create order
       const order = await this.orderRepository.createOrderFromQuote(userId, data);
+
+      // Send notifications
+      try {
+        await this.notifyOrderCreated(order);
+      } catch (notifError) {
+        this.logger.error(`Error sending order notifications: ${notifError}`);
+      }
 
       this.logger.info(
         `Order created from quote: ${order.id} (${order.orderNumber}) for user ${userId}`,
@@ -103,10 +135,11 @@ export class OrderService implements IOrderService {
     } catch (error) {
       this.logger.error(`Error creating order from quote: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to create order from quote', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to create order from quote', 'SERVICE_ERROR');
     }
   }
 
+  // ORDER RETRIEVAL METHODS
   async getOrderById(id: string): Promise<OrderWithDetails | null> {
     try {
       return await this.orderRepository.findByIdWithDetails(id);
@@ -131,7 +164,7 @@ export class OrderService implements IOrderService {
     } catch (error) {
       this.logger.error(`Error getting orders: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get orders', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get orders', 'SERVICE_ERROR');
     }
   }
 
@@ -144,11 +177,11 @@ export class OrderService implements IOrderService {
     } catch (error) {
       this.logger.error(`Error getting my orders: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get my orders', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get my orders', 'SERVICE_ERROR');
     }
   }
 
-  async getSellerOrders(
+  async getArtisanOrders(
     sellerId: string,
     options: Partial<OrderQueryOptions> = {},
   ): Promise<PaginatedResult<OrderSummary>> {
@@ -156,17 +189,18 @@ export class OrderService implements IOrderService {
       // Validate seller is artisan
       const seller = await this.userRepository.findById(sellerId);
       if (!seller || seller.role !== 'ARTISAN') {
-        throw new AppError('User is not an artisan', 403, 'NOT_ARTISAN');
+        throw AppError.forbidden('User is not an artisan', 'NOT_ARTISAN');
       }
 
       return await this.orderRepository.getSellerOrders(sellerId, options);
     } catch (error) {
-      this.logger.error(`Error getting seller orders: ${error}`);
+      this.logger.error(`Error getting artisan orders: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get seller orders', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get artisan orders', 'SERVICE_ERROR');
     }
   }
 
+  // ORDER MANAGEMENT METHODS
   async updateOrderStatus(
     id: string,
     data: UpdateOrderStatusDto,
@@ -176,13 +210,21 @@ export class OrderService implements IOrderService {
       // Validate order exists and user has permission
       const hasAccess = await this.validateOrderAccess(id, updatedBy, 'UPDATE');
       if (!hasAccess) {
-        throw new AppError('You do not have permission to update this order', 403, 'FORBIDDEN');
+        throw AppError.forbidden('You do not have permission to update this order', 'FORBIDDEN');
       }
 
       // Additional business logic validation
       await this.validateStatusUpdate(id, data, updatedBy);
 
+      // Update order status
       const order = await this.orderRepository.updateOrderStatus(id, data, updatedBy);
+
+      // Send notifications
+      try {
+        await this.notifyOrderStatusChanged(order, data.status);
+      } catch (notifError) {
+        this.logger.error(`Error sending status change notifications: ${notifError}`);
+      }
 
       this.logger.info(`Order status updated: ${id} to ${data.status} by ${updatedBy}`);
 
@@ -190,7 +232,7 @@ export class OrderService implements IOrderService {
     } catch (error) {
       this.logger.error(`Error updating order status: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update order status', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to update order status', 'SERVICE_ERROR');
     }
   }
 
@@ -199,35 +241,64 @@ export class OrderService implements IOrderService {
       // Validate order access
       const hasAccess = await this.validateOrderAccess(id, userId, 'CANCEL');
       if (!hasAccess) {
-        throw new AppError('You do not have permission to cancel this order', 403, 'FORBIDDEN');
+        throw AppError.forbidden('You do not have permission to cancel this order', 'FORBIDDEN');
       }
 
-      const order = await this.orderRepository.cancelOrder(id, reason, userId);
+      // Additional validation for cancellation
+      const order = await this.orderRepository.findByIdWithDetails(id);
+      if (!order) {
+        throw AppError.notFound('Order not found', 'ORDER_NOT_FOUND');
+      }
+
+      // Business rules for cancellation
+      const cancellableStatuses = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PAID];
+      if (!cancellableStatuses.includes(order.status)) {
+        throw AppError.badRequest(`Cannot cancel order in ${order.status} status`, 'CANNOT_CANCEL');
+      }
+
+      // Cancel order
+      const cancelledOrder = await this.orderRepository.cancelOrder(id, reason, userId);
+
+      // Send notifications
+      try {
+        await this.notifyOrderCancelled(cancelledOrder, reason);
+      } catch (notifError) {
+        this.logger.error(`Error sending cancellation notifications: ${notifError}`);
+      }
 
       this.logger.info(`Order cancelled: ${id} by ${userId}`);
 
-      return order;
+      return cancelledOrder;
     } catch (error) {
       this.logger.error(`Error cancelling order: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to cancel order', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to cancel order', 'SERVICE_ERROR');
     }
   }
 
+  // PAYMENT METHODS
   async processPayment(id: string, data: ProcessPaymentDto): Promise<OrderWithDetails> {
     try {
       // Get order to validate
       const order = await this.orderRepository.findByIdWithDetails(id);
       if (!order) {
-        throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
+        throw AppError.notFound('Order not found', 'ORDER_NOT_FOUND');
       }
 
       // Basic payment validation
       if (order.paymentStatus === 'COMPLETED') {
-        throw new AppError('Order is already paid', 400, 'ORDER_ALREADY_PAID');
+        throw AppError.badRequest('Order is already paid', 'ORDER_ALREADY_PAID');
       }
 
+      // Process payment
       const processedOrder = await this.orderRepository.processPayment(id, data);
+
+      // Send notifications
+      try {
+        await this.notifyPaymentProcessed(processedOrder);
+      } catch (notifError) {
+        this.logger.error(`Error sending payment notifications: ${notifError}`);
+      }
 
       this.logger.info(`Payment processed for order: ${id}`);
 
@@ -235,7 +306,7 @@ export class OrderService implements IOrderService {
     } catch (error) {
       this.logger.error(`Error processing payment: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to process payment', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to process payment', 'SERVICE_ERROR');
     }
   }
 
@@ -243,36 +314,46 @@ export class OrderService implements IOrderService {
     try {
       const order = await this.orderRepository.refundPayment(id, reason);
 
+      // Send notifications
+      try {
+        await this.notifyPaymentRefunded(order, reason);
+      } catch (notifError) {
+        this.logger.error(`Error sending refund notifications: ${notifError}`);
+      }
+
       this.logger.info(`Payment refunded for order: ${id}`);
 
       return order;
     } catch (error) {
       this.logger.error(`Error refunding payment: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to refund payment', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to refund payment', 'SERVICE_ERROR');
     }
   }
 
-  async getOrderStatusHistory(orderId: string): Promise<OrderStatusHistory[]> {
+  // STATUS HISTORY
+  async getOrderStatusHistory(orderId: string): Promise<any[]> {
     try {
-      return await this.orderRepository.getOrderStatusHistory(orderId);
+      return await this.orderRepository.getStatusHistory(orderId);
     } catch (error) {
       this.logger.error(`Error getting order status history: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get order status history', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get order status history', 'SERVICE_ERROR');
     }
   }
 
+  // ANALYTICS
   async getOrderStats(userId?: string, sellerId?: string): Promise<OrderStats> {
     try {
       return await this.orderRepository.getOrderStats(userId, sellerId);
     } catch (error) {
       this.logger.error(`Error getting order stats: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get order stats', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get order stats', 'SERVICE_ERROR');
     }
   }
 
+  // VALIDATION METHODS
   async validateOrderAccess(
     orderId: string,
     userId: string,
@@ -314,6 +395,239 @@ export class OrderService implements IOrderService {
     }
   }
 
+  // DISPUTE METHODS
+  async createDispute(userId: string, data: CreateDisputeDto): Promise<OrderDisputeWithDetails> {
+    try {
+      // Validate user can create dispute
+      const canCreate = await this.orderRepository.canUserCreateDispute(data.orderId, userId);
+      if (!canCreate) {
+        throw AppError.badRequest(
+          'You cannot create a dispute for this order',
+          'CANNOT_CREATE_DISPUTE',
+        );
+      }
+
+      // Create dispute
+      const dispute = await this.orderRepository.createDispute({
+        ...data,
+        complainantId: userId,
+      });
+
+      // Send notifications
+      try {
+        await this.notifyDisputeCreated(dispute);
+      } catch (notifError) {
+        this.logger.error(`Error sending dispute notifications: ${notifError}`);
+      }
+
+      this.logger.info(
+        `Dispute created: ${dispute.id} for order ${data.orderId} by user ${userId}`,
+      );
+
+      return dispute;
+    } catch (error) {
+      this.logger.error(`Error creating dispute: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to create dispute', 'SERVICE_ERROR');
+    }
+  }
+
+  async updateDispute(
+    id: string,
+    data: UpdateDisputeDto,
+    updatedBy: string,
+  ): Promise<OrderDisputeWithDetails> {
+    try {
+      // Validate access
+      const hasAccess = await this.validateDisputeAccess(id, updatedBy);
+      if (!hasAccess) {
+        throw AppError.forbidden('You do not have permission to update this dispute', 'FORBIDDEN');
+      }
+
+      // Validate status transition
+      const currentDispute = await this.orderRepository.getDisputeById(id);
+      if (!currentDispute) {
+        throw AppError.notFound('Dispute not found', 'DISPUTE_NOT_FOUND');
+      }
+
+      await this.validateDisputeStatusUpdate(currentDispute, data, updatedBy);
+
+      // Update dispute
+      const dispute = await this.orderRepository.updateDispute(id, data, updatedBy);
+
+      // Send notifications
+      try {
+        await this.notifyDisputeUpdated(dispute);
+      } catch (notifError) {
+        this.logger.error(`Error sending dispute update notifications: ${notifError}`);
+      }
+
+      this.logger.info(`Dispute updated: ${id} to ${data.status} by ${updatedBy}`);
+
+      return dispute;
+    } catch (error) {
+      this.logger.error(`Error updating dispute: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to update dispute', 'SERVICE_ERROR');
+    }
+  }
+
+  async getMyDisputes(
+    userId: string,
+    options: Partial<DisputeQueryOptions> = {},
+  ): Promise<PaginatedResult<OrderDisputeWithDetails>> {
+    try {
+      return await this.orderRepository.getUserDisputes(userId, options);
+    } catch (error) {
+      this.logger.error(`Error getting my disputes: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get my disputes', 'SERVICE_ERROR');
+    }
+  }
+
+  async getDisputeById(id: string): Promise<OrderDisputeWithDetails | null> {
+    try {
+      return await this.orderRepository.getDisputeById(id);
+    } catch (error) {
+      this.logger.error(`Error getting dispute by ID: ${error}`);
+      return null;
+    }
+  }
+
+  async validateDisputeAccess(disputeId: string, userId: string): Promise<boolean> {
+    try {
+      // Get user role
+      const user = await this.userRepository.findById(userId);
+      if (!user) return false;
+
+      // Admins can access everything
+      if (user.role === 'ADMIN') return true;
+
+      // Check specific access
+      return await this.orderRepository.canUserAccessDispute(disputeId, userId);
+    } catch (error) {
+      this.logger.error(`Error validating dispute access: ${error}`);
+      return false;
+    }
+  }
+
+  // RETURN METHODS
+  async createReturn(userId: string, data: CreateReturnDto): Promise<OrderReturnWithDetails> {
+    try {
+      // Validate user can create return
+      const canCreate = await this.orderRepository.canUserCreateReturn(data.orderId, userId);
+      if (!canCreate) {
+        throw AppError.badRequest(
+          'You cannot create a return for this order',
+          'CANNOT_CREATE_RETURN',
+        );
+      }
+
+      // Create return
+      const returnRequest = await this.orderRepository.createReturn({
+        ...data,
+        requesterId: userId,
+      });
+
+      // Send notifications
+      try {
+        await this.notifyReturnCreated(returnRequest);
+      } catch (notifError) {
+        this.logger.error(`Error sending return notifications: ${notifError}`);
+      }
+
+      this.logger.info(
+        `Return created: ${returnRequest.id} for order ${data.orderId} by user ${userId}`,
+      );
+
+      return returnRequest;
+    } catch (error) {
+      this.logger.error(`Error creating return: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to create return', 'SERVICE_ERROR');
+    }
+  }
+
+  async updateReturn(
+    id: string,
+    data: UpdateReturnDto,
+    updatedBy: string,
+  ): Promise<OrderReturnWithDetails> {
+    try {
+      // Validate access
+      const hasAccess = await this.validateReturnAccess(id, updatedBy);
+      if (!hasAccess) {
+        throw AppError.forbidden('You do not have permission to update this return', 'FORBIDDEN');
+      }
+
+      // Validate status transition
+      const currentReturn = await this.orderRepository.getReturnById(id);
+      if (!currentReturn) {
+        throw AppError.notFound('Return not found', 'RETURN_NOT_FOUND');
+      }
+
+      await this.validateReturnStatusUpdate(currentReturn, data, updatedBy);
+
+      // Update return
+      const returnRequest = await this.orderRepository.updateReturn(id, data, updatedBy);
+
+      // Send notifications
+      try {
+        await this.notifyReturnUpdated(returnRequest);
+      } catch (notifError) {
+        this.logger.error(`Error sending return update notifications: ${notifError}`);
+      }
+
+      this.logger.info(`Return updated: ${id} to ${data.status} by ${updatedBy}`);
+
+      return returnRequest;
+    } catch (error) {
+      this.logger.error(`Error updating return: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to update return', 'SERVICE_ERROR');
+    }
+  }
+
+  async getMyReturns(
+    userId: string,
+    options: Partial<ReturnQueryOptions> = {},
+  ): Promise<PaginatedResult<OrderReturnWithDetails>> {
+    try {
+      return await this.orderRepository.getUserReturns(userId, options);
+    } catch (error) {
+      this.logger.error(`Error getting my returns: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get my returns', 'SERVICE_ERROR');
+    }
+  }
+
+  async getReturnById(id: string): Promise<OrderReturnWithDetails | null> {
+    try {
+      return await this.orderRepository.getReturnById(id);
+    } catch (error) {
+      this.logger.error(`Error getting return by ID: ${error}`);
+      return null;
+    }
+  }
+
+  async validateReturnAccess(returnId: string, userId: string): Promise<boolean> {
+    try {
+      // Get user role
+      const user = await this.userRepository.findById(userId);
+      if (!user) return false;
+
+      // Admins can access everything
+      if (user.role === 'ADMIN') return true;
+
+      // Check specific access
+      return await this.orderRepository.canUserAccessReturn(returnId, userId);
+    } catch (error) {
+      this.logger.error(`Error validating return access: ${error}`);
+      return false;
+    }
+  }
+
+  // PRIVATE HELPER METHODS
   private async validateStatusUpdate(
     orderId: string,
     data: UpdateOrderStatusDto,
@@ -321,12 +635,12 @@ export class OrderService implements IOrderService {
   ): Promise<void> {
     const order = await this.orderRepository.findByIdWithDetails(orderId);
     if (!order) {
-      throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
+      throw AppError.notFound('Order not found', 'ORDER_NOT_FOUND');
     }
 
     const user = await this.userRepository.findById(updatedBy);
     if (!user) {
-      throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      throw AppError.notFound('User not found', 'USER_NOT_FOUND');
     }
 
     // Role-based status update validation
@@ -339,45 +653,21 @@ export class OrderService implements IOrderService {
         // Artisans can only update orders where they are sellers
         const isSeller = order.items.some((item) => item.seller.id === updatedBy);
         if (!isSeller) {
-          throw new AppError('You can only update orders for your products', 403, 'FORBIDDEN');
+          throw AppError.forbidden('You can only update orders for your products', 'FORBIDDEN');
         }
 
         const allowedStatuses = [
-          OrderStatus.CONFIRMED, // Thêm CONFIRMED
+          OrderStatus.CONFIRMED,
           OrderStatus.PROCESSING,
           OrderStatus.SHIPPED,
           OrderStatus.DELIVERED,
-          OrderStatus.CANCELLED, // Thêm CANCELLED
+          OrderStatus.CANCELLED,
         ];
 
         if (!allowedStatuses.includes(data.status)) {
-          throw new AppError(
+          throw AppError.forbidden(
             'Artisans can only update orders to confirmed, processing, shipped, delivered, or cancelled',
-            403,
             'FORBIDDEN_STATUS',
-          );
-        }
-
-        // Validate status flow cho nghệ nhân
-        const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-          [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
-          [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
-          [OrderStatus.PAID]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
-          [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
-          [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
-          [OrderStatus.DELIVERED]: [],
-          [OrderStatus.CANCELLED]: [],
-          [OrderStatus.REFUNDED]: [],
-        };
-
-        const currentStatus = order.status as OrderStatus;
-        const allowedNextStatuses = validTransitions[currentStatus] || [];
-
-        if (!allowedNextStatuses.includes(data.status)) {
-          throw new AppError(
-            `Cannot change order status from ${currentStatus} to ${data.status}`,
-            400,
-            'INVALID_STATUS_TRANSITION',
           );
         }
         break;
@@ -385,22 +675,156 @@ export class OrderService implements IOrderService {
       case 'CUSTOMER':
         // Customers can only cancel their own orders
         if (order.customer.id !== updatedBy) {
-          throw new AppError('You can only update your own orders', 403, 'FORBIDDEN');
+          throw AppError.forbidden('You can only update your own orders', 'FORBIDDEN');
         }
 
         if (data.status !== OrderStatus.CANCELLED) {
-          throw new AppError('Customers can only cancel orders', 403, 'FORBIDDEN_STATUS');
-        }
-
-        // Customers can only cancel orders in certain statuses
-        const cancellableStatuses = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PAID];
-        if (!cancellableStatuses.includes(order.status as OrderStatus)) {
-          throw new AppError(`Cannot cancel order in ${order.status} status`, 400, 'CANNOT_CANCEL');
+          throw AppError.forbidden('Customers can only cancel orders', 'FORBIDDEN_STATUS');
         }
         break;
 
       default:
-        throw new AppError('Unauthorized role', 403, 'FORBIDDEN');
+        throw AppError.forbidden('Unauthorized role', 'FORBIDDEN');
     }
+  }
+
+  private async validateDisputeStatusUpdate(
+    dispute: OrderDisputeWithDetails,
+    data: UpdateDisputeDto,
+    updatedBy: string,
+  ): Promise<void> {
+    const user = await this.userRepository.findById(updatedBy);
+    if (!user) {
+      throw AppError.notFound('User not found', 'USER_NOT_FOUND');
+    }
+
+    // Only admins and sellers can update dispute status
+    if (user.role === 'ADMIN') {
+      // Admins can update to any status
+      return;
+    }
+
+    if (user.role === 'ARTISAN') {
+      // Only sellers involved in the dispute can update
+      const order = await this.orderRepository.findByIdWithDetails(dispute.orderId);
+      if (!order) {
+        throw AppError.notFound('Order not found', 'ORDER_NOT_FOUND');
+      }
+
+      const isSeller = order.items.some((item) => item.seller.id === updatedBy);
+      if (!isSeller) {
+        throw AppError.forbidden('You can only update disputes for your orders', 'FORBIDDEN');
+      }
+
+      // Sellers can only respond, not resolve
+      if (data.status === DisputeStatus.RESOLVED || data.status === DisputeStatus.CLOSED) {
+        throw AppError.forbidden('Only admins can resolve disputes', 'FORBIDDEN_STATUS');
+      }
+    } else {
+      throw AppError.forbidden('Only admins and sellers can update disputes', 'FORBIDDEN');
+    }
+  }
+
+  private async validateReturnStatusUpdate(
+    returnRequest: OrderReturnWithDetails,
+    data: UpdateReturnDto,
+    updatedBy: string,
+  ): Promise<void> {
+    const user = await this.userRepository.findById(updatedBy);
+    if (!user) {
+      throw AppError.notFound('User not found', 'USER_NOT_FOUND');
+    }
+
+    // Only admins and sellers can update return status
+    if (user.role === 'ADMIN') {
+      // Admins can update to any status
+      return;
+    }
+
+    if (user.role === 'ARTISAN') {
+      // Only sellers involved in the return can update
+      const order = await this.orderRepository.findByIdWithDetails(returnRequest.orderId);
+      if (!order) {
+        throw AppError.notFound('Order not found', 'ORDER_NOT_FOUND');
+      }
+
+      const isSeller = order.items.some((item) => item.seller.id === updatedBy);
+      if (!isSeller) {
+        throw AppError.forbidden('You can only update returns for your orders', 'FORBIDDEN');
+      }
+
+      // Sellers can approve/reject, admins handle refunds
+      const allowedStatuses = [ReturnStatus.APPROVED, ReturnStatus.REJECTED];
+      if (!allowedStatuses.includes(data.status)) {
+        throw AppError.forbidden('Sellers can only approve or reject returns', 'FORBIDDEN_STATUS');
+      }
+    } else {
+      throw AppError.forbidden('Only admins and sellers can update returns', 'FORBIDDEN');
+    }
+  }
+
+  // NOTIFICATION METHODS
+  private async notifyOrderCreated(order: OrderWithDetails): Promise<void> {
+    // Notify customer
+    await this.notificationService.notifyOrderCreated(order.customer.id, order.id);
+
+    // Notify all sellers
+    const sellerIds = [...new Set(order.items.map((item) => item.seller.id))];
+    for (const sellerId of sellerIds) {
+      await this.notificationService.notifyNewOrderForSeller(sellerId, order.id);
+    }
+  }
+
+  private async notifyOrderStatusChanged(
+    order: OrderWithDetails,
+    newStatus: OrderStatus,
+  ): Promise<void> {
+    await this.notificationService.notifyOrderStatusChanged(order.customer.id, order.id, newStatus);
+  }
+
+  private async notifyOrderCancelled(order: OrderWithDetails, reason?: string): Promise<void> {
+    // Notify customer
+    await this.notificationService.notifyOrderCancelled(order.customer.id, order.id);
+
+    // Notify sellers
+    const sellerIds = [...new Set(order.items.map((item) => item.seller.id))];
+    for (const sellerId of sellerIds) {
+      await this.notificationService.notifyOrderCancelledForSeller(sellerId, order.id);
+    }
+  }
+
+  private async notifyPaymentProcessed(order: OrderWithDetails): Promise<void> {
+    await this.notificationService.notifyPaymentSuccess(order.customer.id, order.id);
+  }
+
+  private async notifyPaymentRefunded(order: OrderWithDetails, reason?: string): Promise<void> {
+    await this.notificationService.notifyPaymentRefunded(order.customer.id, order.id);
+  }
+
+  private async notifyDisputeCreated(dispute: OrderDisputeWithDetails): Promise<void> {
+    // Notify admin
+    await this.notificationService.notifyDisputeCreated(dispute.complainant.id, dispute.id);
+  }
+
+  private async notifyDisputeUpdated(dispute: OrderDisputeWithDetails): Promise<void> {
+    await this.notificationService.notifyDisputeUpdated(dispute.complainant.id, dispute.id);
+  }
+
+  private async notifyReturnCreated(returnRequest: OrderReturnWithDetails): Promise<void> {
+    // Get order to notify seller
+    const order = await this.orderRepository.findByIdWithDetails(returnRequest.orderId);
+    if (order) {
+      const sellerIds = [...new Set(order.items.map((item) => item.seller.id))];
+      for (const sellerId of sellerIds) {
+        await this.notificationService.notifyReturnCreated(sellerId, returnRequest.id);
+      }
+    }
+  }
+
+  private async notifyReturnUpdated(returnRequest: OrderReturnWithDetails): Promise<void> {
+    await this.notificationService.notifyReturnUpdated(
+      returnRequest.requester.id,
+      returnRequest.id,
+    );
   }
 }
