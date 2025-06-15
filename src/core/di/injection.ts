@@ -38,6 +38,7 @@ import { WishlistRepository } from '../../modules/social/repositories/WishlistRe
 import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
 import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
 
+import { PriceNegotiationRepository } from '../../modules/price-negotiation/repositories/PriceNegotiationRepository';
 import { QuoteRepository } from '../../modules/quote/repositories/QuoteRepository';
 import { OrderRepository } from '../../modules/order/repositories/OrderRepository';
 import { CartRepository } from '../../modules/cart/repositories/CartRepository';
@@ -70,6 +71,7 @@ container.register('categoryRepository', new CategoryRepository(prisma));
 container.register('wishlistRepository', new WishlistRepository(prisma));
 
 container.register('cartRepository', new CartRepository(prisma));
+container.register('priceNegotiationRepository', new PriceNegotiationRepository(prisma));
 container.register('quoteRepository', new QuoteRepository(prisma));
 container.register('orderRepository', new OrderRepository(prisma));
 container.register('reviewRepository', new ReviewRepository(prisma));
@@ -88,6 +90,7 @@ import { CommentService } from '../../modules/social/services/CommentService';
 import { WishlistService } from '../../modules/social/services/WishlistService';
 import { ProductService } from '../../modules/product/services/ProductService';
 import { CategoryService } from '../../modules/product/services/CategoryService';
+import { PriceNegotiationService } from '../../modules/price-negotiation/services/PriceNegotiationService';
 import { QuoteService } from '../../modules/quote/services/QuoteService';
 import { OrderService } from '../../modules/order/services/OrderService';
 import { CartService } from '../../modules/cart/services/CartService';
@@ -109,6 +112,7 @@ container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
 container.register('wishlistService', new WishlistService());
 container.register('cartService', new CartService());
+container.register('priceNegotiationService', new PriceNegotiationService());
 container.register('quoteService', new QuoteService());
 container.register('orderService', new OrderService());
 container.register('reviewService', new ReviewService());

@@ -55,5 +55,6 @@ export enum NotificationType {
   MESSAGE = 'MESSAGE',
   DISPUTE = 'DISPUTE',
   RETURN = 'RETURN',
+  PRICE_NEGOTIATION = 'PRICE_NEGOTIATION',
   SYSTEM = 'SYSTEM',
 }

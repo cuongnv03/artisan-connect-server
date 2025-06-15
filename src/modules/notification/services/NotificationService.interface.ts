@@ -65,4 +65,19 @@ export interface INotificationService {
   // RETURN NOTIFICATIONS
   notifyReturnCreated(sellerId: string, returnId: string): Promise<void>;
   notifyReturnUpdated(requesterId: string, returnId: string): Promise<void>;
+
+  // PRICE NEGOTIATION NOTIFICATIONS
+  notifyPriceNegotiationRequest(
+    productId: string,
+    customerId: string,
+    artisanId: string,
+    proposedPrice: number,
+  ): Promise<void>;
+  notifyPriceNegotiationResponse(
+    productId: string,
+    customerId: string,
+    artisanId: string,
+    action: string,
+    price?: number,
+  ): Promise<void>;
 }

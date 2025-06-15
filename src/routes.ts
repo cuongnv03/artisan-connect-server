@@ -12,6 +12,7 @@ import analyticsRoutes from './modules/analytics/interface/routes/analytics.rout
 import productRoutes from './modules/product/interface/routes/product.routes';
 import categoryRoutes from './modules/product/interface/routes/category.routes';
 import cartRoutes from './modules/cart/interface/routes/cart.routes';
+import negotiationRoutes from './modules/price-negotiation/interface/routes/negotiation.routes';
 import quoteRoutes from './modules/quote/interface/routes/quote.routes';
 import orderRoutes from './modules/order/interface/routes/order.routes';
 import reviewRoutes from './modules/review/interface/routes/review.routes';
@@ -36,6 +37,7 @@ export const registerRoutes = (app: Express) => {
     app.use(`${apiPrefix}/products`, productRoutes);
     app.use(`${apiPrefix}/categories`, categoryRoutes);
     app.use(`${apiPrefix}/cart`, cartRoutes);
+    app.use(`${apiPrefix}/negotiations`, negotiationRoutes);
     app.use(`${apiPrefix}/quotes`, quoteRoutes);
     app.use(`${apiPrefix}/orders`, orderRoutes);
     app.use(`${apiPrefix}/reviews`, reviewRoutes);
@@ -61,6 +63,7 @@ export const registerRoutes = (app: Express) => {
           products: `${apiPrefix}/products`,
           orders: `${apiPrefix}/orders`,
           cart: `${apiPrefix}/cart`,
+          negotiations: `${apiPrefix}/negotiations`,
           quotes: `${apiPrefix}/quotes`,
           reviews: `${apiPrefix}/reviews`,
           analytics: `${apiPrefix}/analytics`,

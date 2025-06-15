@@ -390,4 +390,61 @@ export class NotificationService implements INotificationService {
       actionUrl: `/returns/${returnId}`,
     });
   }
+
+  // PRICE NEGOTIATION NOTIFICATIONS
+  async notifyPriceNegotiationRequest(
+    productId: string,
+    customerId: string,
+    artisanId: string,
+    proposedPrice: number,
+  ): Promise<void> {
+    await this.sendNotification({
+      recipientId: artisanId,
+      senderId: customerId,
+      type: NotificationType.PRICE_NEGOTIATION,
+      title: 'New Price Negotiation',
+      message: `A customer wants to negotiate the price to $${proposedPrice} for your product`,
+      data: { productId, customerId, proposedPrice, action: 'REQUEST' },
+      actionUrl: `/products/${productId}`, // Link đến product page
+    });
+  }
+
+  async notifyPriceNegotiationResponse(
+    productId: string,
+    customerId: string,
+    artisanId: string,
+    action: string,
+    price?: number,
+  ): Promise<void> {
+    let title = '';
+    let message = '';
+
+    switch (action) {
+      case 'ACCEPT':
+        title = 'Price Negotiation Accepted';
+        message = `Your price negotiation has been accepted!`;
+        break;
+      case 'REJECT':
+        title = 'Price Negotiation Rejected';
+        message = `Your price negotiation has been rejected`;
+        break;
+      case 'COUNTER':
+        title = 'Counter Offer Received';
+        message = `The artisan has made a counter offer${price ? ` of $${price}` : ''}`;
+        break;
+      default:
+        title = 'Price Negotiation Update';
+        message = 'There is an update on your price negotiation';
+    }
+
+    await this.sendNotification({
+      recipientId: customerId,
+      senderId: artisanId,
+      type: NotificationType.PRICE_NEGOTIATION,
+      title,
+      message,
+      data: { productId, artisanId, action, price },
+      actionUrl: `/products/${productId}`, // Link đến product page
+    });
+  }
 }
