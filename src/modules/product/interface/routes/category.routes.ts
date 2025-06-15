@@ -11,9 +11,16 @@ import { GetCategoryBySlugController } from '../controllers/category/GetCategory
 import { GetAllCategoriesController } from '../controllers/category/GetAllCategoriesController';
 import { GetCategoryTreeController } from '../controllers/category/GetCategoryTreeController';
 import { DeleteCategoryController } from '../controllers/category/DeleteCategoryController';
+import { GetCategoryAttributeTemplatesController } from '../controllers/category/GetCategoryAttributeTemplatesController';
+import { CreateCategoryAttributeTemplateController } from '../controllers/category/CreateCategoryAttributeTemplateController';
 
 // Validators
-import { createCategorySchema, updateCategorySchema } from '../validators/category.validator';
+import {
+  createCategorySchema,
+  updateCategorySchema,
+  createCategoryAttributeTemplateSchema,
+  getCategoryAttributeTemplatesQuerySchema,
+} from '../validators/category.validator';
 
 const router = Router();
 
@@ -25,6 +32,8 @@ const getCategoryBySlugController = new GetCategoryBySlugController();
 const getAllCategoriesController = new GetAllCategoriesController();
 const getCategoryTreeController = new GetCategoryTreeController();
 const deleteCategoryController = new DeleteCategoryController();
+const getCategoryAttributeTemplatesController = new GetCategoryAttributeTemplatesController();
+const createCategoryAttributeTemplateController = new CreateCategoryAttributeTemplateController();
 
 // === PUBLIC ROUTES ===
 // Get all categories
@@ -39,9 +48,18 @@ router.get('/slug/:slug', getCategoryBySlugController.execute);
 // Get category by ID
 router.get('/:id', validateIdParam(), getCategoryController.execute);
 
+// Get category attribute templates (public for product creation forms)
+router.get(
+  '/:categoryId/attributes',
+  validateIdParam('categoryId'),
+  validate(getCategoryAttributeTemplatesQuerySchema, 'query'),
+  getCategoryAttributeTemplatesController.execute,
+);
+
 // === ADMIN ROUTES ===
 // Category CRUD (Admin only)
 router.post('/', authenticate, validate(createCategorySchema), createCategoryController.execute);
+
 router.patch(
   '/:id',
   authenticate,
@@ -49,6 +67,16 @@ router.patch(
   validate(updateCategorySchema),
   updateCategoryController.execute,
 );
+
 router.delete('/:id', authenticate, validateIdParam(), deleteCategoryController.execute);
+
+// Category attribute template management (Admin only)
+router.post(
+  '/:categoryId/attributes',
+  authenticate,
+  validateIdParam('categoryId'),
+  validate(createCategoryAttributeTemplateSchema),
+  createCategoryAttributeTemplateController.execute,
+);
 
 export default router;

@@ -38,28 +38,6 @@ export interface Product {
   deletedAt?: Date | null;
 }
 
-export interface ProductWithSeller extends Product {
-  seller: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    username: string;
-    avatarUrl?: string | null;
-    artisanProfile?: {
-      shopName: string;
-      isVerified: boolean;
-    } | null;
-  };
-  categories?: Array<{
-    id: string;
-    name: string;
-    slug: string;
-  }>;
-  variants?: ProductVariant[];
-  priceHistory?: PriceHistory[];
-  postMentions?: PostProductMention[];
-}
-
 export interface ProductVariant {
   id: string;
   productId: string;
@@ -94,24 +72,41 @@ export interface PostProductMention {
   productId: string;
   contextText?: string | null;
   position?: number | null;
+  post: {
+    id: string;
+    title: string;
+    slug?: string | null;
+    type: string;
+    user: {
+      id: string;
+      username: string;
+      firstName: string;
+      lastName: string;
+    };
+  };
 }
 
-export interface CategoryAttributeTemplate {
-  id: string;
-  categoryId: string;
-  name: string;
-  key: string;
-  type: 'TEXT' | 'NUMBER' | 'SELECT' | 'MULTI_SELECT' | 'BOOLEAN' | 'DATE' | 'URL' | 'EMAIL';
-  isRequired: boolean;
-  isVariant: boolean;
-  options?: string[] | null;
-  unit?: string | null;
-  sortOrder: number;
-  description?: string | null;
-  isCustom: boolean;
-  createdBy?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+export interface ProductWithDetails extends Product {
+  seller: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    username: string;
+    avatarUrl?: string | null;
+    artisanProfile?: {
+      shopName: string;
+      isVerified: boolean;
+    } | null;
+  };
+  categories: Array<{
+    id: string;
+    name: string;
+    slug: string;
+  }>;
+  variants?: ProductVariant[];
+  priceHistory?: PriceHistory[];
+  postMentions?: PostProductMention[];
+  isWishlisted?: boolean; // For authenticated users
 }
 
 // DTOs
@@ -183,23 +178,6 @@ export interface CreateProductVariantDto {
   sortOrder?: number;
 }
 
-export interface UpdateProductVariantDto extends Partial<CreateProductVariantDto> {}
-
-export interface CreateCategoryAttributeTemplateDto {
-  name: string;
-  key: string;
-  type: 'TEXT' | 'NUMBER' | 'SELECT' | 'MULTI_SELECT' | 'BOOLEAN' | 'DATE' | 'URL' | 'EMAIL';
-  isRequired?: boolean;
-  isVariant?: boolean;
-  options?: string[];
-  unit?: string;
-  sortOrder?: number;
-  description?: string;
-}
-
-export interface UpdateCategoryAttributeTemplateDto
-  extends Partial<CreateCategoryAttributeTemplateDto> {}
-
 export interface ProductQueryOptions {
   page?: number;
   limit?: number;
@@ -212,10 +190,11 @@ export interface ProductQueryOptions {
   inStock?: boolean;
   priceRange?: { min?: number; max?: number };
   hasVariants?: boolean;
+  userId?: string; // For wishlist checking
 }
 
 export interface ProductPaginationResult {
-  data: ProductWithSeller[];
+  data: ProductWithDetails[];
   meta: {
     total: number;
     page: number;

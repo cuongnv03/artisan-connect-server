@@ -17,7 +17,6 @@ import { PublishProductController } from '../controllers/product/PublishProductC
 import { UnpublishProductController } from '../controllers/product/UnpublishProductController';
 import { SearchProductsController } from '../controllers/product/SearchProductsController';
 import { GetProductStatsController } from '../controllers/product/GetProductStatsController';
-import { ViewProductController } from '../controllers/product/ViewProductController';
 
 // Validators
 import {
@@ -44,7 +43,6 @@ const publishProductController = new PublishProductController();
 const unpublishProductController = new UnpublishProductController();
 const searchProductsController = new SearchProductsController();
 const getProductStatsController = new GetProductStatsController();
-const viewProductController = new ViewProductController();
 
 // === PUBLIC ROUTES ===
 router.get('/', validate(getProductsQuerySchema, 'query'), getProductsController.execute);
@@ -80,6 +78,5 @@ router.patch(
 );
 router.post('/:id/publish', authenticate, validateIdParam(), publishProductController.execute);
 router.post('/:id/unpublish', authenticate, validateIdParam(), unpublishProductController.execute);
-router.post('/:id/view', validateIdParam(), viewProductController.execute);
 
 export default router;

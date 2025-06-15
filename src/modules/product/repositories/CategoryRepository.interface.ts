@@ -1,9 +1,10 @@
 import { BaseRepository } from '../../../shared/interfaces/BaseRepository';
 import {
   Category,
-  CategoryWithChildren,
+  CategoryWithRelations,
   CreateCategoryDto,
   UpdateCategoryDto,
+  CategoryAttributeTemplate,
 } from '../models/Category';
 
 export interface ICategoryRepository extends BaseRepository<Category, string> {
@@ -11,9 +12,12 @@ export interface ICategoryRepository extends BaseRepository<Category, string> {
   updateCategory(id: string, data: UpdateCategoryDto): Promise<Category>;
   deleteCategory(id: string): Promise<boolean>;
   getAllCategories(): Promise<Category[]>;
-  getCategoryTree(): Promise<CategoryWithChildren[]>;
-  getCategoryBySlug(slug: string): Promise<Category | null>;
+  getCategoryTree(): Promise<CategoryWithRelations[]>;
+  getCategoryBySlug(slug: string): Promise<CategoryWithRelations | null>;
   generateSlug(name: string): Promise<string>;
-  getCategoryAttributeTemplates(categoryId: string): Promise<any[]>;
-  createCategoryAttributeTemplate(categoryId: string, data: any): Promise<any>;
+  getCategoryAttributeTemplates(categoryId: string): Promise<CategoryAttributeTemplate[]>;
+  createCategoryAttributeTemplate(
+    categoryId: string,
+    data: Partial<CategoryAttributeTemplate>,
+  ): Promise<CategoryAttributeTemplate>;
 }

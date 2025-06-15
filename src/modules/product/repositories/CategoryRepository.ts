@@ -3,9 +3,10 @@ import { BasePrismaRepository } from '../../../shared/baseClasses/BasePrismaRepo
 import { ICategoryRepository } from './CategoryRepository.interface';
 import {
   Category,
-  CategoryWithChildren,
+  CategoryWithRelations,
   CreateCategoryDto,
   UpdateCategoryDto,
+  CategoryAttributeTemplate,
 } from '../models/Category';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
@@ -28,18 +29,22 @@ export class CategoryRepository
       });
 
       if (existing) {
-        throw new AppError('Category name already exists', 409, 'CATEGORY_NAME_EXISTS');
+        throw AppError.conflict('Category name already exists', 'CATEGORY_NAME_EXISTS');
       }
 
       // Validate parent category if provided
+      let level = 0;
       if (data.parentId) {
         const parent = await this.prisma.category.findUnique({
           where: { id: data.parentId, isActive: true },
+          select: { level: true },
         });
 
         if (!parent) {
-          throw new AppError('Parent category not found', 404, 'PARENT_CATEGORY_NOT_FOUND');
+          throw AppError.notFound('Parent category not found', 'PARENT_CATEGORY_NOT_FOUND');
         }
+
+        level = parent.level + 1;
       }
 
       const slug = await this.generateSlug(data.name);
@@ -51,6 +56,8 @@ export class CategoryRepository
           description: data.description,
           imageUrl: data.imageUrl,
           parentId: data.parentId,
+          level,
+          sortOrder: data.sortOrder || 0,
           isActive: true,
         },
       });
@@ -59,16 +66,19 @@ export class CategoryRepository
     } catch (error) {
       this.logger.error(`Error creating category: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to create category', 500, 'CATEGORY_CREATE_ERROR');
+      throw AppError.internal('Failed to create category', 'CATEGORY_CREATE_ERROR');
     }
   }
 
   async updateCategory(id: string, data: UpdateCategoryDto): Promise<Category> {
     try {
-      const existing = await this.prisma.category.findUnique({ where: { id } });
+      const existing = await this.prisma.category.findUnique({
+        where: { id },
+        select: { id: true, name: true, parentId: true, level: true },
+      });
 
       if (!existing) {
-        throw new AppError('Category not found', 404, 'CATEGORY_NOT_FOUND');
+        throw AppError.notFound('Category not found', 'CATEGORY_NOT_FOUND');
       }
 
       // Check name uniqueness if name is being changed
@@ -81,7 +91,7 @@ export class CategoryRepository
         });
 
         if (nameExists) {
-          throw new AppError('Category name already exists', 409, 'CATEGORY_NAME_EXISTS');
+          throw AppError.conflict('Category name already exists', 'CATEGORY_NAME_EXISTS');
         }
       }
 
@@ -90,6 +100,27 @@ export class CategoryRepository
       // Generate new slug if name changed
       if (data.name && data.name !== existing.name) {
         updateData.slug = await this.generateSlug(data.name);
+      }
+
+      // Update level if parent changed
+      if (data.parentId !== undefined && data.parentId !== existing.parentId) {
+        if (data.parentId) {
+          const parent = await this.prisma.category.findUnique({
+            where: { id: data.parentId },
+            select: { level: true },
+          });
+
+          if (!parent) {
+            throw AppError.notFound('Parent category not found', 'PARENT_CATEGORY_NOT_FOUND');
+          }
+
+          updateData.level = parent.level + 1;
+        } else {
+          updateData.level = 0;
+        }
+
+        // Update all children levels recursively
+        await this.updateChildrenLevels(id, updateData.level);
       }
 
       const category = await this.prisma.category.update({
@@ -101,7 +132,24 @@ export class CategoryRepository
     } catch (error) {
       this.logger.error(`Error updating category: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update category', 500, 'CATEGORY_UPDATE_ERROR');
+      throw AppError.internal('Failed to update category', 'CATEGORY_UPDATE_ERROR');
+    }
+  }
+
+  private async updateChildrenLevels(parentId: string, parentLevel: number): Promise<void> {
+    const children = await this.prisma.category.findMany({
+      where: { parentId },
+      select: { id: true },
+    });
+
+    for (const child of children) {
+      await this.prisma.category.update({
+        where: { id: child.id },
+        data: { level: parentLevel + 1 },
+      });
+
+      // Recursively update grandchildren
+      await this.updateChildrenLevels(child.id, parentLevel + 1);
     }
   }
 
@@ -111,24 +159,23 @@ export class CategoryRepository
         where: { id },
         include: {
           children: true,
-          _count: { select: { products: true } },
+          products: true,
         },
       });
 
       if (!category) {
-        throw new AppError('Category not found', 404, 'CATEGORY_NOT_FOUND');
+        throw AppError.notFound('Category not found', 'CATEGORY_NOT_FOUND');
       }
 
       if (category.children.length > 0) {
-        throw new AppError(
+        throw AppError.badRequest(
           'Cannot delete category with subcategories',
-          400,
           'CATEGORY_HAS_CHILDREN',
         );
       }
 
-      if (category._count.products > 0) {
-        throw new AppError('Cannot delete category with products', 400, 'CATEGORY_HAS_PRODUCTS');
+      if (category.products.length > 0) {
+        throw AppError.badRequest('Cannot delete category with products', 'CATEGORY_HAS_PRODUCTS');
       }
 
       await this.prisma.category.delete({ where: { id } });
@@ -137,7 +184,7 @@ export class CategoryRepository
     } catch (error) {
       this.logger.error(`Error deleting category: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to delete category', 500, 'CATEGORY_DELETE_ERROR');
+      throw AppError.internal('Failed to delete category', 'CATEGORY_DELETE_ERROR');
     }
   }
 
@@ -145,33 +192,33 @@ export class CategoryRepository
     try {
       const categories = await this.prisma.category.findMany({
         where: { isActive: true },
-        orderBy: { name: 'asc' },
+        orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
       });
 
       return categories as Category[];
     } catch (error) {
       this.logger.error(`Error getting all categories: ${error}`);
-      throw new AppError('Failed to get categories', 500, 'CATEGORY_GET_ERROR');
+      throw AppError.internal('Failed to get categories', 'CATEGORY_GET_ERROR');
     }
   }
 
-  async getCategoryTree(): Promise<CategoryWithChildren[]> {
+  async getCategoryTree(): Promise<CategoryWithRelations[]> {
     try {
       const allCategories = await this.prisma.category.findMany({
         where: { isActive: true },
         include: {
           _count: { select: { products: true } },
         },
-        orderBy: { name: 'asc' },
+        orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
       });
 
       // Build tree structure
-      const categoryMap = new Map<string, CategoryWithChildren>();
-      const rootCategories: CategoryWithChildren[] = [];
+      const categoryMap = new Map<string, CategoryWithRelations>();
+      const rootCategories: CategoryWithRelations[] = [];
 
       // First pass: create all nodes
       allCategories.forEach((category) => {
-        const treeNode: CategoryWithChildren = {
+        const treeNode: CategoryWithRelations = {
           ...category,
           children: [],
           productCount: category._count.products,
@@ -186,7 +233,7 @@ export class CategoryRepository
         if (category.parentId) {
           const parent = categoryMap.get(category.parentId);
           if (parent) {
-            parent.children.push(treeNode);
+            parent.children!.push(treeNode);
           }
         } else {
           rootCategories.push(treeNode);
@@ -196,17 +243,33 @@ export class CategoryRepository
       return rootCategories;
     } catch (error) {
       this.logger.error(`Error getting category tree: ${error}`);
-      throw new AppError('Failed to get category tree', 500, 'CATEGORY_TREE_ERROR');
+      throw AppError.internal('Failed to get category tree', 'CATEGORY_TREE_ERROR');
     }
   }
 
-  async getCategoryBySlug(slug: string): Promise<Category | null> {
+  async getCategoryBySlug(slug: string): Promise<CategoryWithRelations | null> {
     try {
       const category = await this.prisma.category.findUnique({
         where: { slug, isActive: true },
+        include: {
+          parent: true,
+          children: {
+            where: { isActive: true },
+            orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+          },
+          _count: { select: { products: true } },
+          attributeTemplates: {
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
       });
 
-      return category as Category | null;
+      if (!category) return null;
+
+      return {
+        ...category,
+        productCount: category._count.products,
+      } as CategoryWithRelations;
     } catch (error) {
       this.logger.error(`Error getting category by slug: ${error}`);
       return null;
@@ -234,28 +297,41 @@ export class CategoryRepository
     return `${baseSlug}-${randomStr}`;
   }
 
-  async getCategoryAttributeTemplates(categoryId: string): Promise<any[]> {
+  async getCategoryAttributeTemplates(categoryId: string): Promise<CategoryAttributeTemplate[]> {
     try {
       const templates = await this.prisma.categoryAttributeTemplate.findMany({
         where: { categoryId },
         orderBy: { sortOrder: 'asc' },
       });
-      return templates;
+      return templates as CategoryAttributeTemplate[];
     } catch (error) {
       this.logger.error(`Error getting category attribute templates: ${error}`);
       throw AppError.internal('Failed to get category attribute templates', 'DATABASE_ERROR');
     }
   }
 
-  async createCategoryAttributeTemplate(categoryId: string, data: any): Promise<any> {
+  async createCategoryAttributeTemplate(
+    categoryId: string,
+    data: Partial<CategoryAttributeTemplate>,
+  ): Promise<CategoryAttributeTemplate> {
     try {
       const template = await this.prisma.categoryAttributeTemplate.create({
         data: {
           categoryId,
-          ...data,
+          name: data.name!,
+          key: data.key!,
+          type: data.type!,
+          isRequired: data.isRequired || false,
+          isVariant: data.isVariant || false,
+          options: data.options,
+          unit: data.unit,
+          sortOrder: data.sortOrder || 0,
+          description: data.description,
+          isCustom: data.isCustom || false,
+          createdBy: data.createdBy,
         },
       });
-      return template;
+      return template as CategoryAttributeTemplate;
     } catch (error) {
       this.logger.error(`Error creating category attribute template: ${error}`);
       throw AppError.internal('Failed to create category attribute template', 'DATABASE_ERROR');

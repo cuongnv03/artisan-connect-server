@@ -1,9 +1,9 @@
 import {
   Category,
-  CategoryQueryOptions,
-  CategoryWithChildren,
+  CategoryWithRelations,
   CreateCategoryDto,
   UpdateCategoryDto,
+  CategoryAttributeTemplate,
 } from '../models/Category';
 
 export interface ICategoryService {
@@ -11,7 +11,13 @@ export interface ICategoryService {
   updateCategory(id: string, data: UpdateCategoryDto): Promise<Category>;
   deleteCategory(id: string): Promise<boolean>;
   getAllCategories(): Promise<Category[]>;
-  getCategoryTree(): Promise<CategoryWithChildren[]>;
+  getCategoryTree(): Promise<CategoryWithRelations[]>;
   getCategoryById(id: string): Promise<Category | null>;
-  getCategoryBySlug(slug: string, options?: CategoryQueryOptions): Promise<Category | null>;
+  getCategoryBySlug(slug: string): Promise<CategoryWithRelations | null>;
+  getCategoryAttributeTemplates(categoryId: string): Promise<CategoryAttributeTemplate[]>;
+  createCategoryAttributeTemplate(
+    categoryId: string,
+    data: Partial<CategoryAttributeTemplate>,
+    createdBy: string,
+  ): Promise<CategoryAttributeTemplate>;
 }

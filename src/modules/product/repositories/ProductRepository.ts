@@ -3,14 +3,13 @@ import { BasePrismaRepository } from '../../../shared/baseClasses/BasePrismaRepo
 import { IProductRepository } from './ProductRepository.interface';
 import {
   Product,
-  ProductWithSeller,
+  ProductWithDetails,
   CreateProductDto,
   UpdateProductDto,
   ProductQueryOptions,
   ProductPaginationResult,
   PriceHistory,
   ProductStats,
-  ProductVariant,
 } from '../models/Product';
 import { ProductStatus } from '../models/ProductEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -27,7 +26,7 @@ export class ProductRepository
     super(prisma, 'product');
   }
 
-  async createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithSeller> {
+  async createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithDetails> {
     try {
       const slug = await this.generateSlug(data.name, sellerId);
 
@@ -114,83 +113,14 @@ export class ProductRepository
         return product;
       });
 
-      return (await this.getProductById(product.id)) as ProductWithSeller;
+      return (await this.getProductById(product.id)) as ProductWithDetails;
     } catch (error) {
       this.logger.error(`Error creating product: ${error}`);
       throw AppError.internal('Failed to create product', 'PRODUCT_CREATE_ERROR');
     }
   }
 
-  async updateProduct(
-    id: string,
-    sellerId: string,
-    data: UpdateProductDto,
-  ): Promise<ProductWithSeller> {
-    try {
-      // Check ownership
-      const existingProduct = await this.prisma.product.findUnique({
-        where: { id, deletedAt: null },
-        select: { sellerId: true, price: true, name: true },
-      });
-
-      if (!existingProduct) {
-        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
-      }
-
-      if (existingProduct.sellerId !== sellerId) {
-        throw AppError.forbidden('You can only update your own products', 'FORBIDDEN');
-      }
-
-      const updateData: any = { ...data };
-
-      // Generate new slug if name changed
-      if (data.name && data.name !== existingProduct.name) {
-        updateData.slug = await this.generateSlug(data.name, sellerId);
-      }
-
-      await this.prisma.$transaction(async (tx) => {
-        // Update categories if provided
-        if (data.categoryIds !== undefined) {
-          await tx.categoryProduct.deleteMany({ where: { productId: id } });
-          if (data.categoryIds.length > 0) {
-            await Promise.all(
-              data.categoryIds.map((categoryId) =>
-                tx.categoryProduct.create({
-                  data: { productId: id, categoryId },
-                }),
-              ),
-            );
-          }
-        }
-
-        // Update product
-        await tx.product.update({
-          where: { id },
-          data: updateData,
-        });
-
-        // Create price history if price changed
-        if (data.price !== undefined && data.price !== Number(existingProduct.price)) {
-          await tx.priceHistory.create({
-            data: {
-              productId: id,
-              price: data.price,
-              changeNote: 'Price updated',
-              changedBy: sellerId,
-            },
-          });
-        }
-      });
-
-      return (await this.getProductById(id)) as ProductWithSeller;
-    } catch (error) {
-      this.logger.error(`Error updating product: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to update product', 'PRODUCT_UPDATE_ERROR');
-    }
-  }
-
-  async getProductById(id: string): Promise<ProductWithSeller | null> {
+  async getProductById(id: string, userId?: string): Promise<ProductWithDetails | null> {
     try {
       const product = await this.prisma.product.findUnique({
         where: { id, deletedAt: null },
@@ -221,19 +151,47 @@ export class ProductRepository
             orderBy: { createdAt: 'desc' },
             take: 10,
           },
+          postMentions: {
+            include: {
+              post: {
+                select: {
+                  id: true,
+                  title: true,
+                  slug: true,
+                  type: true,
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      firstName: true,
+                      lastName: true,
+                    },
+                  },
+                },
+              },
+            },
+            take: 10,
+          },
+          // Check if wishlisted by current user
+          wishlistItems: userId
+            ? {
+                where: { userId, itemType: 'PRODUCT' },
+                take: 1,
+              }
+            : undefined,
         },
       });
 
       if (!product) return null;
 
-      return this.transformProductWithSeller(product);
+      return this.transformProductWithDetails(product, userId);
     } catch (error) {
       this.logger.error(`Error getting product by ID: ${error}`);
       return null;
     }
   }
 
-  async getProductBySlug(slug: string): Promise<ProductWithSeller | null> {
+  async getProductBySlug(slug: string, userId?: string): Promise<ProductWithDetails | null> {
     try {
       const product = await this.prisma.product.findUnique({
         where: { slug, deletedAt: null },
@@ -260,12 +218,39 @@ export class ProductRepository
           variants: {
             orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
           },
+          postMentions: {
+            include: {
+              post: {
+                select: {
+                  id: true,
+                  title: true,
+                  slug: true,
+                  type: true,
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      firstName: true,
+                      lastName: true,
+                    },
+                  },
+                },
+              },
+            },
+            take: 10,
+          },
+          wishlistItems: userId
+            ? {
+                where: { userId, itemType: 'PRODUCT' },
+                take: 1,
+              }
+            : undefined,
         },
       });
 
       if (!product) return null;
 
-      return this.transformProductWithSeller(product);
+      return this.transformProductWithDetails(product, userId);
     } catch (error) {
       this.logger.error(`Error getting product by slug: ${error}`);
       return null;
@@ -286,6 +271,7 @@ export class ProductRepository
         inStock,
         priceRange,
         hasVariants,
+        userId,
       } = options;
 
       const where: Prisma.ProductWhereInput = {
@@ -358,6 +344,12 @@ export class ProductRepository
               },
             },
           },
+          wishlistItems: userId
+            ? {
+                where: { userId, itemType: 'PRODUCT' },
+                take: 1,
+              }
+            : undefined,
         },
         orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
@@ -365,7 +357,7 @@ export class ProductRepository
       });
 
       return {
-        data: products.map((product) => this.transformProductWithSeller(product)),
+        data: products.map((product) => this.transformProductWithDetails(product, userId)),
         meta: { total, page, limit, totalPages },
       };
     } catch (error) {
@@ -374,226 +366,72 @@ export class ProductRepository
     }
   }
 
-  async getMyProducts(
-    sellerId: string,
-    options: Omit<ProductQueryOptions, 'sellerId'> = {},
-  ): Promise<ProductPaginationResult> {
-    return this.getProducts({ ...options, sellerId });
-  }
-
-  async searchProducts(
-    query: string,
-    options: ProductQueryOptions = {},
-  ): Promise<ProductPaginationResult> {
-    return this.getProducts({ ...options, search: query, status: ProductStatus.PUBLISHED });
-  }
-
-  async deleteProduct(id: string, sellerId: string): Promise<boolean> {
-    try {
-      const product = await this.prisma.product.findUnique({
-        where: { id, deletedAt: null },
-        select: { sellerId: true },
-      });
-
-      if (!product) {
-        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
-      }
-
-      if (product.sellerId !== sellerId) {
-        throw AppError.forbidden('You can only delete your own products', 'FORBIDDEN');
-      }
-
-      await this.prisma.product.update({
-        where: { id },
-        data: {
-          status: ProductStatus.DELETED,
-          deletedAt: new Date(),
-        },
-      });
-
-      return true;
-    } catch (error) {
-      this.logger.error(`Error deleting product: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to delete product', 'PRODUCT_DELETE_ERROR');
-    }
-  }
-
-  async updatePrice(
+  async updateProduct(
     id: string,
     sellerId: string,
-    price: number,
-    note?: string,
-  ): Promise<ProductWithSeller> {
+    data: UpdateProductDto,
+  ): Promise<ProductWithDetails> {
     try {
-      const product = await this.prisma.product.findUnique({
+      // Check ownership
+      const existingProduct = await this.prisma.product.findUnique({
         where: { id, deletedAt: null },
-        select: { sellerId: true },
+        select: { sellerId: true, price: true, name: true },
       });
 
-      if (!product) {
+      if (!existingProduct) {
         throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
       }
 
-      if (product.sellerId !== sellerId) {
+      if (existingProduct.sellerId !== sellerId) {
         throw AppError.forbidden('You can only update your own products', 'FORBIDDEN');
       }
 
+      const updateData: any = { ...data };
+
+      // Generate new slug if name changed
+      if (data.name && data.name !== existingProduct.name) {
+        updateData.slug = await this.generateSlug(data.name, sellerId);
+      }
+
       await this.prisma.$transaction(async (tx) => {
+        // Update categories if provided
+        if (data.categoryIds !== undefined) {
+          await tx.categoryProduct.deleteMany({ where: { productId: id } });
+          if (data.categoryIds.length > 0) {
+            await Promise.all(
+              data.categoryIds.map((categoryId) =>
+                tx.categoryProduct.create({
+                  data: { productId: id, categoryId },
+                }),
+              ),
+            );
+          }
+        }
+
+        // Update product
         await tx.product.update({
           where: { id },
-          data: { price },
+          data: updateData,
         });
 
-        await tx.priceHistory.create({
-          data: {
-            productId: id,
-            price,
-            changeNote: note || 'Price updated',
-            changedBy: sellerId,
-          },
-        });
+        // Create price history if price changed
+        if (data.price !== undefined && data.price !== Number(existingProduct.price)) {
+          await tx.priceHistory.create({
+            data: {
+              productId: id,
+              price: data.price,
+              changeNote: 'Price updated',
+              changedBy: sellerId,
+            },
+          });
+        }
       });
 
-      return (await this.getProductById(id)) as ProductWithSeller;
+      return (await this.getProductById(id)) as ProductWithDetails;
     } catch (error) {
-      this.logger.error(`Error updating price: ${error}`);
+      this.logger.error(`Error updating product: ${error}`);
       if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to update price', 'PRICE_UPDATE_ERROR');
-    }
-  }
-
-  async getPriceHistory(
-    productId: string,
-    page: number = 1,
-    limit: number = 10,
-  ): Promise<PaginatedResult<PriceHistory>> {
-    try {
-      const total = await this.prisma.priceHistory.count({ where: { productId } });
-
-      const history = await this.prisma.priceHistory.findMany({
-        where: { productId },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      });
-
-      return {
-        data: history as PriceHistory[],
-        meta: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-        },
-      };
-    } catch (error) {
-      this.logger.error(`Error getting price history: ${error}`);
-      throw AppError.internal('Failed to get price history', 'PRICE_HISTORY_ERROR');
-    }
-  }
-
-  async publishProduct(id: string, sellerId: string): Promise<ProductWithSeller> {
-    try {
-      const product = await this.prisma.product.findUnique({
-        where: { id, deletedAt: null },
-        select: { sellerId: true, quantity: true },
-      });
-
-      if (!product) {
-        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
-      }
-
-      if (product.sellerId !== sellerId) {
-        throw AppError.forbidden('You can only publish your own products', 'FORBIDDEN');
-      }
-
-      const status = product.quantity > 0 ? ProductStatus.PUBLISHED : ProductStatus.OUT_OF_STOCK;
-
-      await this.prisma.product.update({
-        where: { id },
-        data: { status },
-      });
-
-      return (await this.getProductById(id)) as ProductWithSeller;
-    } catch (error) {
-      this.logger.error(`Error publishing product: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to publish product', 'PRODUCT_PUBLISH_ERROR');
-    }
-  }
-
-  async unpublishProduct(id: string, sellerId: string): Promise<ProductWithSeller> {
-    try {
-      const product = await this.prisma.product.findUnique({
-        where: { id, deletedAt: null },
-        select: { sellerId: true },
-      });
-
-      if (!product) {
-        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
-      }
-
-      if (product.sellerId !== sellerId) {
-        throw AppError.forbidden('You can only unpublish your own products', 'FORBIDDEN');
-      }
-
-      await this.prisma.product.update({
-        where: { id },
-        data: { status: ProductStatus.DRAFT },
-      });
-
-      return (await this.getProductById(id)) as ProductWithSeller;
-    } catch (error) {
-      this.logger.error(`Error unpublishing product: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to unpublish product', 'PRODUCT_UNPUBLISH_ERROR');
-    }
-  }
-
-  async incrementViewCount(id: string): Promise<void> {
-    try {
-      await this.prisma.product.update({
-        where: { id },
-        data: { viewCount: { increment: 1 } },
-      });
-    } catch (error) {
-      this.logger.error(`Error incrementing view count: ${error}`);
-    }
-  }
-
-  async getProductStats(sellerId: string): Promise<ProductStats> {
-    try {
-      const [totalStats, publishedCount, draftCount, outOfStockCount] = await Promise.all([
-        this.prisma.product.aggregate({
-          where: { sellerId, deletedAt: null },
-          _count: { id: true },
-          _sum: { viewCount: true, salesCount: true },
-          _avg: { avgRating: true },
-        }),
-        this.prisma.product.count({
-          where: { sellerId, status: ProductStatus.PUBLISHED, deletedAt: null },
-        }),
-        this.prisma.product.count({
-          where: { sellerId, status: ProductStatus.DRAFT, deletedAt: null },
-        }),
-        this.prisma.product.count({
-          where: { sellerId, status: ProductStatus.OUT_OF_STOCK, deletedAt: null },
-        }),
-      ]);
-
-      return {
-        totalProducts: totalStats._count.id || 0,
-        publishedProducts: publishedCount,
-        draftProducts: draftCount,
-        outOfStockProducts: outOfStockCount,
-        totalViews: totalStats._sum.viewCount || 0,
-        totalSales: totalStats._sum.salesCount || 0,
-        avgRating: totalStats._avg.avgRating || undefined,
-      };
-    } catch (error) {
-      this.logger.error(`Error getting product stats: ${error}`);
-      throw AppError.internal('Failed to get product stats', 'PRODUCT_STATS_ERROR');
+      throw AppError.internal('Failed to update product', 'PRODUCT_UPDATE_ERROR');
     }
   }
 
@@ -653,19 +491,7 @@ export class ProductRepository
     return `${sku}-${randomSuffix}`;
   }
 
-  async isProductOwner(productId: string, sellerId: string): Promise<boolean> {
-    try {
-      const product = await this.prisma.product.findUnique({
-        where: { id: productId },
-        select: { sellerId: true },
-      });
-      return product?.sellerId === sellerId;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  private transformProductWithSeller(product: any): ProductWithSeller {
+  private transformProductWithDetails(product: any, userId?: string): ProductWithDetails {
     return {
       ...product,
       price: Number(product.price),
@@ -682,6 +508,247 @@ export class ProductRepository
           ...p,
           price: Number(p.price),
         })) || [],
+      postMentions: product.postMentions || [],
+      isWishlisted: userId ? product.wishlistItems?.length > 0 : undefined,
     };
+  }
+
+  async deleteProduct(id: string, sellerId: string): Promise<boolean> {
+    // Implementation similar to existing but check sellerId
+    try {
+      const product = await this.prisma.product.findUnique({
+        where: { id, deletedAt: null },
+        select: { sellerId: true },
+      });
+
+      if (!product) {
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
+      }
+
+      if (product.sellerId !== sellerId) {
+        throw AppError.forbidden('You can only delete your own products', 'FORBIDDEN');
+      }
+
+      await this.prisma.product.update({
+        where: { id },
+        data: {
+          status: ProductStatus.DELETED,
+          deletedAt: new Date(),
+        },
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting product: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to delete product', 'PRODUCT_DELETE_ERROR');
+    }
+  }
+
+  async getMyProducts(
+    sellerId: string,
+    options: Omit<ProductQueryOptions, 'sellerId'> = {},
+  ): Promise<ProductPaginationResult> {
+    return this.getProducts({ ...options, sellerId });
+  }
+
+  async searchProducts(
+    query: string,
+    options: ProductQueryOptions = {},
+  ): Promise<ProductPaginationResult> {
+    return this.getProducts({ ...options, search: query, status: ProductStatus.PUBLISHED });
+  }
+
+  async updatePrice(
+    id: string,
+    sellerId: string,
+    price: number,
+    note?: string,
+  ): Promise<ProductWithDetails> {
+    try {
+      const product = await this.prisma.product.findUnique({
+        where: { id, deletedAt: null },
+        select: { sellerId: true },
+      });
+
+      if (!product) {
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
+      }
+
+      if (product.sellerId !== sellerId) {
+        throw AppError.forbidden('You can only update your own products', 'FORBIDDEN');
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.product.update({
+          where: { id },
+          data: { price },
+        });
+
+        await tx.priceHistory.create({
+          data: {
+            productId: id,
+            price,
+            changeNote: note || 'Price updated',
+            changedBy: sellerId,
+          },
+        });
+      });
+
+      return (await this.getProductById(id)) as ProductWithDetails;
+    } catch (error) {
+      this.logger.error(`Error updating price: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to update price', 'PRICE_UPDATE_ERROR');
+    }
+  }
+
+  async getPriceHistory(
+    productId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResult<PriceHistory>> {
+    try {
+      const total = await this.prisma.priceHistory.count({ where: { productId } });
+
+      const history = await this.prisma.priceHistory.findMany({
+        where: { productId },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+      return {
+        data: history.map((h) => ({
+          ...h,
+          price: Number(h.price),
+        })) as PriceHistory[],
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error getting price history: ${error}`);
+      throw AppError.internal('Failed to get price history', 'PRICE_HISTORY_ERROR');
+    }
+  }
+
+  async publishProduct(id: string, sellerId: string): Promise<ProductWithDetails> {
+    try {
+      const product = await this.prisma.product.findUnique({
+        where: { id, deletedAt: null },
+        select: { sellerId: true, quantity: true },
+      });
+
+      if (!product) {
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
+      }
+
+      if (product.sellerId !== sellerId) {
+        throw AppError.forbidden('You can only publish your own products', 'FORBIDDEN');
+      }
+
+      const status = product.quantity > 0 ? ProductStatus.PUBLISHED : ProductStatus.OUT_OF_STOCK;
+
+      await this.prisma.product.update({
+        where: { id },
+        data: { status },
+      });
+
+      return (await this.getProductById(id)) as ProductWithDetails;
+    } catch (error) {
+      this.logger.error(`Error publishing product: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to publish product', 'PRODUCT_PUBLISH_ERROR');
+    }
+  }
+
+  async unpublishProduct(id: string, sellerId: string): Promise<ProductWithDetails> {
+    try {
+      const product = await this.prisma.product.findUnique({
+        where: { id, deletedAt: null },
+        select: { sellerId: true },
+      });
+
+      if (!product) {
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
+      }
+
+      if (product.sellerId !== sellerId) {
+        throw AppError.forbidden('You can only unpublish your own products', 'FORBIDDEN');
+      }
+
+      await this.prisma.product.update({
+        where: { id },
+        data: { status: ProductStatus.DRAFT },
+      });
+
+      return (await this.getProductById(id)) as ProductWithDetails;
+    } catch (error) {
+      this.logger.error(`Error unpublishing product: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to unpublish product', 'PRODUCT_UNPUBLISH_ERROR');
+    }
+  }
+
+  async incrementViewCount(id: string): Promise<void> {
+    try {
+      await this.prisma.product.update({
+        where: { id },
+        data: { viewCount: { increment: 1 } },
+      });
+    } catch (error) {
+      this.logger.error(`Error incrementing view count: ${error}`);
+    }
+  }
+
+  async getProductStats(sellerId: string): Promise<ProductStats> {
+    try {
+      const [totalStats, publishedCount, draftCount, outOfStockCount] = await Promise.all([
+        this.prisma.product.aggregate({
+          where: { sellerId, deletedAt: null },
+          _count: { id: true },
+          _sum: { viewCount: true, salesCount: true },
+          _avg: { avgRating: true },
+        }),
+        this.prisma.product.count({
+          where: { sellerId, status: ProductStatus.PUBLISHED, deletedAt: null },
+        }),
+        this.prisma.product.count({
+          where: { sellerId, status: ProductStatus.DRAFT, deletedAt: null },
+        }),
+        this.prisma.product.count({
+          where: { sellerId, status: ProductStatus.OUT_OF_STOCK, deletedAt: null },
+        }),
+      ]);
+
+      return {
+        totalProducts: totalStats._count.id || 0,
+        publishedProducts: publishedCount,
+        draftProducts: draftCount,
+        outOfStockProducts: outOfStockCount,
+        totalViews: totalStats._sum.viewCount || 0,
+        totalSales: totalStats._sum.salesCount || 0,
+        avgRating: totalStats._avg.avgRating || undefined,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting product stats: ${error}`);
+      throw AppError.internal('Failed to get product stats', 'PRODUCT_STATS_ERROR');
+    }
+  }
+
+  async isProductOwner(productId: string, sellerId: string): Promise<boolean> {
+    try {
+      const product = await this.prisma.product.findUnique({
+        where: { id: productId },
+        select: { sellerId: true },
+      });
+      return product?.sellerId === sellerId;
+    } catch (error) {
+      return false;
+    }
   }
 }

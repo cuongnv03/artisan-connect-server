@@ -1,6 +1,6 @@
 import {
   Product,
-  ProductWithSeller,
+  ProductWithDetails,
   CreateProductDto,
   UpdateProductDto,
   ProductQueryOptions,
@@ -12,11 +12,11 @@ import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IProductService {
   // Core CRUD
-  createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithSeller>;
-  updateProduct(id: string, sellerId: string, data: UpdateProductDto): Promise<ProductWithSeller>;
+  createProduct(sellerId: string, data: CreateProductDto): Promise<ProductWithDetails>;
+  updateProduct(id: string, sellerId: string, data: UpdateProductDto): Promise<ProductWithDetails>;
   deleteProduct(id: string, sellerId: string): Promise<boolean>;
-  getProductById(id: string): Promise<ProductWithSeller | null>;
-  getProductBySlug(slug: string): Promise<ProductWithSeller | null>;
+  getProductById(id: string, userId?: string): Promise<ProductWithDetails | null>;
+  getProductBySlug(slug: string, userId?: string): Promise<ProductWithDetails | null>;
 
   // Queries
   getProducts(options?: ProductQueryOptions): Promise<ProductPaginationResult>;
@@ -26,13 +26,13 @@ export interface IProductService {
   ): Promise<ProductPaginationResult>;
   searchProducts(query: string, options?: ProductQueryOptions): Promise<ProductPaginationResult>;
 
-  // Price management (tính năng độc đáo)
+  // Price management
   updatePrice(
     id: string,
     sellerId: string,
     price: number,
     note?: string,
-  ): Promise<ProductWithSeller>;
+  ): Promise<ProductWithDetails>;
   getPriceHistory(
     productId: string,
     page?: number,
@@ -40,8 +40,8 @@ export interface IProductService {
   ): Promise<PaginatedResult<PriceHistory>>;
 
   // Status management
-  publishProduct(id: string, sellerId: string): Promise<ProductWithSeller>;
-  unpublishProduct(id: string, sellerId: string): Promise<ProductWithSeller>;
+  publishProduct(id: string, sellerId: string): Promise<ProductWithDetails>;
+  unpublishProduct(id: string, sellerId: string): Promise<ProductWithDetails>;
 
   // Analytics
   viewProduct(id: string): Promise<void>;
