@@ -1,3 +1,4 @@
+import { CustomOrderRepository } from './../../custom-order/repositories/CustomOrderRepository';
 import { IOrderService } from './OrderService.interface';
 import {
   Order,
@@ -23,7 +24,7 @@ import {
 import { OrderStatus, DisputeStatus, ReturnStatus } from '../models/OrderEnums';
 import { IOrderRepository } from '../repositories/OrderRepository.interface';
 import { ICartRepository } from '../../cart/repositories/CartRepository.interface';
-import { IQuoteRepository } from '../../custom-order/repositories/CustomOrderRepository.interface';
+import { ICustomOrderRepository } from '../../custom-order/repositories/CustomOrderRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { INotificationService } from '../../notification';
 import { AppError } from '../../../core/errors/AppError';
@@ -34,7 +35,7 @@ import container from '../../../core/di/container';
 export class OrderService implements IOrderService {
   private orderRepository: IOrderRepository;
   private cartRepository: ICartRepository;
-  private quoteRepository: IQuoteRepository;
+  private customOrderRepository: ICustomOrderRepository;
   private userRepository: IUserRepository;
   private notificationService: INotificationService;
   private logger = Logger.getInstance();
@@ -42,7 +43,7 @@ export class OrderService implements IOrderService {
   constructor() {
     this.orderRepository = container.resolve<IOrderRepository>('orderRepository');
     this.cartRepository = container.resolve<ICartRepository>('cartRepository');
-    this.quoteRepository = container.resolve<IQuoteRepository>('quoteRepository');
+    this.customOrderRepository = container.resolve<ICustomOrderRepository>('CustomOrderRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
     this.notificationService = container.resolve<INotificationService>('notificationService');
   }
@@ -101,7 +102,7 @@ export class OrderService implements IOrderService {
       }
 
       // Validate quote exists and belongs to user
-      const quote = await this.quoteRepository.findById(data.quoteRequestId);
+      const quote = await this.customOrderRepository.findById(data.quoteRequestId);
       if (!quote) {
         throw AppError.notFound('Quote request not found', 'QUOTE_NOT_FOUND');
       }

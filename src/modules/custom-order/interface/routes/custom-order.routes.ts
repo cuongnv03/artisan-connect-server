@@ -10,6 +10,7 @@ import { RespondToCustomOrderController } from '../controllers/RespondToCustomOr
 import { GetCustomOrderController } from '../controllers/GetCustomOrderController';
 import { GetMyCustomOrdersController } from '../controllers/GetMyCustomOrdersController';
 import { GetNegotiationHistoryController } from '../controllers/GetNegotiationHistoryController';
+import { AcceptCounterOfferController } from '../controllers/AcceptCounterOfferController';
 import { CancelCustomOrderController } from '../controllers/CancelCustomOrderController';
 import { GetCustomOrderStatsController } from '../controllers/GetCustomOrderStatsController';
 
@@ -32,6 +33,7 @@ const respondToCustomOrderController = new RespondToCustomOrderController();
 const getCustomOrderController = new GetCustomOrderController();
 const getMyCustomOrdersController = new GetMyCustomOrdersController();
 const getNegotiationHistoryController = new GetNegotiationHistoryController();
+const acceptCounterOfferController = new AcceptCounterOfferController();
 const cancelCustomOrderController = new CancelCustomOrderController();
 const getCustomOrderStatsController = new GetCustomOrderStatsController();
 
@@ -74,6 +76,8 @@ router.post(
 
 // Get negotiation history
 router.get('/:id/history', validateIdParam(), getNegotiationHistoryController.execute);
+
+router.post('/:id/accept-counter', validateIdParam(), acceptCounterOfferController.execute);
 
 // === ORDER CANCELLATION ===
 // Cancel custom order

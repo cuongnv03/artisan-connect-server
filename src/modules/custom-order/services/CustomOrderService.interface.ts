@@ -50,4 +50,6 @@ export interface ICustomOrderService {
 
   // Background tasks
   expireOldOrders(): Promise<number>;
+
+  acceptCounterOffer(id: string, customerId: string): Promise<CustomOrderWithDetails>;
 }

@@ -309,6 +309,22 @@ export class OrderRepository
         const returnDeadline = new Date();
         returnDeadline.setDate(returnDeadline.getDate() + 30);
 
+        // ✅ Fix: Handle custom orders properly
+        const orderItemData = {
+          sellerId: quote.artisanId,
+          quantity: 1,
+          price: quote.finalPrice,
+          customOrderId: quote.id,
+          isCustomOrder: true,
+          customTitle: quote.title,
+          customDescription: quote.description,
+        };
+
+        // Add productId only if reference product exists
+        if (quote.referenceProductId) {
+          orderItemData.productId = quote.referenceProductId;
+        }
+
         // Create order
         const order = await tx.order.create({
           data: {
@@ -332,17 +348,12 @@ export class OrderRepository
             notes: data.notes || `Custom order from quote: ${quote.title}`,
             statusHistory: initialStatusHistory,
             items: {
-              create: {
-                productId: quote.referenceProductId || '', // Handle nullable reference
-                sellerId: quote.artisanId,
-                quantity: 1,
-                price: quote.finalPrice,
-              },
+              create: orderItemData,
             },
           },
         });
 
-        // Update quote status
+        // Update quote status to COMPLETED
         await tx.quoteRequest.update({
           where: { id: quote.id },
           data: { status: 'COMPLETED' },
@@ -405,6 +416,14 @@ export class OrderRepository
                   },
                 },
               },
+              // ✅ Add custom order relation
+              customOrder: {
+                select: {
+                  id: true,
+                  title: true,
+                  description: true,
+                },
+              },
             },
           },
           paymentTransactions: {
@@ -449,6 +468,10 @@ export class OrderRepository
         items: order.items.map((item) => ({
           ...item,
           price: Number(item.price),
+          // ✅ Handle custom order display name
+          displayName: item.isCustomOrder
+            ? item.customTitle || item.customOrder?.title || 'Custom Order'
+            : item.product?.name || 'Product',
         })),
         paymentTransactions: order.paymentTransactions.map((tx) => ({
           ...tx,

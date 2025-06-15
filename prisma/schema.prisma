@@ -748,10 +748,11 @@ model QuoteRequest {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  customer         User      @relation("CustomerQuotes", fields: [customerId], references: [id])
-  artisan          User      @relation("ArtisanQuotes", fields: [artisanId], references: [id])
-  referenceProduct Product?  @relation("ReferenceProduct", fields: [referenceProductId], references: [id])
+  customer         User        @relation("CustomerQuotes", fields: [customerId], references: [id])
+  artisan          User        @relation("ArtisanQuotes", fields: [artisanId], references: [id])
+  referenceProduct Product?    @relation("ReferenceProduct", fields: [referenceProductId], references: [id])
   messages         Message[]
+  orderItems       OrderItem[]
 
   @@index([customerId])
   @@index([artisanId])
@@ -825,22 +826,28 @@ model Order {
 }
 
 model OrderItem {
-  id        String   @id @default(uuid())
-  orderId   String
-  productId String
-  variantId String?
-  sellerId  String
-  quantity  Int
-  price     Decimal  @db.Decimal(10, 2)
-  createdAt DateTime @default(now())
+  id                String   @id @default(uuid())
+  orderId           String
+  productId         String? // Make nullable for custom orders
+  variantId         String?
+  sellerId          String
+  quantity          Int
+  price             Decimal  @db.Decimal(10, 2)
+  customOrderId     String? // Add reference to custom order
+  isCustomOrder     Boolean  @default(false)
+  customTitle       String? // Store custom product title
+  customDescription String? // Store custom product description
+  createdAt         DateTime @default(now())
 
-  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product         @relation(fields: [productId], references: [id])
-  variant ProductVariant? @relation("VariantOrderItems", fields: [variantId], references: [id])
-  seller  User            @relation("SellerOrderItems", fields: [sellerId], references: [id])
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product?        @relation(fields: [productId], references: [id]) // Make optional
+  variant     ProductVariant? @relation("VariantOrderItems", fields: [variantId], references: [id])
+  seller      User            @relation("SellerOrderItems", fields: [sellerId], references: [id])
+  customOrder QuoteRequest?   @relation(fields: [customOrderId], references: [id])
 
   @@index([orderId])
   @@index([sellerId])
+  @@index([customOrderId])
 }
 
 model OrderDispute {

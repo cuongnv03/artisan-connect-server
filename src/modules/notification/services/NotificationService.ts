@@ -202,40 +202,71 @@ export class NotificationService implements INotificationService {
     });
   }
 
-  async notifyQuote(
-    quoteId: string,
+  async notifyCustomOrderRequest(
     customerId: string,
     artisanId: string,
-    action: string,
+    customOrderId: string,
   ): Promise<void> {
-    let recipientId: string;
-    let title: string;
-    let message: string;
+    await this.sendNotification({
+      recipientId: artisanId,
+      senderId: customerId,
+      type: NotificationType.CUSTOM_ORDER,
+      title: 'New Custom Order Request',
+      message: 'You have received a new custom order request',
+      data: { customOrderId, action: 'REQUEST' },
+      actionUrl: `/customs/${customOrderId}`,
+    });
+  }
+
+  async notifyCustomOrderResponse(
+    customOrderId: string,
+    customerId: string,
+    artisanId: string,
+    action: 'ACCEPT' | 'REJECT' | 'COUNTER_OFFER',
+    finalPrice?: number,
+  ): Promise<void> {
+    let title = '';
+    let message = '';
 
     switch (action) {
-      case 'REQUEST':
-        recipientId = artisanId;
-        title = 'New Quote Request';
-        message = 'You have received a new quote request';
-        break;
       case 'ACCEPT':
-      case 'REJECT':
-      case 'COUNTER':
-        recipientId = customerId;
-        title = 'Quote Response';
-        message = `Your quote request has been ${action.toLowerCase()}ed`;
+        title = 'Custom Order Accepted';
+        message = 'Your custom order request has been accepted!';
         break;
-      default:
-        return;
+      case 'REJECT':
+        title = 'Custom Order Rejected';
+        message = 'Your custom order request has been rejected';
+        break;
+      case 'COUNTER_OFFER':
+        title = 'Counter Offer Received';
+        message = `The artisan has made a counter offer${finalPrice ? ` of $${finalPrice}` : ''}`;
+        break;
     }
 
     await this.sendNotification({
-      recipientId,
-      type: NotificationType.QUOTE_RESPONSE,
+      recipientId: customerId,
+      senderId: artisanId,
+      type: NotificationType.CUSTOM_ORDER,
       title,
       message,
-      data: { quoteId, action },
-      actionUrl: `/quotes/${quoteId}`,
+      data: { customOrderId, action, finalPrice },
+      actionUrl: `/customs/${customOrderId}`,
+    });
+  }
+
+  async notifyCustomOrderCounterAccepted(
+    customOrderId: string,
+    customerId: string,
+    artisanId: string,
+  ): Promise<void> {
+    await this.sendNotification({
+      recipientId: artisanId,
+      senderId: customerId,
+      type: NotificationType.CUSTOM_ORDER,
+      title: 'Counter Offer Accepted',
+      message: 'Your counter offer has been accepted by the customer',
+      data: { customOrderId, action: 'ACCEPT_COUNTER' },
+      actionUrl: `/customs/${customOrderId}`,
     });
   }
 

@@ -51,11 +51,22 @@ export interface INotificationService {
   notifyPaymentRefunded(customerId: string, orderId: string): Promise<void>;
 
   // QUOTE NOTIFICATIONS
-  notifyQuote(
-    quoteId: string,
+  notifyCustomOrderRequest(
     customerId: string,
     artisanId: string,
-    action: string,
+    customOrderId: string,
+  ): Promise<void>;
+  notifyCustomOrderResponse(
+    customOrderId: string,
+    customerId: string,
+    artisanId: string,
+    action: 'ACCEPT' | 'REJECT' | 'COUNTER_OFFER',
+    finalPrice?: number,
+  ): Promise<void>;
+  notifyCustomOrderCounterAccepted(
+    customOrderId: string,
+    customerId: string,
+    artisanId: string,
   ): Promise<void>;
 
   // DISPUTE NOTIFICATIONS

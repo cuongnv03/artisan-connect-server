@@ -76,13 +76,13 @@ export interface OrderItem {
 }
 
 export interface OrderItemWithDetails extends OrderItem {
-  product: {
+  product?: {
     id: string;
     name: string;
     slug?: string | null;
     images: string[];
     isCustomizable: boolean;
-  };
+  } | null; // Make optional
   variant?: {
     id: string;
     sku: string;
@@ -99,6 +99,14 @@ export interface OrderItemWithDetails extends OrderItem {
       isVerified: boolean;
     } | null;
   };
+  customOrder?: {
+    id: string;
+    title: string;
+    description: string;
+  } | null;
+  isCustomOrder: boolean;
+  customTitle?: string | null;
+  customDescription?: string | null;
 }
 
 export interface PaymentTransaction {

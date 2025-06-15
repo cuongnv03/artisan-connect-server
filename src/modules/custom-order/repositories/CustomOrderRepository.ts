@@ -493,7 +493,10 @@ export class CustomOrderRepository
     try {
       await this.prisma.quoteRequest.update({
         where: { id },
-        data: { status, updatedAt: new Date() },
+        data: {
+          status,
+          updatedAt: new Date(),
+        },
       });
 
       return (await this.findByIdWithDetails(id)) as CustomOrderWithDetails;
