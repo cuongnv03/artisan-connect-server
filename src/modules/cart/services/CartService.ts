@@ -9,6 +9,7 @@ import {
 import { ICartRepository } from '../repositories/CartRepository.interface';
 import { IProductRepository } from '../../product/repositories/ProductRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
+import { IPriceNegotiationRepository } from '../../price-negotiation/repositories/PriceNegotiationRepository.interface';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
 import container from '../../../core/di/container';
@@ -17,12 +18,16 @@ export class CartService implements ICartService {
   private cartRepository: ICartRepository;
   private productRepository: IProductRepository;
   private userRepository: IUserRepository;
+  private priceNegotiationRepository: IPriceNegotiationRepository;
   private logger = Logger.getInstance();
 
   constructor() {
     this.cartRepository = container.resolve<ICartRepository>('cartRepository');
     this.productRepository = container.resolve<IProductRepository>('productRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
+    this.priceNegotiationRepository = container.resolve<IPriceNegotiationRepository>(
+      'priceNegotiationRepository',
+    );
   }
 
   async addToCart(userId: string, data: AddToCartDto): Promise<CartItem> {
@@ -44,15 +49,26 @@ export class CartService implements ICartService {
         throw new AppError('Cart is full. Maximum 50 items allowed', 400, 'CART_LIMIT_EXCEEDED');
       }
 
+      // Validate negotiation nếu có
+      if (data.negotiationId) {
+        await this.validateNegotiationForCart(
+          data.negotiationId,
+          userId,
+          data.productId,
+          data.quantity,
+        );
+      }
+
       const cartItem = await this.cartRepository.addToCart(
         userId,
         data.productId,
         data.quantity,
         data.variantId,
+        data.negotiationId,
       );
 
       this.logger.info(
-        `User ${userId} added ${data.quantity}x product ${data.productId}${data.variantId ? ` variant ${data.variantId}` : ''} to cart`,
+        `User ${userId} added ${data.quantity}x product ${data.productId}${data.variantId ? ` variant ${data.variantId}` : ''}${data.negotiationId ? ` with negotiation ${data.negotiationId}` : ''} to cart`,
       );
 
       return this.convertCartItemForApi(cartItem);
@@ -224,6 +240,11 @@ export class CartService implements ICartService {
         warnings.push(warning.message);
       });
 
+      // Collect negotiation issues
+      validation.negotiationIssues?.forEach((issue) => {
+        errors.push(issue.message);
+      });
+
       // Additional checkout validations
       if (summary.items.length === 0) {
         errors.push('Cart is empty');
@@ -242,6 +263,11 @@ export class CartService implements ICartService {
         );
       }
 
+      // Warning for negotiated items
+      if (summary.hasNegotiatedItems) {
+        warnings.push('Some items have negotiated prices. Please review before checkout.');
+      }
+
       return {
         isValid: errors.length === 0,
         errors,
@@ -252,6 +278,63 @@ export class CartService implements ICartService {
       this.logger.error(`Error validating cart for checkout: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to validate cart for checkout', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async addNegotiatedItemToCart(
+    userId: string,
+    negotiationId: string,
+    quantity?: number,
+  ): Promise<CartItem> {
+    try {
+      // Get negotiation details
+      const negotiation = await this.priceNegotiationRepository.findByIdWithDetails(negotiationId);
+
+      if (!negotiation) {
+        throw new AppError('Price negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
+      }
+
+      // Validate negotiation ownership
+      if (negotiation.customerId !== userId) {
+        throw new AppError('You can only use your own negotiations', 403, 'NEGOTIATION_NOT_YOURS');
+      }
+
+      // Validate negotiation status
+      if (negotiation.status !== 'ACCEPTED') {
+        throw new AppError(
+          'Only accepted negotiations can be used',
+          400,
+          'NEGOTIATION_NOT_ACCEPTED',
+        );
+      }
+
+      // Check expiration
+      if (negotiation.expiresAt && negotiation.expiresAt < new Date()) {
+        throw new AppError('This price negotiation has expired', 400, 'NEGOTIATION_EXPIRED');
+      }
+
+      // Use negotiated quantity if not provided
+      const finalQuantity = quantity || negotiation.quantity;
+
+      // Validate quantity
+      if (finalQuantity > negotiation.quantity) {
+        throw new AppError(
+          `Requested quantity (${finalQuantity}) exceeds negotiated quantity (${negotiation.quantity})`,
+          400,
+          'EXCEEDS_NEGOTIATED_QUANTITY',
+        );
+      }
+
+      // Add to cart with negotiation
+      return await this.addToCart(userId, {
+        productId: negotiation.productId,
+        quantity: finalQuantity,
+        negotiationId,
+      });
+    } catch (error) {
+      this.logger.error(`Error adding negotiated item to cart: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to add negotiated item to cart', 500, 'SERVICE_ERROR');
     }
   }
 
@@ -275,5 +358,46 @@ export class CartService implements ICartService {
           }
         : undefined,
     };
+  }
+
+  private async validateNegotiationForCart(
+    negotiationId: string,
+    userId: string,
+    productId: string,
+    quantity: number,
+  ): Promise<void> {
+    const negotiation = await this.priceNegotiationRepository.findById(negotiationId);
+
+    if (!negotiation) {
+      throw new AppError('Price negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
+    }
+
+    if (negotiation.customerId !== userId) {
+      throw new AppError('You can only use your own negotiations', 403, 'NEGOTIATION_NOT_YOURS');
+    }
+
+    if (negotiation.productId !== productId) {
+      throw new AppError(
+        'Negotiation is for different product',
+        400,
+        'NEGOTIATION_PRODUCT_MISMATCH',
+      );
+    }
+
+    if (negotiation.status !== 'ACCEPTED') {
+      throw new AppError('Only accepted negotiations can be used', 400, 'NEGOTIATION_NOT_ACCEPTED');
+    }
+
+    if (negotiation.expiresAt && negotiation.expiresAt < new Date()) {
+      throw new AppError('This price negotiation has expired', 400, 'NEGOTIATION_EXPIRED');
+    }
+
+    if (quantity > negotiation.quantity) {
+      throw new AppError(
+        `Requested quantity (${quantity}) exceeds negotiated quantity (${negotiation.quantity})`,
+        400,
+        'EXCEEDS_NEGOTIATED_QUANTITY',
+      );
+    }
   }
 }

@@ -114,6 +114,7 @@ enum NegotiationStatus {
   REJECTED
   COUNTER_OFFERED
   EXPIRED
+  COMPLETED
 }
 
 enum DisputeType {
@@ -716,9 +717,10 @@ model PriceNegotiation {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
-  product  Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  customer User    @relation("CustomerNegotiations", fields: [customerId], references: [id])
-  artisan  User    @relation("ArtisanNegotiations", fields: [artisanId], references: [id])
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer  User       @relation("CustomerNegotiations", fields: [customerId], references: [id])
+  artisan   User       @relation("ArtisanNegotiations", fields: [artisanId], references: [id])
+  cartItems CartItem[]
 
   @@index([productId])
   @@index([customerId])
@@ -758,21 +760,24 @@ model QuoteRequest {
 
 // CART & ORDER MODELS
 model CartItem {
-  id        String   @id @default(uuid())
-  userId    String
-  productId String
-  variantId String?
-  quantity  Int
-  price     Decimal  @db.Decimal(10, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  userId        String
+  productId     String
+  variantId     String?
+  quantity      Int
+  price         Decimal  @db.Decimal(10, 2)
+  negotiationId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  variant ProductVariant? @relation("VariantCartItems", fields: [variantId], references: [id])
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant     ProductVariant?   @relation("VariantCartItems", fields: [variantId], references: [id])
+  negotiation PriceNegotiation? @relation(fields: [negotiationId], references: [id])
 
   @@unique([userId, productId, variantId])
   @@index([userId])
+  @@index([negotiationId])
 }
 
 model Order {

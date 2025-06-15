@@ -7,10 +7,13 @@ export interface CartItem {
   variantId?: string | null;
   quantity: number;
   price: Decimal; // Changed from number to Decimal
+  negotiationId?: string | null;
+  isNegotiatedPrice?: boolean;
   createdAt: Date;
   updatedAt: Date;
   product?: ProductInCart;
   variant?: ProductVariantInCart;
+  negotiation?: NegotiationInCart;
 }
 
 export interface ProductInCart {
@@ -48,6 +51,14 @@ export interface ProductVariantInCart {
   }>;
 }
 
+export interface NegotiationInCart {
+  id: string;
+  originalPrice: number;
+  finalPrice: number;
+  status: string;
+  expiresAt?: Date | null;
+}
+
 export interface CartSummary {
   items: CartItem[];
   totalItems: number;
@@ -55,6 +66,7 @@ export interface CartSummary {
   subtotal: number; // Keep as number for API response
   total: number; // Keep as number for API response
   groupedBySeller: SellerCartGroup[];
+  hasNegotiatedItems: boolean;
 }
 
 export interface SellerCartGroup {
@@ -76,6 +88,7 @@ export interface AddToCartDto {
   productId: string;
   variantId?: string;
   quantity: number;
+  negotiationId?: string;
 }
 
 export interface UpdateCartItemDto {
@@ -86,6 +99,7 @@ export interface CartValidationResult {
   isValid: boolean;
   errors: CartValidationError[];
   warnings: CartValidationWarning[];
+  negotiationIssues: NegotiationValidationError[];
 }
 
 export interface CartValidationError {
@@ -98,6 +112,13 @@ export interface CartValidationError {
 export interface CartValidationWarning {
   type: 'LOW_STOCK' | 'PRICE_CHANGED';
   productId: string;
+  productName: string;
+  message: string;
+}
+
+export interface NegotiationValidationError {
+  type: 'NEGOTIATION_EXPIRED' | 'NEGOTIATION_INVALID' | 'NEGOTIATION_USED';
+  negotiationId: string;
   productName: string;
   message: string;
 }

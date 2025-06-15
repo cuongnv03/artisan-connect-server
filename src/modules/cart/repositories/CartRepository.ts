@@ -8,6 +8,7 @@ import {
   CartValidationError,
   CartValidationWarning,
   SellerCartGroup,
+  NegotiationValidationError,
 } from '../models/CartItem';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
@@ -28,65 +29,20 @@ export class CartRepository
     productId: string,
     quantity: number,
     variantId?: string,
+    negotiationId?: string,
   ): Promise<CartItem> {
     try {
-      // Check if product exists and is available
-      const product = await this.prisma.product.findUnique({
-        where: { id: productId, deletedAt: null },
-        include: {
-          seller: {
-            include: {
-              artisanProfile: {
-                select: { shopName: true, isVerified: true },
-              },
-            },
-          },
-          variants: variantId
-            ? {
-                where: { id: variantId, isActive: true },
-              }
-            : undefined,
-        },
-      });
-
-      if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
-      }
-
-      if (product.status !== 'PUBLISHED') {
-        throw new AppError('Product is not available for purchase', 400, 'PRODUCT_UNAVAILABLE');
-      }
-
-      if (product.sellerId === userId) {
-        throw new AppError(
-          'You cannot add your own product to cart',
-          400,
-          'CANNOT_BUY_OWN_PRODUCT',
+      // Validate product và negotiation
+      const { product, finalPrice, validatedNegotiation } =
+        await this.validateProductAndNegotiation(
+          productId,
+          userId,
+          quantity,
+          variantId,
+          negotiationId,
         );
-      }
 
-      let availableQuantity = product.quantity;
-      let price = product.discountPrice || product.price;
-
-      // Handle variant-specific logic
-      if (variantId) {
-        const variant = product.variants?.[0];
-        if (!variant) {
-          throw new AppError('Product variant not found', 404, 'VARIANT_NOT_FOUND');
-        }
-        availableQuantity = variant.quantity;
-        price = variant.discountPrice || variant.price || price;
-      }
-
-      if (availableQuantity < quantity) {
-        throw new AppError(
-          `Insufficient stock. Only ${availableQuantity} available.`,
-          400,
-          'INSUFFICIENT_STOCK',
-        );
-      }
-
-      // Check if item already exists in cart - Handle unique constraint properly
+      // Check existing cart item
       const existingCartItem = await this.prisma.cartItem.findUnique({
         where: {
           userId_productId_variantId: {
@@ -100,14 +56,27 @@ export class CartRepository
       let cartItem: any;
 
       if (existingCartItem) {
-        // Update existing item
+        // Cập nhật existing item - handle negotiation conflicts
+        if (
+          existingCartItem.negotiationId &&
+          negotiationId &&
+          existingCartItem.negotiationId !== negotiationId
+        ) {
+          throw new AppError(
+            'This product already exists in cart with different negotiated price. Remove it first.',
+            400,
+            'NEGOTIATION_CONFLICT',
+          );
+        }
+
         const newQuantity = existingCartItem.quantity + quantity;
 
-        if (availableQuantity < newQuantity) {
+        // Validate quantity với negotiation nếu có
+        if (validatedNegotiation && newQuantity > validatedNegotiation.quantity) {
           throw new AppError(
-            `Cannot add ${quantity} more. Total would be ${newQuantity}, but only ${availableQuantity} available.`,
+            `Cannot add ${quantity} more. Negotiated quantity is only ${validatedNegotiation.quantity}.`,
             400,
-            'INSUFFICIENT_STOCK',
+            'EXCEEDS_NEGOTIATED_QUANTITY',
           );
         }
 
@@ -115,25 +84,26 @@ export class CartRepository
           where: { id: existingCartItem.id },
           data: {
             quantity: newQuantity,
-            price: new Decimal(price.toString()),
+            price: new Decimal(finalPrice.toString()),
+            negotiationId: negotiationId || existingCartItem.negotiationId,
             updatedAt: new Date(),
           },
         });
       } else {
-        // Create new cart item
+        // ✅ Tạo cart item mới
         cartItem = await this.prisma.cartItem.create({
           data: {
             userId,
             productId,
             variantId: variantId || null,
             quantity,
-            price: new Decimal(price.toString()),
+            price: new Decimal(finalPrice.toString()),
+            negotiationId,
           },
         });
       }
 
-      // Return cart item with product details
-      return this.enrichCartItemWithProduct(cartItem, product, variantId);
+      return this.enrichCartItemWithProduct(cartItem, product, variantId, validatedNegotiation);
     } catch (error) {
       this.logger.error(`Error adding to cart: ${error}`);
       if (error instanceof AppError) throw error;
@@ -268,6 +238,15 @@ export class CartRepository
             },
           },
           variant: true,
+          negotiation: {
+            select: {
+              id: true,
+              originalPrice: true,
+              finalPrice: true,
+              status: true,
+              expiresAt: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -291,21 +270,22 @@ export class CartRepository
           subtotal: 0,
           total: 0,
           groupedBySeller: [],
+          hasNegotiatedItems: false,
         };
       }
 
       let subtotal = 0;
       let totalQuantity = 0;
+      let hasNegotiatedItems = false;
 
       cartItems.forEach((item) => {
-        const currentPrice =
-          item.variant?.discountPrice ||
-          item.variant?.price ||
-          item.product!.discountPrice ||
-          item.product!.price;
-        const price = Number(currentPrice);
+        const price = Number(item.price);
         subtotal += price * item.quantity;
         totalQuantity += item.quantity;
+
+        if (item.negotiationId) {
+          hasNegotiatedItems = true;
+        }
       });
 
       const groupedBySeller = this.groupItemsBySeller(cartItems);
@@ -317,6 +297,7 @@ export class CartRepository
         subtotal,
         total: subtotal,
         groupedBySeller,
+        hasNegotiatedItems,
       };
     } catch (error) {
       this.logger.error(`Error getting cart summary: ${error}`);
@@ -329,6 +310,7 @@ export class CartRepository
       const cartItems = await this.getCartItems(userId);
       const errors: CartValidationError[] = [];
       const warnings: CartValidationWarning[] = [];
+      const negotiationIssues: NegotiationValidationError[] = [];
 
       for (const item of cartItems) {
         const product = item.product!;
@@ -342,6 +324,28 @@ export class CartRepository
             message: 'Product is no longer available',
           });
           continue;
+        }
+
+        if (item.negotiationId && item.negotiation) {
+          const negotiation = item.negotiation;
+
+          if (negotiation.status !== 'ACCEPTED') {
+            negotiationIssues.push({
+              type: 'NEGOTIATION_INVALID',
+              negotiationId: item.negotiationId,
+              productName: product.name,
+              message: 'Price negotiation is no longer valid',
+            });
+          }
+
+          if (negotiation.expiresAt && negotiation.expiresAt < new Date()) {
+            negotiationIssues.push({
+              type: 'NEGOTIATION_EXPIRED',
+              negotiationId: item.negotiationId,
+              productName: product.name,
+              message: 'Price negotiation has expired',
+            });
+          }
         }
 
         // Determine available quantity and current price
@@ -400,6 +404,7 @@ export class CartRepository
         isValid: errors.length === 0,
         errors,
         warnings,
+        negotiationIssues,
       };
     } catch (error) {
       this.logger.error(`Error validating cart: ${error}`);
@@ -430,6 +435,7 @@ export class CartRepository
       variantId: cartItem.variantId,
       quantity: cartItem.quantity,
       price: cartItem.price,
+      negotiationId: cartItem.negotiationId,
       createdAt: cartItem.createdAt,
       updatedAt: cartItem.updatedAt,
     };
@@ -466,10 +472,25 @@ export class CartRepository
       };
     }
 
+    if (cartItem.negotiation) {
+      baseItem.negotiation = {
+        id: cartItem.negotiation.id,
+        originalPrice: Number(cartItem.negotiation.originalPrice),
+        finalPrice: Number(cartItem.negotiation.finalPrice),
+        status: cartItem.negotiation.status,
+        expiresAt: cartItem.negotiation.expiresAt,
+      };
+    }
+
     return baseItem;
   }
 
-  private enrichCartItemWithProduct(cartItem: any, product: any, variantId?: string): CartItem {
+  private enrichCartItemWithProduct(
+    cartItem: any,
+    product: any,
+    variantId?: string,
+    negotiation?: any,
+  ): CartItem {
     const transformedItem: CartItem = {
       ...cartItem,
       product: {
@@ -501,6 +522,16 @@ export class CartRepository
         discountPrice: variant.discountPrice,
         images: variant.images,
         attributes: this.parseVariantAttributes(variant.attributes),
+      };
+    }
+
+    if (negotiation) {
+      transformedItem.negotiation = {
+        id: negotiation.id,
+        originalPrice: Number(negotiation.originalPrice),
+        finalPrice: Number(negotiation.finalPrice),
+        status: negotiation.status,
+        expiresAt: negotiation.expiresAt,
       };
     }
 
@@ -557,5 +588,126 @@ export class CartRepository
     });
 
     return Object.values(groups);
+  }
+
+  private async validateProductAndNegotiation(
+    productId: string,
+    userId: string,
+    quantity: number,
+    variantId?: string,
+    negotiationId?: string,
+  ) {
+    // Validate product
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId, deletedAt: null },
+      include: {
+        seller: {
+          include: {
+            artisanProfile: {
+              select: { shopName: true, isVerified: true },
+            },
+          },
+        },
+        variants: variantId ? { where: { id: variantId, isActive: true } } : undefined,
+      },
+    });
+
+    if (!product) {
+      throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+    }
+
+    if (product.status !== 'PUBLISHED') {
+      throw new AppError('Product is not available for purchase', 400, 'PRODUCT_UNAVAILABLE');
+    }
+
+    if (product.sellerId === userId) {
+      throw new AppError('You cannot add your own product to cart', 400, 'CANNOT_BUY_OWN_PRODUCT');
+    }
+
+    let availableQuantity = product.quantity;
+    let basePrice = product.discountPrice || product.price;
+
+    // Handle variant
+    if (variantId) {
+      const variant = product.variants?.[0];
+      if (!variant) {
+        throw new AppError('Product variant not found', 404, 'VARIANT_NOT_FOUND');
+      }
+      availableQuantity = variant.quantity;
+      basePrice = variant.discountPrice || variant.price || basePrice;
+    }
+
+    let finalPrice = Number(basePrice);
+    let validatedNegotiation = null;
+
+    // Validate negotiation nếu có
+    if (negotiationId) {
+      const negotiation = await this.prisma.priceNegotiation.findUnique({
+        where: { id: negotiationId },
+      });
+
+      if (!negotiation) {
+        throw new AppError('Price negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
+      }
+
+      // Validate negotiation conditions
+      if (negotiation.customerId !== userId) {
+        throw new AppError('You can only use your own negotiations', 403, 'NEGOTIATION_NOT_YOURS');
+      }
+
+      if (negotiation.productId !== productId) {
+        throw new AppError(
+          'Negotiation is for different product',
+          400,
+          'NEGOTIATION_PRODUCT_MISMATCH',
+        );
+      }
+
+      if (negotiation.status !== 'ACCEPTED') {
+        throw new AppError(
+          'Only accepted negotiations can be used',
+          400,
+          'NEGOTIATION_NOT_ACCEPTED',
+        );
+      }
+
+      if (negotiation.expiresAt && negotiation.expiresAt < new Date()) {
+        throw new AppError('This price negotiation has expired', 400, 'NEGOTIATION_EXPIRED');
+      }
+
+      if (quantity > negotiation.quantity) {
+        throw new AppError(
+          `Requested quantity (${quantity}) exceeds negotiated quantity (${negotiation.quantity})`,
+          400,
+          'EXCEEDS_NEGOTIATED_QUANTITY',
+        );
+      }
+
+      // Check if negotiation already used in another cart item
+      const existingUsage = await this.prisma.cartItem.findFirst({
+        where: {
+          negotiationId,
+          userId: { not: userId }, // Khác user hiện tại
+        },
+      });
+
+      if (existingUsage) {
+        throw new AppError('This negotiation is already in use', 400, 'NEGOTIATION_ALREADY_USED');
+      }
+
+      finalPrice = Number(negotiation.finalPrice);
+      validatedNegotiation = negotiation;
+    }
+
+    // Validate quantity availability
+    if (availableQuantity < quantity) {
+      throw new AppError(
+        `Insufficient stock. Only ${availableQuantity} available.`,
+        400,
+        'INSUFFICIENT_STOCK',
+      );
+    }
+
+    return { product, finalPrice, validatedNegotiation };
   }
 }

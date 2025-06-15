@@ -7,6 +7,7 @@ export interface ICartRepository extends BaseRepository<CartItem, string> {
     productId: string,
     quantity: number,
     variantId?: string,
+    negotiationId?: string,
   ): Promise<CartItem>;
   updateCartItem(
     userId: string,

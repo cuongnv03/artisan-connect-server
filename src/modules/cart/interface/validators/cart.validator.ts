@@ -13,6 +13,9 @@ export const addToCartSchema = Joi.object({
     'number.max': 'Maximum 10 items per product allowed',
     'any.required': 'Quantity is required',
   }),
+  negotiationId: Joi.string().uuid().optional().messages({
+    'string.uuid': 'Negotiation ID must be a valid UUID',
+  }),
 });
 
 export const updateCartItemSchema = Joi.object({
@@ -31,4 +34,11 @@ export const validateCartQuerySchema = Joi.object({
 
 export const getCartQuerySchema = Joi.object({
   details: Joi.boolean().default(false),
+});
+
+export const addNegotiatedItemToCartSchema = Joi.object({
+  quantity: Joi.number().integer().min(1).max(10).optional().messages({
+    'number.min': 'Quantity must be at least 1',
+    'number.max': 'Maximum 10 items per product allowed',
+  }),
 });

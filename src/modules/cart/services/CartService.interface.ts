@@ -23,6 +23,12 @@ export interface ICartService {
   getCartSummary(userId: string): Promise<CartSummary>;
   getCartItemCount(userId: string): Promise<number>;
 
+  addNegotiatedItemToCart(
+    userId: string,
+    negotiationId: string,
+    quantity?: number,
+  ): Promise<CartItem>;
+
   // Validation
   validateCart(userId: string): Promise<CartValidationResult>;
 

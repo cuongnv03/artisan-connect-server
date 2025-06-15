@@ -194,6 +194,23 @@ export class OrderRepository
           },
         });
 
+        // Mark negotiations as completed
+        const negotiationIds = cartItems
+          .filter((item) => item.negotiationId)
+          .map((item) => item.negotiationId);
+
+        if (negotiationIds.length > 0) {
+          await tx.priceNegotiation.updateMany({
+            where: {
+              id: { in: negotiationIds },
+              status: 'ACCEPTED',
+            },
+            data: {
+              status: 'COMPLETED',
+            },
+          });
+        }
+
         // Clear cart
         await tx.cartItem.deleteMany({
           where: { userId },

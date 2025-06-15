@@ -5,6 +5,7 @@ import { validateIdParam } from '../../../../shared/middlewares/request-validati
 
 // Controllers
 import { AddToCartController } from '../controllers/AddToCartController';
+import { AddNegotiatedItemToCartController } from '../controllers/AddNegotiatedItemToCartController';
 import { UpdateCartItemController } from '../controllers/UpdateCartItemController';
 import { RemoveFromCartController } from '../controllers/RemoveFromCartController';
 import { ClearCartController } from '../controllers/ClearCartController';
@@ -16,6 +17,7 @@ import { ValidateCartController } from '../controllers/ValidateCartController';
 // Validators
 import {
   addToCartSchema,
+  addNegotiatedItemToCartSchema,
   updateCartItemSchema,
   validateCartQuerySchema,
   getCartQuerySchema,
@@ -25,6 +27,7 @@ const router = Router();
 
 // Initialize controllers
 const addToCartController = new AddToCartController();
+const addNegotiatedItemToCartController = new AddNegotiatedItemToCartController();
 const updateCartItemController = new UpdateCartItemController();
 const removeFromCartController = new RemoveFromCartController();
 const clearCartController = new ClearCartController();
@@ -48,6 +51,14 @@ router.get('/count', getCartCountController.execute);
 
 // Add item to cart
 router.post('/', validate(addToCartSchema), addToCartController.execute);
+
+// Add negotiated item to cart
+router.post(
+  '/negotiated/:negotiationId',
+  validateIdParam('negotiationId'),
+  validate(addNegotiatedItemToCartSchema),
+  addNegotiatedItemToCartController.execute,
+);
 
 // Update cart item
 router.patch(
