@@ -29,24 +29,25 @@ import { FollowRepository } from '../../modules/user/repositories/FollowReposito
 import { ArtisanProfileRepository } from '../../modules/artisan/repositories/ArtisanProfileRepository';
 import { UpgradeRequestRepository } from '../../modules/artisan/repositories/UpgradeRequestRepository';
 
+import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
+import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
+
 import { PostRepository } from '../../modules/post/repositories/PostRepository';
 
 import { LikeRepository } from '../../modules/social/repositories/LikeRepository';
 import { CommentRepository } from '../../modules/social/repositories/CommentRepository';
 import { WishlistRepository } from '../../modules/social/repositories/WishlistRepository';
 
-import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
-import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
-
 import { PriceNegotiationRepository } from '../../modules/price-negotiation/repositories/PriceNegotiationRepository';
 import { CustomOrderRepository } from '../../modules/custom-order/repositories/CustomOrderRepository';
-import { OrderRepository } from '../../modules/order/repositories/OrderRepository';
 import { CartRepository } from '../../modules/cart/repositories/CartRepository';
+import { OrderRepository } from '../../modules/order/repositories/OrderRepository';
 import { ReviewRepository } from '../../modules/review/repositories/ReviewRepository';
-import { AnalyticsRepository } from '../../modules/analytics/repositories/AnalyticsRepository';
 
 import { NotificationRepository } from '../../modules/notification/repositories/NotificationRepository';
 import { MessageRepository } from '../../modules/messaging/repositories/MessageRepository';
+
+import { AnalyticsRepository } from '../../modules/analytics/repositories/AnalyticsRepository';
 
 // Register repositories
 container.register('userRepository', new UserRepository(prisma));
@@ -61,24 +62,27 @@ container.register('followRepository', new FollowRepository(prisma));
 container.register('artisanProfileRepository', new ArtisanProfileRepository(prisma));
 container.register('upgradeRequestRepository', new UpgradeRequestRepository(prisma));
 
+container.register('productRepository', new ProductRepository(prisma));
+container.register('categoryRepository', new CategoryRepository(prisma));
+
 container.register('postRepository', new PostRepository(prisma));
 
 container.register('likeRepository', new LikeRepository(prisma));
 container.register('commentRepository', new CommentRepository(prisma));
-
-container.register('productRepository', new ProductRepository(prisma));
-container.register('categoryRepository', new CategoryRepository(prisma));
 container.register('wishlistRepository', new WishlistRepository(prisma));
+
 container.register('priceNegotiationRepository', new PriceNegotiationRepository(prisma));
 
-container.register('cartRepository', new CartRepository(prisma));
+container.register('priceNegotiationRepository', new PriceNegotiationRepository(prisma));
 container.register('customOrderRepository', new CustomOrderRepository(prisma));
+container.register('cartRepository', new CartRepository(prisma));
 container.register('orderRepository', new OrderRepository(prisma));
 container.register('reviewRepository', new ReviewRepository(prisma));
-container.register('analyticsRepository', new AnalyticsRepository(prisma));
 
 container.register('notificationRepository', new NotificationRepository(prisma));
 container.register('messageRepository', new MessageRepository(prisma));
+
+container.register('analyticsRepository', new AnalyticsRepository(prisma));
 
 // Import services
 import { AuthService } from '../../modules/auth/services/AuthService';
@@ -92,33 +96,40 @@ import { ProductService } from '../../modules/product/services/ProductService';
 import { CategoryService } from '../../modules/product/services/CategoryService';
 import { PriceNegotiationService } from '../../modules/price-negotiation/services/PriceNegotiationService';
 import { CustomOrderService } from '../../modules/custom-order/services/CustomOrderService';
-import { OrderService } from '../../modules/order/services/OrderService';
 import { CartService } from '../../modules/cart/services/CartService';
+import { OrderService } from '../../modules/order/services/OrderService';
 import { ReviewService } from '../../modules/review/services/ReviewService';
-import { AnalyticsService } from '../../modules/analytics/services/AnalyticsService';
 import { NotificationService } from '../../modules/notification/services/NotificationService';
 import { MessageService } from '../../modules/messaging/services/MessageService';
-import { CustomOrderNegotiationService } from '../../modules/messaging/services/CustomOrderNegotiationService';
+import { AnalyticsService } from '../../modules/analytics/services/AnalyticsService';
 
 // Register services
 container.register('authService', new AuthService());
+
 container.register('notificationService', new NotificationService());
+
 container.register('userService', new UserService());
 container.register('artisanProfileService', new ArtisanProfileService());
+
 container.register('postService', new PostService());
 container.register('likeService', new LikeService());
 container.register('commentService', new CommentService());
-container.register('productService', new ProductService());
+
 container.register('categoryService', new CategoryService());
-container.register('wishlistService', new WishlistService());
-container.register('priceNegotiationService', new PriceNegotiationService());
-container.register('cartService', new CartService());
-container.register('customOrderService', new CustomOrderService());
-container.register('orderService', new OrderService());
+container.register('productService', new ProductService());
 container.register('reviewService', new ReviewService());
-container.register('analyticsService', new AnalyticsService());
+
+container.register('wishlistService', new WishlistService());
+
+container.register('priceNegotiationService', new PriceNegotiationService());
+container.register('customOrderService', new CustomOrderService());
+
+container.register('cartService', new CartService());
+container.register('orderService', new OrderService());
+
 container.register('messageService', new MessageService());
-container.register('customOrderNegotiationService', new CustomOrderNegotiationService());
+
+container.register('analyticsService', new AnalyticsService());
 
 console.log('Dependency injection initialized');
 

@@ -28,7 +28,16 @@ export interface IReviewRepository extends BaseRepository<Review, string> {
    */
   createReview(
     userId: string,
-    data: Omit<Review, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
+    data: Omit<
+      Review,
+      | 'id'
+      | 'userId'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'helpfulCount'
+      | 'isVerifiedPurchase'
+      | 'orderItemId'
+    >,
   ): Promise<ReviewWithDetails>;
 
   /**

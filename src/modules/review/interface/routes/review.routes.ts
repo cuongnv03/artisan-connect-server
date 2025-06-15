@@ -41,11 +41,14 @@ const getUserProductReviewController = new GetUserProductReviewController();
 // Get reviews with filtering
 router.get('/', validate(getReviewsSchema, 'query'), getReviewsController.execute);
 
-// Get product reviews (Remove validateIdParam - accept both UUID and slug)
+// Get product reviews
 router.get('/product/:productId', getProductReviewsController.execute);
 
-// Get product review statistics (Remove validateIdParam - accept both UUID and slug)
+// Get product review statistics
 router.get('/product/:productId/statistics', getProductReviewStatisticsController.execute);
+
+// Get review by ID (public)
+router.get('/:id', validateIdParam(), getReviewController.execute);
 
 // === AUTHENTICATED ROUTES ===
 router.use(authenticate);
@@ -76,8 +79,5 @@ router.patch(
 
 // Delete review
 router.delete('/:id', validateIdParam(), deleteReviewController.execute);
-
-// Get review by ID
-router.get('/:id', validateIdParam(), getReviewController.execute);
 
 export default router;

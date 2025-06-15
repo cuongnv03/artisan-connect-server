@@ -43,7 +43,7 @@ export class OrderService implements IOrderService {
   constructor() {
     this.orderRepository = container.resolve<IOrderRepository>('orderRepository');
     this.cartRepository = container.resolve<ICartRepository>('cartRepository');
-    this.customOrderRepository = container.resolve<ICustomOrderRepository>('CustomOrderRepository');
+    this.customOrderRepository = container.resolve<ICustomOrderRepository>('customOrderRepository');
     this.userRepository = container.resolve<IUserRepository>('userRepository');
     this.notificationService = container.resolve<INotificationService>('notificationService');
   }

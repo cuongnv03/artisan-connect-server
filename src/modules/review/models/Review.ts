@@ -9,6 +9,9 @@ export interface Review {
   title?: string | null;
   comment?: string | null;
   images: string[];
+  helpfulCount: number;
+  isVerifiedPurchase: boolean;
+  orderItemId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +63,7 @@ export interface UpdateReviewDto {
 export interface ReviewStatistics {
   totalReviews: number;
   averageRating: number;
+  verifiedPurchaseCount: number;
   ratingDistribution: {
     1: number;
     2: number;
@@ -76,7 +80,8 @@ export interface ReviewFilterOptions {
   productId?: string;
   userId?: string;
   rating?: number;
-  sortBy?: 'createdAt' | 'rating' | 'updatedAt';
+  isVerifiedPurchase?: boolean;
+  sortBy?: 'createdAt' | 'rating' | 'updatedAt' | 'helpfulCount';
   sortOrder?: 'asc' | 'desc';
   page?: number;
   limit?: number;

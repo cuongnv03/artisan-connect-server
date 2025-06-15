@@ -35,27 +35,18 @@ export class ReviewService implements IReviewService {
       // Validate user
       const user = await this.userRepository.findById(userId);
       if (!user) {
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+        throw AppError.notFound('User not found', 'USER_NOT_FOUND');
       }
 
       // Validate product
       const product = await this.productRepository.findById(data.productId);
       if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
       }
 
       // Validate rating
       if (data.rating < 1 || data.rating > 5) {
-        throw new AppError('Rating must be between 1 and 5', 400, 'INVALID_RATING');
-      }
-
-      // Verify that user has purchased this product
-      const hasPurchased = await this.reviewRepository.hasUserPurchasedProduct(
-        userId,
-        data.productId,
-      );
-      if (!hasPurchased) {
-        throw new AppError('You can only review products you have purchased', 403, 'NOT_PURCHASED');
+        throw AppError.badRequest('Rating must be between 1 and 5', 'INVALID_RATING');
       }
 
       // Check if user has already reviewed this product
@@ -64,7 +55,7 @@ export class ReviewService implements IReviewService {
         data.productId,
       );
       if (existingReview) {
-        throw new AppError('You have already reviewed this product', 409, 'REVIEW_EXISTS');
+        throw AppError.conflict('You have already reviewed this product', 'REVIEW_EXISTS');
       }
 
       // Create review
@@ -76,7 +67,6 @@ export class ReviewService implements IReviewService {
         images: data.images || [],
       });
 
-      // Log review creation
       this.logger.info(
         `User ${userId} created review for product ${data.productId} with rating ${data.rating}`,
       );
@@ -85,7 +75,7 @@ export class ReviewService implements IReviewService {
     } catch (error) {
       this.logger.error(`Error creating review: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to create review', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to create review', 'SERVICE_ERROR');
     }
   }
 
@@ -101,18 +91,18 @@ export class ReviewService implements IReviewService {
       // Validate user
       const user = await this.userRepository.findById(userId);
       if (!user) {
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+        throw AppError.notFound('User not found', 'USER_NOT_FOUND');
       }
 
       // Validate rating if provided
       if (data.rating && (data.rating < 1 || data.rating > 5)) {
-        throw new AppError('Rating must be between 1 and 5', 400, 'INVALID_RATING');
+        throw AppError.badRequest('Rating must be between 1 and 5', 'INVALID_RATING');
       }
 
       // Get original review for logging changes
       const originalReview = await this.reviewRepository.findById(id);
       if (!originalReview) {
-        throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
+        throw AppError.notFound('Review not found', 'REVIEW_NOT_FOUND');
       }
 
       // Update review
@@ -141,7 +131,7 @@ export class ReviewService implements IReviewService {
     } catch (error) {
       this.logger.error(`Error updating review: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to update review', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to update review', 'SERVICE_ERROR');
     }
   }
 
@@ -153,11 +143,11 @@ export class ReviewService implements IReviewService {
       // Get review details before deletion for logging
       const review = await this.reviewRepository.findById(id);
       if (!review) {
-        throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
+        throw AppError.notFound('Review not found', 'REVIEW_NOT_FOUND');
       }
 
       if (review.userId !== userId) {
-        throw new AppError('You can only delete your own reviews', 403, 'FORBIDDEN');
+        throw AppError.forbidden('You can only delete your own reviews', 'FORBIDDEN');
       }
 
       const result = await this.reviewRepository.deleteReview(id, userId);
@@ -170,7 +160,7 @@ export class ReviewService implements IReviewService {
     } catch (error) {
       this.logger.error(`Error deleting review: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to delete review', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to delete review', 'SERVICE_ERROR');
     }
   }
 
@@ -197,21 +187,20 @@ export class ReviewService implements IReviewService {
       // Validate user
       const user = await this.userRepository.findById(userId);
       if (!user) {
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+        throw AppError.notFound('User not found', 'USER_NOT_FOUND');
       }
 
       // Validate product
       const product = await this.productRepository.findById(productId);
       if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
       }
 
-      // Get review by user and product
       return await this.reviewRepository.findByUserAndProduct(userId, productId);
     } catch (error) {
       this.logger.error(`Error getting review by user and product: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get user product review', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get user product review', 'SERVICE_ERROR');
     }
   }
 
@@ -224,7 +213,7 @@ export class ReviewService implements IReviewService {
     } catch (error) {
       this.logger.error(`Error getting reviews: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get reviews', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get reviews', 'SERVICE_ERROR');
     }
   }
 
@@ -233,17 +222,17 @@ export class ReviewService implements IReviewService {
    */
   async getProductReviewStatistics(productId: string): Promise<ReviewStatistics> {
     try {
-      // Validate product
+      // Validate product exists first
       const product = await this.productRepository.findById(productId);
       if (!product) {
-        throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        throw AppError.notFound('Product not found', 'PRODUCT_NOT_FOUND');
       }
 
       return await this.reviewRepository.getProductReviewStatistics(productId);
     } catch (error) {
       this.logger.error(`Error getting product review statistics: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get review statistics', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get review statistics', 'SERVICE_ERROR');
     }
   }
 
@@ -258,7 +247,7 @@ export class ReviewService implements IReviewService {
     } catch (error) {
       this.logger.error(`Error getting reviewable products: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get reviewable products', 500, 'SERVICE_ERROR');
+      throw AppError.internal('Failed to get reviewable products', 'SERVICE_ERROR');
     }
   }
 }

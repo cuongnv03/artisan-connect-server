@@ -54,7 +54,12 @@ export const getReviewsSchema = Joi.object({
     'number.min': 'Rating must be at least 1',
     'number.max': 'Rating cannot exceed 5',
   }),
-  sortBy: Joi.string().valid('createdAt', 'rating', 'updatedAt').default('createdAt'),
+  isVerifiedPurchase: Joi.boolean().messages({
+    'boolean.base': 'isVerifiedPurchase must be true or false',
+  }),
+  sortBy: Joi.string()
+    .valid('createdAt', 'rating', 'updatedAt', 'helpfulCount')
+    .default('createdAt'),
   sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(10),

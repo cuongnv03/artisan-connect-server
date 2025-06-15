@@ -18,12 +18,20 @@ export class GetProductReviewsController extends BaseController {
       const page = req.query.page ? parseInt(req.query.page as string) : 1;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
       const rating = req.query.rating ? parseInt(req.query.rating as string) : undefined;
-      const sortBy = (req.query.sortBy as 'createdAt' | 'rating' | 'updatedAt') || 'createdAt';
+      const isVerifiedPurchase =
+        req.query.isVerifiedPurchase === 'true'
+          ? true
+          : req.query.isVerifiedPurchase === 'false'
+            ? false
+            : undefined;
+      const sortBy =
+        (req.query.sortBy as 'createdAt' | 'rating' | 'updatedAt' | 'helpfulCount') || 'createdAt';
       const sortOrder = (req.query.sortOrder as 'asc' | 'desc') || 'desc';
 
       const reviews = await this.reviewService.getReviews({
         productId,
         rating,
+        isVerifiedPurchase,
         sortBy,
         sortOrder,
         page,

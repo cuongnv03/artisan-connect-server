@@ -27,7 +27,9 @@ export class GetReviewableProductsController extends BaseController {
         const product = await this.productService.getProductById(item.productId);
         if (product) {
           productsWithDetails.push({
-            ...item,
+            productId: item.productId,
+            orderId: item.orderId,
+            orderDate: item.orderDate,
             product: {
               id: product.id,
               name: product.name,
@@ -35,6 +37,7 @@ export class GetReviewableProductsController extends BaseController {
               images: product.images,
               price: product.price,
               discountPrice: product.discountPrice,
+              featuredImage: product.featuredImage,
             },
           });
         }

@@ -12,7 +12,7 @@ import { MarkAsReadController } from '../controllers/MarkAsReadController';
 import { MarkConversationAsReadController } from '../controllers/MarkConversationAsReadController';
 import { DeleteMessageController } from '../controllers/DeleteMessageController';
 import { GetUnreadCountController } from '../controllers/GetUnreadCountController';
-import { SendCustomOrderController } from '../controllers/custom-order/SendCustomOrderController';
+import { SendCustomOrderController } from '../controllers/SendCustomOrderController';
 
 // Validators
 import {
@@ -20,8 +20,8 @@ import {
   getMessagesQuerySchema,
   sendQuoteMessageSchema,
   sendMediaMessageSchema,
-  sendCustomOrderMessageSchema,
 } from '../validators/message.validator';
+import { sendCustomOrderMessageSchema } from '../validators/customOrderMessage.validator';
 
 const router = Router();
 

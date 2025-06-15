@@ -17,9 +17,6 @@ export class ReviewRepository
     super(prisma, 'review');
   }
 
-  /**
-   * Find review by ID with details
-   */
   async findByIdWithDetails(id: string): Promise<ReviewWithDetails | null> {
     try {
       const review = await this.prisma.review.findUnique({
@@ -62,9 +59,6 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Find review by user and product
-   */
   async findByUserAndProduct(userId: string, productId: string): Promise<ReviewWithDetails | null> {
     try {
       const review = await this.prisma.review.findUnique({
@@ -112,46 +106,30 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Get reviews with filtering and pagination
-   */
   async getReviews(options: ReviewFilterOptions): Promise<PaginatedResult<ReviewWithDetails>> {
     try {
       const {
         productId,
         userId,
         rating,
+        isVerifiedPurchase,
         sortBy = 'createdAt',
         sortOrder = 'desc',
         page = 1,
         limit = 10,
       } = options;
 
-      // Build where clause
       const where: any = {};
 
-      if (productId) {
-        where.productId = productId;
-      }
+      if (productId) where.productId = productId;
+      if (userId) where.userId = userId;
+      if (rating) where.rating = rating;
+      if (isVerifiedPurchase !== undefined) where.isVerifiedPurchase = isVerifiedPurchase;
 
-      if (userId) {
-        where.userId = userId;
-      }
-
-      if (rating) {
-        where.rating = rating;
-      }
-
-      // Count total reviews
       const total = await this.prisma.review.count({ where });
-
-      // Calculate skip
       const skip = (page - 1) * limit;
-
-      // Build order by
       const orderBy = { [sortBy]: sortOrder };
 
-      // Get reviews
       const reviews = await this.prisma.review.findMany({
         where,
         include: {
@@ -203,40 +181,33 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Get product review statistics
-   */
   async getProductReviewStatistics(productId: string): Promise<ReviewStatistics> {
     try {
-      const reviews = await this.prisma.review.findMany({
-        where: { productId },
-        select: { rating: true },
-      });
+      const [allReviews, verifiedCount] = await Promise.all([
+        this.prisma.review.findMany({
+          where: { productId },
+          select: { rating: true },
+        }),
+        this.prisma.review.count({
+          where: { productId, isVerifiedPurchase: true },
+        }),
+      ]);
 
-      const totalReviews = reviews.length;
+      const totalReviews = allReviews.length;
+      const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
 
-      // Initialize rating distribution
-      const ratingDistribution = {
-        1: 0,
-        2: 0,
-        3: 0,
-        4: 0,
-        5: 0,
-      };
-
-      // Calculate total ratings and distribution
       let sum = 0;
-      reviews.forEach((review) => {
+      allReviews.forEach((review) => {
         sum += review.rating;
         ratingDistribution[review.rating as keyof typeof ratingDistribution]++;
       });
 
-      // Calculate average rating
       const averageRating = totalReviews > 0 ? sum / totalReviews : 0;
 
       return {
         totalReviews,
         averageRating,
+        verifiedPurchaseCount: verifiedCount,
         ratingDistribution,
       };
     } catch (error) {
@@ -245,19 +216,24 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Create review
-   */
   async createReview(
     userId: string,
-    data: Omit<Review, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
+    data: Omit<
+      Review,
+      | 'id'
+      | 'userId'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'helpfulCount'
+      | 'isVerifiedPurchase'
+      | 'orderItemId'
+    >,
   ): Promise<ReviewWithDetails> {
     try {
       const { productId, rating, title, comment, images } = data;
 
       // Check if review already exists
       const existingReview = await this.findByUserAndProduct(userId, productId);
-
       if (existingReview) {
         throw new AppError('You have already reviewed this product', 409, 'REVIEW_ALREADY_EXISTS');
       }
@@ -266,14 +242,14 @@ export class ReviewRepository
       const product = await this.prisma.product.findUnique({
         where: { id: productId },
       });
-
       if (!product) {
         throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
       }
 
-      // Create review in a transaction
+      // Check if user purchased the product (simple check)
+      const hasPurchased = await this.hasUserPurchasedProduct(userId, productId);
+
       const newReview = await this.prisma.$transaction(async (tx) => {
-        // Create the review
         const review = await tx.review.create({
           data: {
             userId,
@@ -282,6 +258,9 @@ export class ReviewRepository
             title,
             comment,
             images: images || [],
+            helpfulCount: 0,
+            isVerifiedPurchase: hasPurchased,
+            orderItemId: null, // Keep simple
           },
           include: {
             user: {
@@ -305,7 +284,7 @@ export class ReviewRepository
           },
         });
 
-        // Update product avg rating and review count
+        // Update product stats
         await this.updateProductRatingAndReviewCount(productId);
 
         return review;
@@ -328,16 +307,12 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Update review
-   */
   async updateReview(
     id: string,
     userId: string,
     data: Partial<Review>,
   ): Promise<ReviewWithDetails> {
     try {
-      // Verify review exists and belongs to user
       const review = await this.prisma.review.findUnique({
         where: { id },
       });
@@ -350,9 +325,7 @@ export class ReviewRepository
         throw new AppError('You can only update your own reviews', 403, 'FORBIDDEN');
       }
 
-      // Update review in a transaction
       const updatedReview = await this.prisma.$transaction(async (tx) => {
-        // Update the review
         const updated = await tx.review.update({
           where: { id },
           data: {
@@ -384,7 +357,6 @@ export class ReviewRepository
           },
         });
 
-        // Update product avg rating if rating changed
         if (data.rating && data.rating !== review.rating) {
           await this.updateProductRatingAndReviewCount(review.productId);
         }
@@ -409,12 +381,8 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Delete review
-   */
   async deleteReview(id: string, userId: string): Promise<boolean> {
     try {
-      // Verify review exists and belongs to user
       const review = await this.prisma.review.findUnique({
         where: { id },
       });
@@ -427,14 +395,11 @@ export class ReviewRepository
         throw new AppError('You can only delete your own reviews', 403, 'FORBIDDEN');
       }
 
-      // Delete review in a transaction
       await this.prisma.$transaction(async (tx) => {
-        // Delete the review
         await tx.review.delete({
           where: { id },
         });
 
-        // Update product avg rating and review count
         await this.updateProductRatingAndReviewCount(review.productId);
       });
 
@@ -446,14 +411,10 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Get products purchased by user that can be reviewed
-   */
   async getReviewableProducts(
     userId: string,
   ): Promise<{ productId: string; orderId: string; orderDate: Date }[]> {
     try {
-      // Get delivered orders for this user
       const orders = await this.prisma.order.findMany({
         where: {
           userId,
@@ -470,12 +431,12 @@ export class ReviewRepository
         },
       });
 
-      // Get products from these orders
       const purchasedProducts: { productId: string; orderId: string; orderDate: Date }[] = [];
 
       for (const order of orders) {
         for (const item of order.items) {
-          // Check if user already reviewed this product
+          if (!item.productId) continue; // Skip custom orders
+
           const existingReview = await this.prisma.review.findUnique({
             where: {
               userId_productId: {
@@ -485,7 +446,6 @@ export class ReviewRepository
             },
           });
 
-          // If not reviewed yet, add to reviewable products
           if (!existingReview) {
             purchasedProducts.push({
               productId: item.productId,
@@ -503,15 +463,10 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Update product rating and review count
-   */
   async updateProductRatingAndReviewCount(productId: string): Promise<void> {
     try {
-      // Get product review statistics
       const stats = await this.getProductReviewStatistics(productId);
 
-      // Update product
       await this.prisma.product.update({
         where: { id: productId },
         data: {
@@ -525,9 +480,6 @@ export class ReviewRepository
     }
   }
 
-  /**
-   * Check if user has purchased product
-   */
   async hasUserPurchasedProduct(userId: string, productId: string): Promise<boolean> {
     try {
       const orderItem = await this.prisma.orderItem.findFirst({
