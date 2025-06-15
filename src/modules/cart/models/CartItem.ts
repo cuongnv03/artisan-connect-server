@@ -1,10 +1,12 @@
+import { Decimal } from '@prisma/client/runtime/library';
+
 export interface CartItem {
   id: string;
   userId: string;
   productId: string;
   variantId?: string | null;
   quantity: number;
-  price: number; // Price at time of adding to cart
+  price: Decimal; // Changed from number to Decimal
   createdAt: Date;
   updatedAt: Date;
   product?: ProductInCart;
@@ -15,11 +17,11 @@ export interface ProductInCart {
   id: string;
   name: string;
   slug?: string;
-  price: number;
-  discountPrice?: number;
+  price: Decimal; // Changed from number to Decimal
+  discountPrice?: Decimal | null; // Changed from number to Decimal
   images: string[];
   status: string;
-  quantity: number; // Available stock
+  quantity: number;
   seller: {
     id: string;
     firstName: string;
@@ -36,8 +38,8 @@ export interface ProductVariantInCart {
   id: string;
   sku: string;
   name?: string;
-  price: number;
-  discountPrice?: number;
+  price: Decimal; // Changed from number to Decimal
+  discountPrice?: Decimal | null; // Changed from number to Decimal
   images: string[];
   attributes: Array<{
     key: string;
@@ -50,8 +52,8 @@ export interface CartSummary {
   items: CartItem[];
   totalItems: number;
   totalQuantity: number;
-  subtotal: number;
-  total: number;
+  subtotal: number; // Keep as number for API response
+  total: number; // Keep as number for API response
   groupedBySeller: SellerCartGroup[];
 }
 
@@ -65,11 +67,11 @@ export interface SellerCartGroup {
     isVerified: boolean;
   };
   items: CartItem[];
-  subtotal: number;
-  total: number;
+  subtotal: number; // Keep as number for API response
+  total: number; // Keep as number for API response
 }
 
-// DTOs
+// DTOs remain the same
 export interface AddToCartDto {
   productId: string;
   variantId?: string;

@@ -55,7 +55,7 @@ export class CartService implements ICartService {
         `User ${userId} added ${data.quantity}x product ${data.productId}${data.variantId ? ` variant ${data.variantId}` : ''} to cart`,
       );
 
-      return cartItem;
+      return this.convertCartItemForApi(cartItem);
     } catch (error) {
       this.logger.error(`Error adding to cart: ${error}`);
       if (error instanceof AppError) throw error;
@@ -85,7 +85,7 @@ export class CartService implements ICartService {
         `User ${userId} updated product ${productId}${variantId ? ` variant ${variantId}` : ''} quantity to ${data.quantity}`,
       );
 
-      return updatedItem;
+      return this.convertCartItemForApi(updatedItem);
     } catch (error) {
       this.logger.error(`Error updating cart item: ${error}`);
       if (error instanceof AppError) throw error;
@@ -129,7 +129,8 @@ export class CartService implements ICartService {
 
   async getCartItems(userId: string): Promise<CartItem[]> {
     try {
-      return await this.cartRepository.getCartItems(userId);
+      const items = await this.cartRepository.getCartItems(userId);
+      return items.map((item) => this.convertCartItemForApi(item));
     } catch (error) {
       this.logger.error(`Error getting cart items: ${error}`);
       if (error instanceof AppError) throw error;
@@ -139,7 +140,13 @@ export class CartService implements ICartService {
 
   async getCartSummary(userId: string): Promise<CartSummary> {
     try {
-      return await this.cartRepository.getCartSummary(userId);
+      const summary = await this.cartRepository.getCartSummary(userId);
+
+      // Convert Decimal to number for API response
+      return {
+        ...summary,
+        items: summary.items.map((item) => this.convertCartItemForApi(item)),
+      };
     } catch (error) {
       this.logger.error(`Error getting cart summary: ${error}`);
       if (error instanceof AppError) throw error;
@@ -165,7 +172,12 @@ export class CartService implements ICartService {
 
       // Check for minimum order requirements
       const totalValue = cartItems.reduce((sum, item) => {
-        const price = item.product!.discountPrice || item.product!.price;
+        const currentPrice =
+          item.variant?.discountPrice ||
+          item.variant?.price ||
+          item.product!.discountPrice ||
+          item.product!.price;
+        const price = Number(currentPrice);
         return sum + price * item.quantity;
       }, 0);
 
@@ -241,5 +253,27 @@ export class CartService implements ICartService {
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to validate cart for checkout', 500, 'SERVICE_ERROR');
     }
+  }
+
+  // Helper method to convert Decimal to number for API responses
+  private convertCartItemForApi(item: CartItem): CartItem {
+    return {
+      ...item,
+      price: Number(item.price),
+      product: item.product
+        ? {
+            ...item.product,
+            price: Number(item.product.price),
+            discountPrice: item.product.discountPrice ? Number(item.product.discountPrice) : null,
+          }
+        : undefined,
+      variant: item.variant
+        ? {
+            ...item.variant,
+            price: Number(item.variant.price),
+            discountPrice: item.variant.discountPrice ? Number(item.variant.discountPrice) : null,
+          }
+        : undefined,
+    };
   }
 }

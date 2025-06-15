@@ -11,6 +11,7 @@ import {
 } from '../models/CartItem';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export class CartRepository
   extends BasePrismaRepository<CartItem, string>
@@ -31,7 +32,7 @@ export class CartRepository
     try {
       // Check if product exists and is available
       const product = await this.prisma.product.findUnique({
-        where: { id: productId },
+        where: { id: productId, deletedAt: null },
         include: {
           seller: {
             include: {
@@ -42,7 +43,7 @@ export class CartRepository
           },
           variants: variantId
             ? {
-                where: { id: variantId },
+                where: { id: variantId, isActive: true },
               }
             : undefined,
         },
@@ -85,27 +86,16 @@ export class CartRepository
         );
       }
 
-      // Check if item already exists in cart - UPDATED LOGIC
-      let existingCartItem;
-      if (variantId) {
-        // Query with variantId
-        existingCartItem = await this.prisma.cartItem.findFirst({
-          where: {
+      // Check if item already exists in cart - Handle unique constraint properly
+      const existingCartItem = await this.prisma.cartItem.findUnique({
+        where: {
+          userId_productId_variantId: {
             userId,
             productId,
-            variantId,
+            variantId: variantId || null,
           },
-        });
-      } else {
-        // Query without variantId (variantId is null)
-        existingCartItem = await this.prisma.cartItem.findFirst({
-          where: {
-            userId,
-            productId,
-            variantId: null,
-          },
-        });
-      }
+        },
+      });
 
       let cartItem: any;
 
@@ -125,7 +115,7 @@ export class CartRepository
           where: { id: existingCartItem.id },
           data: {
             quantity: newQuantity,
-            price,
+            price: new Decimal(price.toString()),
             updatedAt: new Date(),
           },
         });
@@ -137,7 +127,7 @@ export class CartRepository
             productId,
             variantId: variantId || null,
             quantity,
-            price,
+            price: new Decimal(price.toString()),
           },
         });
       }
@@ -163,14 +153,17 @@ export class CartRepository
       }
 
       // Check product and variant stock
-      const whereClause = variantId
-        ? { id: productId, variants: { some: { id: variantId } } }
-        : { id: productId };
-
-      const product = await this.prisma.product.findFirst({
-        where: whereClause,
+      const product = await this.prisma.product.findUnique({
+        where: { id: productId, deletedAt: null },
         include: {
-          variants: variantId ? { where: { id: variantId } } : undefined,
+          variants: variantId ? { where: { id: variantId, isActive: true } } : undefined,
+          seller: {
+            include: {
+              artisanProfile: {
+                select: { shopName: true, isVerified: true },
+              },
+            },
+          },
         },
       });
 
@@ -191,16 +184,15 @@ export class CartRepository
         );
       }
 
-      // Find cart item - UPDATED LOGIC
-      let cartItemWhere;
-      if (variantId) {
-        cartItemWhere = { userId, productId, variantId };
-      } else {
-        cartItemWhere = { userId, productId, variantId: null };
-      }
-
-      const existingItem = await this.prisma.cartItem.findFirst({
-        where: cartItemWhere,
+      // Find cart item using unique constraint
+      const existingItem = await this.prisma.cartItem.findUnique({
+        where: {
+          userId_productId_variantId: {
+            userId,
+            productId,
+            variantId: variantId || null,
+          },
+        },
       });
 
       if (!existingItem) {
@@ -210,23 +202,9 @@ export class CartRepository
       const updatedItem = await this.prisma.cartItem.update({
         where: { id: existingItem.id },
         data: { quantity, updatedAt: new Date() },
-        include: {
-          product: {
-            include: {
-              seller: {
-                include: {
-                  artisanProfile: {
-                    select: { shopName: true, isVerified: true },
-                  },
-                },
-              },
-              variants: variantId ? { where: { id: variantId } } : undefined,
-            },
-          },
-        },
       });
 
-      return this.transformCartItem(updatedItem);
+      return this.enrichCartItemWithProduct(updatedItem, product, variantId);
     } catch (error) {
       this.logger.error(`Error updating cart item: ${error}`);
       if (error instanceof AppError) throw error;
@@ -236,16 +214,14 @@ export class CartRepository
 
   async removeFromCart(userId: string, productId: string, variantId?: string): Promise<boolean> {
     try {
-      // Find cart item - UPDATED LOGIC
-      let cartItemWhere;
-      if (variantId) {
-        cartItemWhere = { userId, productId, variantId };
-      } else {
-        cartItemWhere = { userId, productId, variantId: null };
-      }
-
-      const existingItem = await this.prisma.cartItem.findFirst({
-        where: cartItemWhere,
+      const existingItem = await this.prisma.cartItem.findUnique({
+        where: {
+          userId_productId_variantId: {
+            userId,
+            productId,
+            variantId: variantId || null,
+          },
+        },
       });
 
       if (!existingItem) {
@@ -291,6 +267,7 @@ export class CartRepository
               },
             },
           },
+          variant: true,
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -321,7 +298,12 @@ export class CartRepository
       let totalQuantity = 0;
 
       cartItems.forEach((item) => {
-        const price = item.product!.discountPrice || item.product!.price;
+        const currentPrice =
+          item.variant?.discountPrice ||
+          item.variant?.price ||
+          item.product!.discountPrice ||
+          item.product!.price;
+        const price = Number(currentPrice);
         subtotal += price * item.quantity;
         totalQuantity += item.quantity;
       });
@@ -362,9 +344,18 @@ export class CartRepository
           continue;
         }
 
+        // Determine available quantity and current price
+        let availableQuantity = product.quantity;
+        let currentPrice = product.discountPrice || product.price;
+
+        if (item.variantId && item.variant) {
+          availableQuantity = item.variant.quantity;
+          currentPrice = item.variant.discountPrice || item.variant.price || currentPrice;
+        }
+
         // Check stock availability
-        if (product.quantity < item.quantity) {
-          if (product.quantity === 0) {
+        if (availableQuantity < item.quantity) {
+          if (availableQuantity === 0) {
             errors.push({
               type: 'OUT_OF_STOCK',
               productId: item.productId,
@@ -376,30 +367,31 @@ export class CartRepository
               type: 'OUT_OF_STOCK',
               productId: item.productId,
               productName: product.name,
-              message: `Only ${product.quantity} available, but ${item.quantity} requested`,
+              message: `Only ${availableQuantity} available, but ${item.quantity} requested`,
             });
           }
           continue;
         }
 
         // Check for low stock warning
-        if (product.quantity <= item.quantity * 1.5) {
+        if (availableQuantity <= item.quantity * 1.5) {
           warnings.push({
             type: 'LOW_STOCK',
             productId: item.productId,
             productName: product.name,
-            message: `Low stock: only ${product.quantity} remaining`,
+            message: `Low stock: only ${availableQuantity} remaining`,
           });
         }
 
         // Check for price changes
-        const currentPrice = product.discountPrice || product.price;
-        if (Math.abs(currentPrice - item.price) > 0.01) {
+        const itemPrice = Number(item.price);
+        const actualPrice = Number(currentPrice);
+        if (Math.abs(actualPrice - itemPrice) > 0.01) {
           warnings.push({
             type: 'PRICE_CHANGED',
             productId: item.productId,
             productName: product.name,
-            message: `Price changed from $${item.price} to $${currentPrice}`,
+            message: `Price changed from $${itemPrice.toFixed(2)} to $${actualPrice.toFixed(2)}`,
           });
         }
       }
@@ -431,7 +423,7 @@ export class CartRepository
 
   // Helper methods
   private transformCartItem(cartItem: any): CartItem {
-    const baseItem = {
+    const baseItem: CartItem = {
       id: cartItem.id,
       userId: cartItem.userId,
       productId: cartItem.productId,
@@ -460,27 +452,25 @@ export class CartRepository
           artisanProfile: cartItem.product.seller.artisanProfile,
         },
       };
-
-      // Add variant info if available
-      if (cartItem.variantId && cartItem.product.variants?.[0]) {
-        const variant = cartItem.product.variants[0];
-        baseItem.variant = {
-          id: variant.id,
-          sku: variant.sku,
-          name: variant.name,
-          price: variant.price,
-          discountPrice: variant.discountPrice,
-          images: variant.images,
-          attributes: variant.attributes || [],
-        };
-      }
     }
 
-    return baseItem as CartItem;
+    if (cartItem.variant) {
+      baseItem.variant = {
+        id: cartItem.variant.id,
+        sku: cartItem.variant.sku,
+        name: cartItem.variant.name,
+        price: cartItem.variant.price,
+        discountPrice: cartItem.variant.discountPrice,
+        images: cartItem.variant.images,
+        attributes: this.parseVariantAttributes(cartItem.variant.attributes),
+      };
+    }
+
+    return baseItem;
   }
 
-  private enrichCartItemWithProduct(cartItem: any, product: any): CartItem {
-    return {
+  private enrichCartItemWithProduct(cartItem: any, product: any, variantId?: string): CartItem {
+    const transformedItem: CartItem = {
       ...cartItem,
       product: {
         id: product.id,
@@ -500,6 +490,35 @@ export class CartRepository
         },
       },
     };
+
+    if (variantId && product.variants?.[0]) {
+      const variant = product.variants[0];
+      transformedItem.variant = {
+        id: variant.id,
+        sku: variant.sku,
+        name: variant.name,
+        price: variant.price,
+        discountPrice: variant.discountPrice,
+        images: variant.images,
+        attributes: this.parseVariantAttributes(variant.attributes),
+      };
+    }
+
+    return transformedItem;
+  }
+
+  private parseVariantAttributes(
+    attributes: any,
+  ): Array<{ key: string; name: string; value: string }> {
+    if (!attributes || typeof attributes !== 'object') {
+      return [];
+    }
+
+    return Object.entries(attributes).map(([key, value]) => ({
+      key,
+      name: key.charAt(0).toUpperCase() + key.slice(1),
+      value: String(value),
+    }));
   }
 
   private groupItemsBySeller(cartItems: CartItem[]): SellerCartGroup[] {
@@ -527,7 +546,12 @@ export class CartRepository
       const group = groups[sellerId];
       group.items.push(item);
 
-      const price = item.product!.discountPrice || item.product!.price;
+      const currentPrice =
+        item.variant?.discountPrice ||
+        item.variant?.price ||
+        item.product!.discountPrice ||
+        item.product!.price;
+      const price = Number(currentPrice);
       group.subtotal += price * item.quantity;
       group.total = group.subtotal;
     });
