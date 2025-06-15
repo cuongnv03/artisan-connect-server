@@ -35,28 +35,57 @@ export interface ContentBlock {
   order: number;
 }
 
+export interface PostProductMention {
+  id: string;
+  postId: string;
+  productId: string;
+  contextText?: string | null;
+  position?: number | null;
+  product: {
+    id: string;
+    name: string;
+    slug?: string | null;
+    images: string[];
+    price: number;
+    discountPrice?: number | null;
+    status: string;
+    avgRating?: number | null;
+    reviewCount: number;
+    seller: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      avatarUrl?: string | null;
+      artisanProfile?: {
+        shopName: string;
+        isVerified: boolean;
+      } | null;
+    };
+  };
+}
+
 export interface Post {
   id: string;
   userId: string;
   title: string;
-  slug?: string;
-  summary?: string;
+  slug?: string | null;
+  summary?: string | null;
   content: ContentBlock[];
-  contentText?: string; // For search
+  contentText?: string | null;
   type: PostType;
   status: PostStatus;
-  thumbnailUrl?: string;
-  coverImage?: string;
+  thumbnailUrl?: string | null;
+  coverImage?: string | null;
   mediaUrls: string[];
   tags: string[];
   viewCount: number;
   likeCount: number;
   commentCount: number;
   shareCount: number;
-  publishedAt?: Date;
+  publishedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  deletedAt?: Date;
+  deletedAt?: Date | null;
 }
 
 export interface PostWithUser extends Post {
@@ -65,12 +94,13 @@ export interface PostWithUser extends Post {
     username: string;
     firstName: string;
     lastName: string;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
     artisanProfile?: {
       shopName: string;
       isVerified: boolean;
-    };
+    } | null;
   };
+  productMentions?: PostProductMention[];
   isLiked?: boolean;
   isSaved?: boolean;
   canEdit?: boolean;
@@ -89,7 +119,7 @@ export interface CreatePostDto {
   productMentions?: Array<{
     productId: string;
     contextText?: string;
-    position: number;
+    position?: number;
   }>;
 }
 
@@ -105,7 +135,7 @@ export interface UpdatePostDto {
   productMentions?: Array<{
     productId: string;
     contextText?: string;
-    position: number;
+    position?: number;
   }>;
 }
 

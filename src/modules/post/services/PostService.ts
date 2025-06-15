@@ -26,19 +26,19 @@ export class PostService implements IPostService {
 
   async createPost(userId: string, data: CreatePostDto): Promise<PostWithUser> {
     try {
-      // Validate user exists
-      const user = await this.userRepository.findById(userId);
-      if (!user) {
+      // Get user with artisan profile for logging
+      const userWithProfile = await this.getUserWithArtisanProfile(userId);
+      if (!userWithProfile) {
         throw new AppError('User not found', 404, 'USER_NOT_FOUND');
       }
 
       // Create post
       const post = await this.postRepository.createPost(userId, data);
 
-      // Log creation
-      const authorName = user.artisanProfile
-        ? user.artisanProfile.shopName
-        : `${user.firstName} ${user.lastName}`;
+      // Enhanced logging with author information
+      const authorName = userWithProfile.artisanProfile
+        ? userWithProfile.artisanProfile.shopName
+        : `${userWithProfile.firstName} ${userWithProfile.lastName}`;
 
       if (data.publishNow) {
         this.logger.info(`Post published: ${post.id} "${post.title}" by ${authorName} (${userId})`);
@@ -189,7 +189,7 @@ export class PostService implements IPostService {
       }
     } catch (error) {
       this.logger.error(`Error viewing post: ${error}`);
-      // Don't throw errors for view increments
+      // Don't throw errors for view increments as they are non-critical
     }
   }
 
@@ -200,6 +200,30 @@ export class PostService implements IPostService {
       this.logger.error(`Error getting post status counts: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to get post status counts', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  // Helper method to get user with artisan profile for enhanced logging
+  private async getUserWithArtisanProfile(userId: string): Promise<any> {
+    try {
+      // Use Prisma directly for this specific query since UserRepository might not support includes
+      const { PrismaClientManager } = await import('../../../core/database/PrismaClient');
+      const prisma = PrismaClientManager.getClient();
+
+      return await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          artisanProfile: {
+            select: {
+              shopName: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error getting user with artisan profile: ${error}`);
+      // Fallback to regular user repository
+      return await this.userRepository.findById(userId);
     }
   }
 }

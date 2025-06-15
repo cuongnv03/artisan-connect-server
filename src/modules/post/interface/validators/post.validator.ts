@@ -10,6 +10,12 @@ const contentBlockSchema = Joi.object({
   order: Joi.number().integer().min(0).required(),
 });
 
+const productMentionSchema = Joi.object({
+  productId: Joi.string().uuid().required(),
+  contextText: Joi.string().max(500).allow(''),
+  position: Joi.number().integer().min(0),
+});
+
 export const createPostSchema = Joi.object({
   title: Joi.string().required().min(3).max(200).messages({
     'string.empty': 'Title is required',
@@ -43,6 +49,9 @@ export const createPostSchema = Joi.object({
     'string.max': 'Each tag cannot exceed 50 characters',
   }),
   publishNow: Joi.boolean().default(false),
+  productMentions: Joi.array().items(productMentionSchema).max(5).messages({
+    'array.max': 'Maximum 5 product mentions allowed per post',
+  }),
 });
 
 export const updatePostSchema = Joi.object({
@@ -54,6 +63,7 @@ export const updatePostSchema = Joi.object({
   thumbnailUrl: Joi.string().uri().allow(''),
   coverImage: Joi.string().uri().allow(''),
   tags: Joi.array().items(Joi.string().max(50)).max(10),
+  productMentions: Joi.array().items(productMentionSchema).max(5),
 })
   .min(1)
   .messages({

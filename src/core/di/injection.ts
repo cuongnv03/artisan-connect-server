@@ -33,7 +33,7 @@ import { PostRepository } from '../../modules/post/repositories/PostRepository';
 
 import { LikeRepository } from '../../modules/social/repositories/LikeRepository';
 import { CommentRepository } from '../../modules/social/repositories/CommentRepository';
-import { SavedPostRepository } from '../../modules/social/repositories/SavedPostRepository';
+import { WishlistRepository } from '../../modules/social/repositories/WishlistRepository';
 
 import { ProductRepository } from '../../modules/product/repositories/ProductRepository';
 import { CategoryRepository } from '../../modules/product/repositories/CategoryRepository';
@@ -65,11 +65,11 @@ container.register('postRepository', new PostRepository(prisma));
 
 container.register('likeRepository', new LikeRepository(prisma));
 container.register('commentRepository', new CommentRepository(prisma));
-container.register('savedPostRepository', new SavedPostRepository(prisma));
 
 container.register('productRepository', new ProductRepository(prisma));
 container.register('categoryRepository', new CategoryRepository(prisma));
 container.register('productAttributeRepository', new ProductAttributeRepository(prisma));
+container.register('wishlistRepository', new WishlistRepository(prisma));
 
 container.register('cartRepository', new CartRepository(prisma));
 container.register('quoteRepository', new QuoteRepository(prisma));
@@ -87,7 +87,7 @@ import { ArtisanProfileService } from '../../modules/artisan/services/ArtisanPro
 import { PostService } from '../../modules/post/services/PostService';
 import { LikeService } from '../../modules/social/services/LikeService';
 import { CommentService } from '../../modules/social/services/CommentService';
-import { SavedPostService } from '../../modules/social/services/SavedPostService';
+import { WishlistService } from '../../modules/social/services/WishlistService';
 import { ProductService } from '../../modules/product/services/ProductService';
 import { CategoryService } from '../../modules/product/services/CategoryService';
 import { ProductAttributeService } from '../../modules/product/services/ProductAttributeService';
@@ -108,10 +108,10 @@ container.register('artisanProfileService', new ArtisanProfileService());
 container.register('postService', new PostService());
 container.register('likeService', new LikeService());
 container.register('commentService', new CommentService());
-container.register('savedPostService', new SavedPostService());
 container.register('productAttributeService', new ProductAttributeService());
 container.register('productService', new ProductService());
 container.register('categoryService', new CategoryService());
+container.register('wishlistService', new WishlistService());
 container.register('cartService', new CartService());
 container.register('quoteService', new QuoteService());
 container.register('orderService', new OrderService());

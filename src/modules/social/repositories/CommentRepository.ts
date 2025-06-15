@@ -65,7 +65,7 @@ export class CommentRepository
         throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
       }
 
-      // If parentId provided, validate parent comment
+      // If parentId provided, validate parent comment exists and belongs to same post
       if (data.parentId) {
         const parentComment = await this.prisma.comment.findUnique({
           where: { id: data.parentId, deletedAt: null },
@@ -81,7 +81,7 @@ export class CommentRepository
         }
       }
 
-      // Create comment and update counters
+      // Create comment and update counters in transaction
       const comment = await this.prisma.$transaction(async (tx) => {
         const comment = await tx.comment.create({
           data: {
@@ -113,7 +113,7 @@ export class CommentRepository
           data: { commentCount: { increment: 1 } },
         });
 
-        // If reply, update parent comment reply count
+        // If this is a reply, update parent comment reply count
         if (data.parentId) {
           await tx.comment.update({
             where: { id: data.parentId },
@@ -182,7 +182,7 @@ export class CommentRepository
 
   async deleteComment(id: string, userId: string): Promise<boolean> {
     try {
-      // Get comment info
+      // Get comment info including parent relationship
       const comment = await this.prisma.comment.findUnique({
         where: { id, deletedAt: null },
         select: { userId: true, postId: true, parentId: true },
@@ -225,7 +225,7 @@ export class CommentRepository
           data: { commentCount: { decrement: 1 } },
         });
 
-        // If reply, update parent reply count
+        // If this was a reply, update parent reply count
         if (comment.parentId) {
           await tx.comment.update({
             where: { id: comment.parentId },

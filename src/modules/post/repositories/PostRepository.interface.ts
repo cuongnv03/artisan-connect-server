@@ -24,6 +24,5 @@ export interface IPostRepository extends BaseRepository<Post, string> {
   ): Promise<PostPaginationResult>;
   incrementViewCount(id: string): Promise<void>;
   generateSlug(title: string): Promise<string>;
-  extractTextContent(content: ContentBlock[]): string;
   getPostStatusCounts(userId: string): Promise<Record<string, number>>;
 }

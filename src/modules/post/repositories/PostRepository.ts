@@ -9,7 +9,7 @@ import {
   PostQueryOptions,
   PostPaginationResult,
   PostStatus,
-  BlockType,
+  ContentBlock,
 } from '../models/Post';
 import { AppError } from '../../../core/errors/AppError';
 import { Logger } from '../../../core/logging/Logger';
@@ -41,7 +41,7 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
               },
             },
           },
-          // Thêm product mentions
+          // Include product mentions with full product details
           productMentions: {
             include: {
               product: {
@@ -76,14 +76,16 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
               position: 'asc',
             },
           },
+          // Check if current user liked this post
           likes: requestUserId
             ? {
                 where: { userId: requestUserId, commentId: null },
               }
             : undefined,
-          savedBy: requestUserId
+          // Check if current user saved this post to wishlist
+          wishlistItems: requestUserId
             ? {
-                where: { userId: requestUserId },
+                where: { userId: requestUserId, itemType: 'POST' },
               }
             : undefined,
         },
@@ -118,7 +120,7 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
               },
             },
           },
-          // Thêm product mentions
+          // Include product mentions with full product details
           productMentions: {
             include: {
               product: {
@@ -158,9 +160,9 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
                 where: { userId: requestUserId, commentId: null },
               }
             : undefined,
-          savedBy: requestUserId
+          wishlistItems: requestUserId
             ? {
-                where: { userId: requestUserId },
+                where: { userId: requestUserId, itemType: 'POST' },
               }
             : undefined,
         },
@@ -175,29 +177,29 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
     }
   }
 
-  // src/modules/post/repositories/PostRepository.ts
-
   async createPost(userId: string, data: CreatePostDto): Promise<PostWithUser> {
     try {
       const slug = await this.generateSlug(data.title);
       const contentText = this.extractTextContent(data.content);
 
-      const cleanedContent = (data.content || []).map((block: any, index: number) => ({
+      // Clean and validate content blocks structure
+      const cleanedContent = (data.content || []).map((block, index) => ({
+        id: block.id || `block_${Date.now()}_${index}`,
         type: block.type,
         data: block.data || {},
         order: block.order !== undefined ? block.order : index,
       }));
 
       const post = await this.prisma.$transaction(async (tx) => {
-        // Create post
+        // Create the main post record
         const newPost = await tx.post.create({
           data: {
             userId,
             title: data.title,
             slug,
             summary: data.summary,
-            content: cleanedContent as any,
-            contentText,
+            content: cleanedContent as any, // Store content blocks as JSON
+            contentText, // Extracted plain text for search functionality
             type: data.type,
             status: data.publishNow ? PostStatus.PUBLISHED : data.status || PostStatus.DRAFT,
             thumbnailUrl: data.thumbnailUrl,
@@ -215,8 +217,8 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
         // Create product mentions if provided
         if (data.productMentions && data.productMentions.length > 0) {
           await Promise.all(
-            data.productMentions.map((mention: any) =>
-              tx.productMention.create({
+            data.productMentions.map((mention) =>
+              tx.postProductMention.create({
                 data: {
                   postId: newPost.id,
                   productId: mention.productId,
@@ -240,7 +242,7 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
 
   async updatePost(id: string, userId: string, data: UpdatePostDto): Promise<PostWithUser> {
     try {
-      // Check ownership
+      // Verify post ownership
       const existingPost = await this.prisma.post.findUnique({
         where: { id },
         select: { userId: true, title: true },
@@ -256,12 +258,15 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
 
       const updateData: any = { ...data };
 
+      // Generate new slug if title changed
       if (data.title && data.title !== existingPost.title) {
         updateData.slug = await this.generateSlug(data.title);
       }
 
+      // Process content blocks if provided
       if (data.content) {
-        const cleanedContent = data.content.map((block: any, index: number) => ({
+        const cleanedContent = data.content.map((block, index) => ({
+          id: block.id || `block_${Date.now()}_${index}`,
           type: block.type,
           data: block.data || {},
           order: block.order !== undefined ? block.order : index,
@@ -273,24 +278,24 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       }
 
       await this.prisma.$transaction(async (tx) => {
-        // Update post
+        // Update the main post record
         await tx.post.update({
           where: { id },
           data: updateData,
         });
 
-        // Handle product mentions
+        // Handle product mentions update
         if (data.productMentions !== undefined) {
-          // Delete existing mentions
-          await tx.productMention.deleteMany({
+          // Remove all existing mentions
+          await tx.postProductMention.deleteMany({
             where: { postId: id },
           });
 
-          // Create new mentions
+          // Add new mentions if provided
           if (data.productMentions.length > 0) {
             await Promise.all(
-              data.productMentions.map((mention: any) =>
-                tx.productMention.create({
+              data.productMentions.map((mention) =>
+                tx.postProductMention.create({
                   data: {
                     postId: id,
                     productId: mention.productId,
@@ -327,6 +332,7 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
         throw new AppError('You can only delete your own posts', 403, 'FORBIDDEN');
       }
 
+      // Soft delete by updating status and setting deletedAt timestamp
       await this.prisma.post.update({
         where: { id },
         data: {
@@ -477,6 +483,7 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
         where.tags = { hasSome: tags };
       }
 
+      // Enhanced search across multiple fields including extracted content text
       if (search) {
         where.OR = [
           { title: { contains: search, mode: 'insensitive' } },
@@ -486,9 +493,10 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
         ];
       }
 
+      // Filter posts from followed users only
       if (followedOnly && requestUserId) {
         const followedUsers = await this.prisma.follow.findMany({
-          where: { followerId: requestUserId, status: 'accepted' },
+          where: { followerId: requestUserId },
           select: { followingId: true },
         });
 
@@ -521,9 +529,9 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
                 where: { userId: requestUserId, commentId: null },
               }
             : undefined,
-          savedBy: requestUserId
+          wishlistItems: requestUserId
             ? {
-                where: { userId: requestUserId },
+                where: { userId: requestUserId, itemType: 'POST' },
               }
             : undefined,
         },
@@ -557,11 +565,12 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       });
     } catch (error) {
       this.logger.error(`Error incrementing view count: ${error}`);
-      // Don't throw error for view count updates
+      // Don't throw error for view count updates as they are non-critical
     }
   }
 
   async generateSlug(title: string): Promise<string> {
+    // Convert title to URL-friendly slug
     let baseSlug = title
       .toLowerCase()
       .replace(/[^\w\s-]/g, '')
@@ -572,12 +581,14 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       baseSlug = baseSlug + '-post';
     }
 
+    // Check if slug already exists
     const existing = await this.prisma.post.findUnique({
       where: { slug: baseSlug },
     });
 
     if (!existing) return baseSlug;
 
+    // Generate unique slug by appending random string
     const randomStr = Math.random().toString(36).substring(2, 7);
     return `${baseSlug}-${randomStr}`;
   }
@@ -595,14 +606,14 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
         },
       });
 
-      // Initialize all statuses with 0
+      // Initialize all possible statuses with zero count
       const result: Record<string, number> = {
         [PostStatus.DRAFT]: 0,
         [PostStatus.PUBLISHED]: 0,
         [PostStatus.ARCHIVED]: 0,
       };
 
-      // Fill in actual counts
+      // Populate actual counts from database
       counts.forEach((count) => {
         result[count.status] = count._count.status;
       });
@@ -614,7 +625,8 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
     }
   }
 
-  extractTextContent(content: any[]): string {
+  // Extract plain text from content blocks for search functionality
+  private extractTextContent(content: ContentBlock[]): string {
     let text = '';
 
     for (const block of content) {
@@ -633,6 +645,10 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
               block.data.items.forEach((item: string) => (text += item + ' '));
             }
             break;
+          case 'product':
+            if (block.data.name) text += block.data.name + ' ';
+            if (block.data.description) text += block.data.description + ' ';
+            break;
         }
       }
     }
@@ -640,7 +656,8 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
     return text.trim();
   }
 
-  private extractMediaUrls(content: any[]): string[] {
+  // Extract media URLs from content blocks for efficient querying
+  private extractMediaUrls(content: ContentBlock[]): string[] {
     const urls: string[] = [];
 
     for (const block of content) {
@@ -666,15 +683,16 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
     return urls;
   }
 
+  // Transform database result to include computed fields and user permissions
   private transformPostWithUser(post: any, requestUserId?: string): PostWithUser {
-    const { likes, savedBy, productMentions, ...postData } = post;
+    const { likes, wishlistItems, productMentions, ...postData } = post;
 
     return {
       ...postData,
       content: Array.isArray(postData.content) ? postData.content : [],
       productMentions: productMentions || [],
       isLiked: requestUserId ? likes?.length > 0 : undefined,
-      isSaved: requestUserId ? savedBy?.length > 0 : undefined,
+      isSaved: requestUserId ? wishlistItems?.length > 0 : undefined,
       canEdit: requestUserId ? postData.userId === requestUserId : false,
     };
   }

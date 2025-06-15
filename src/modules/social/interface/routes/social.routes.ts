@@ -15,12 +15,12 @@ import { DeleteCommentController } from '../controllers/comment/DeleteCommentCon
 import { GetPostCommentsController } from '../controllers/comment/GetPostCommentsController';
 import { GetCommentRepliesController } from '../controllers/comment/GetCommentRepliesController';
 
-// SavedPost controllers
-import { SavePostController } from '../controllers/savedPost/SavePostController';
-import { UnsavePostController } from '../controllers/savedPost/UnsavePostController';
-import { GetSavedPostsController } from '../controllers/savedPost/GetSavedPostsController';
-import { ToggleSavePostController } from '../controllers/savedPost/ToggleSavePostController';
-import { CheckSavedStatusController } from '../controllers/savedPost/CheckSavedStatusController';
+// Wishlist controllers
+import { AddToWishlistController } from '../controllers/wishlist/AddToWishlistController';
+import { RemoveFromWishlistController } from '../controllers/wishlist/RemoveFromWishlistController';
+import { ToggleWishlistController } from '../controllers/wishlist/ToggleWishlistController';
+import { GetWishlistController } from '../controllers/wishlist/GetWishlistController';
+import { CheckWishlistStatusController } from '../controllers/wishlist/CheckWishlistStatusController';
 
 // Validators
 import { likeToggleSchema, likeQuerySchema } from '../validators/like.validator';
@@ -29,7 +29,11 @@ import {
   updateCommentSchema,
   commentQuerySchema,
 } from '../validators/comment.validator';
-import { savePostSchema, getSavedPostsQuerySchema } from '../validators/savedPost.validator';
+import {
+  addToWishlistSchema,
+  getWishlistSchema,
+  wishlistItemParamsSchema,
+} from '../validators/wishlist.validator';
 
 const router = Router();
 
@@ -44,13 +48,14 @@ const deleteCommentController = new DeleteCommentController();
 const getPostCommentsController = new GetPostCommentsController();
 const getCommentRepliesController = new GetCommentRepliesController();
 
-const savePostController = new SavePostController();
-const unsavePostController = new UnsavePostController();
-const getSavedPostsController = new GetSavedPostsController();
-const toggleSavePostController = new ToggleSavePostController();
-const checkSavedStatusController = new CheckSavedStatusController();
+// THAY ĐỔI: Wishlist controllers thay vì SavedPost
+const addToWishlistController = new AddToWishlistController();
+const removeFromWishlistController = new RemoveFromWishlistController();
+const toggleWishlistController = new ToggleWishlistController();
+const getWishlistController = new GetWishlistController();
+const checkWishlistStatusController = new CheckWishlistStatusController();
 
-// === LIKE ROUTES ===
+// LIKE ROUTES
 // Toggle like (post or comment)
 router.post('/like', authenticate, validate(likeToggleSchema), toggleLikeController.execute);
 
@@ -70,7 +75,7 @@ router.get(
   getCommentLikesController.execute,
 );
 
-// === COMMENT ROUTES ===
+// COMMENT ROUTES
 // Create comment
 router.post(
   '/comments',
@@ -107,40 +112,45 @@ router.get(
   getCommentRepliesController.execute,
 );
 
-// === SAVED POSTS ROUTES ===
-// Save post
-router.post('/saved-posts', authenticate, validate(savePostSchema), savePostController.execute);
-
-// Unsave post
-router.delete(
-  '/saved-posts/:postId',
-  authenticate,
-  validateIdParam('postId'),
-  unsavePostController.execute,
-);
-
-// Toggle save post
+// WISHLIST ROUTES
+// Add to wishlist
 router.post(
-  '/saved-posts/toggle',
+  '/wishlist',
   authenticate,
-  validate(savePostSchema),
-  toggleSavePostController.execute,
+  validate(addToWishlistSchema),
+  addToWishlistController.execute,
 );
 
-// Get saved posts
-router.get(
-  '/saved-posts',
+// Remove from wishlist
+router.delete(
+  '/wishlist/:itemType/:itemId',
   authenticate,
-  validate(getSavedPostsQuerySchema, 'query'),
-  getSavedPostsController.execute,
+  validate(wishlistItemParamsSchema, 'params'),
+  removeFromWishlistController.execute,
 );
 
-// Check saved status
-router.get(
-  '/saved-posts/check/:postId',
+// Toggle wishlist item
+router.post(
+  '/wishlist/toggle',
   authenticate,
-  validateIdParam('postId'),
-  checkSavedStatusController.execute,
+  validate(addToWishlistSchema),
+  toggleWishlistController.execute,
+);
+
+// Get wishlist items
+router.get(
+  '/wishlist',
+  authenticate,
+  validate(getWishlistSchema, 'query'),
+  getWishlistController.execute,
+);
+
+// Check wishlist status
+router.get(
+  '/wishlist/check/:itemType/:itemId',
+  authenticate,
+  validate(wishlistItemParamsSchema, 'params'),
+  checkWishlistStatusController.execute,
 );
 
 export default router;
