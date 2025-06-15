@@ -22,7 +22,9 @@ export class MessageRepository implements IMessageRepository {
           receiverId: data.receiverId,
           content: data.content,
           type: data.type || 'TEXT',
-          metadata: data.metadata,
+          attachments: data.attachments || [],
+          quoteRequestId: data.quoteRequestId,
+          productMentions: data.productMentions,
         },
         include: {
           sender: {
@@ -45,6 +47,13 @@ export class MessageRepository implements IMessageRepository {
               avatarUrl: true,
               role: true,
               lastSeenAt: true,
+            },
+          },
+          quoteRequest: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
             },
           },
         },
@@ -81,6 +90,13 @@ export class MessageRepository implements IMessageRepository {
               lastSeenAt: true,
             },
           },
+          quoteRequest: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+            },
+          },
         },
       });
     } catch (error) {
@@ -113,7 +129,7 @@ export class MessageRepository implements IMessageRepository {
 
       if (isRead !== undefined) {
         where.isRead = isRead;
-        where.receiverId = userId; // Only check read status for received messages
+        where.receiverId = userId;
       }
 
       if (dateFrom || dateTo) {
@@ -146,6 +162,13 @@ export class MessageRepository implements IMessageRepository {
                 avatarUrl: true,
                 role: true,
                 lastSeenAt: true,
+              },
+            },
+            quoteRequest: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
               },
             },
           },
@@ -204,6 +227,13 @@ export class MessageRepository implements IMessageRepository {
                 lastSeenAt: true,
               },
             },
+            quoteRequest: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+              },
+            },
           },
           orderBy: { createdAt: 'desc' },
           skip,
@@ -227,6 +257,7 @@ export class MessageRepository implements IMessageRepository {
         },
         data: {
           isRead: true,
+          readAt: new Date(),
         },
       });
 
@@ -246,6 +277,7 @@ export class MessageRepository implements IMessageRepository {
         },
         data: {
           isRead: true,
+          readAt: new Date(),
         },
       });
 
@@ -257,7 +289,6 @@ export class MessageRepository implements IMessageRepository {
 
   async getConversations(userId: string): Promise<Conversation[]> {
     try {
-      // Get all unique conversation partners using Prisma groupBy
       const messages = await this.prisma.message.findMany({
         where: {
           OR: [{ senderId: userId }, { receiverId: userId }],
@@ -291,7 +322,6 @@ export class MessageRepository implements IMessageRepository {
         },
       });
 
-      // Group by conversation partner
       const conversationMap = new Map<string, any>();
 
       messages.forEach((message) => {
@@ -308,13 +338,11 @@ export class MessageRepository implements IMessageRepository {
           });
         }
 
-        // Count unread messages from this partner
         if (message.receiverId === userId && !message.isRead) {
           conversationMap.get(partnerId).unreadCount++;
         }
       });
 
-      // Convert to array and sort by last activity
       const conversations = Array.from(conversationMap.values()).sort(
         (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime(),
       );
@@ -343,7 +371,7 @@ export class MessageRepository implements IMessageRepository {
       const result = await this.prisma.message.deleteMany({
         where: {
           id: messageId,
-          senderId: userId, // Only sender can delete
+          senderId: userId,
         },
       });
 

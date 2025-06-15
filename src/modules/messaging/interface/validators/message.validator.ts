@@ -15,7 +15,11 @@ export const sendMessageSchema = Joi.object({
   type: Joi.string()
     .valid(...Object.values(MessageType))
     .default(MessageType.TEXT),
-  metadata: Joi.object().allow(null),
+  attachments: Joi.array().items(Joi.string().uri()).max(10).messages({
+    'array.max': 'Maximum 10 attachments allowed',
+  }),
+  quoteRequestId: Joi.string().uuid().allow(null),
+  productMentions: Joi.object().allow(null),
 });
 
 export const getMessagesQuerySchema = Joi.object({
@@ -39,18 +43,6 @@ export const sendQuoteMessageSchema = Joi.object({
     'string.max': 'Message cannot exceed 2000 characters',
     'any.required': 'Message content is required',
   }),
-});
-
-export const sendCustomOrderSchema = Joi.object({
-  receiverId: Joi.string().uuid().required(),
-  content: Joi.string().required().min(1).max(2000),
-  orderData: Joi.object({
-    productName: Joi.string().required().max(200),
-    description: Joi.string().max(2000),
-    estimatedPrice: Joi.number().positive(),
-    estimatedDuration: Joi.string().max(100),
-    specifications: Joi.object(),
-  }).required(),
 });
 
 export const sendMediaMessageSchema = Joi.object({

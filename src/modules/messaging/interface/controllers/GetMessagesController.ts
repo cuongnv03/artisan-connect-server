@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { BaseController } from '../../../../../shared/baseClasses/BaseController';
-import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
-import { IMessageService } from '../../../services/MessageService.interface';
-import { MessageQueryOptions } from '../../../models/Message';
-import container from '../../../../../core/di/container';
+import { BaseController } from '../../../../shared/baseClasses/BaseController';
+import { ApiResponse } from '../../../../shared/utils/ApiResponse';
+import { IMessageService } from '../../services/MessageService.interface';
+import { MessageQueryOptions } from '../../models/Message';
+import container from '../../../../core/di/container';
 
 export class GetMessagesController extends BaseController {
   private messageService: IMessageService;

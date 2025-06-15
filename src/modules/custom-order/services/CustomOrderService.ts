@@ -40,7 +40,6 @@ export class CustomOrderService implements ICustomOrderService {
     data: CreateCustomOrderDto,
   ): Promise<CustomOrderWithDetails> {
     try {
-      // Validate customer
       const customer = await this.userRepository.findById(customerId);
       if (!customer) {
         throw AppError.notFound('Customer not found', 'CUSTOMER_NOT_FOUND');
@@ -79,7 +78,9 @@ export class CustomOrderService implements ICustomOrderService {
         this.logger.error(`Error sending notification: ${notifError}`);
       }
 
-      this.logger.info(`Custom order created: ${order.id} by customer ${customerId}`);
+      this.logger.info(
+        `Custom order created: ${order.id} by user ${customerId} (${customer.role})`,
+      );
 
       return order;
     } catch (error) {

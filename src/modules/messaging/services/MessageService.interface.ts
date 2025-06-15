@@ -33,17 +33,29 @@ export interface IMessageService {
   deleteMessage(messageId: string, userId: string): Promise<boolean>;
 
   // Special message types
+  sendCustomOrderMessage(
+    senderId: string,
+    receiverId: string,
+    customOrderData: any,
+    content: string,
+  ): Promise<MessageWithUsers>;
+
+  respondToCustomOrderInChat(
+    artisanId: string,
+    customerId: string,
+    quoteRequestId: string,
+    response: {
+      action: 'ACCEPT' | 'REJECT' | 'COUNTER_OFFER';
+      finalPrice?: number;
+      message: string;
+      response?: any;
+    },
+  ): Promise<MessageWithUsers>;
+
   sendQuoteDiscussionMessage(
     senderId: string,
     receiverId: string,
     quoteId: string,
-    content: string,
-  ): Promise<MessageWithUsers>;
-
-  sendCustomOrderMessage(
-    senderId: string,
-    receiverId: string,
-    orderData: any,
     content: string,
   ): Promise<MessageWithUsers>;
 
