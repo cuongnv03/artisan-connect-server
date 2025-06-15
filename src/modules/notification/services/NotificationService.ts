@@ -172,6 +172,7 @@ export class NotificationService implements INotificationService {
       title: 'New Like',
       message: 'Someone liked your post',
       data: { postId, likerId },
+      actionUrl: `/posts/${postId}`,
     });
   }
 
@@ -185,6 +186,7 @@ export class NotificationService implements INotificationService {
       title: 'New Comment',
       message: 'Someone commented on your post',
       data: { postId, commenterId },
+      actionUrl: `/posts/${postId}`,
     });
   }
 
@@ -196,38 +198,8 @@ export class NotificationService implements INotificationService {
       title: 'New Follower',
       message: 'Someone started following you',
       data: { followerId },
+      actionUrl: `/users/${followerId}`,
     });
-  }
-
-  async notifyOrder(
-    orderId: string,
-    customerId: string,
-    sellerId: string,
-    status: string,
-  ): Promise<void> {
-    const notifications: CreateNotificationDto[] = [];
-
-    // Notify customer about order status change
-    notifications.push({
-      recipientId: customerId,
-      type: NotificationType.ORDER_UPDATE,
-      title: 'Order Update',
-      message: `Your order status has been updated to ${status}`,
-      data: { orderId, status },
-    });
-
-    // Notify seller about new order (if status is new)
-    if (status === 'PENDING') {
-      notifications.push({
-        recipientId: sellerId,
-        type: NotificationType.ORDER_UPDATE,
-        title: 'New Order',
-        message: 'You have received a new order',
-        data: { orderId, customerId },
-      });
-    }
-
-    await this.sendBulkNotifications(notifications);
   }
 
   async notifyQuote(
@@ -263,6 +235,7 @@ export class NotificationService implements INotificationService {
       title,
       message,
       data: { quoteId, action },
+      actionUrl: `/quotes/${quoteId}`,
     });
   }
 
@@ -274,6 +247,147 @@ export class NotificationService implements INotificationService {
       title: 'New Message',
       message: 'You have received a new message',
       data: { messageId },
+      actionUrl: `/messages/${senderId}`,
+    });
+  }
+
+  // ORDER NOTIFICATIONS
+  async notifyOrderCreated(customerId: string, orderId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: customerId,
+      type: NotificationType.ORDER_UPDATE,
+      title: 'Order Confirmed',
+      message: 'Your order has been successfully created',
+      data: { orderId },
+      actionUrl: `/orders/${orderId}`,
+    });
+  }
+
+  async notifyNewOrderForSeller(sellerId: string, orderId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: sellerId,
+      type: NotificationType.ORDER_UPDATE,
+      title: 'New Order Received',
+      message: 'You have received a new order',
+      data: { orderId },
+      actionUrl: `/orders/${orderId}`,
+    });
+  }
+
+  async notifyOrderStatusChanged(
+    customerId: string,
+    orderId: string,
+    status: string,
+  ): Promise<void> {
+    await this.sendNotification({
+      recipientId: customerId,
+      type: NotificationType.ORDER_UPDATE,
+      title: 'Order Status Update',
+      message: `Your order status has been updated to ${status}`,
+      data: { orderId, status },
+      actionUrl: `/orders/${orderId}`,
+    });
+  }
+
+  async notifyOrderCancelled(customerId: string, orderId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: customerId,
+      type: NotificationType.ORDER_UPDATE,
+      title: 'Order Cancelled',
+      message: 'Your order has been cancelled',
+      data: { orderId },
+      actionUrl: `/orders/${orderId}`,
+    });
+  }
+
+  async notifyOrderCancelledForSeller(sellerId: string, orderId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: sellerId,
+      type: NotificationType.ORDER_UPDATE,
+      title: 'Order Cancelled',
+      message: 'An order has been cancelled',
+      data: { orderId },
+      actionUrl: `/orders/${orderId}`,
+    });
+  }
+
+  // PAYMENT NOTIFICATIONS
+  async notifyPaymentSuccess(customerId: string, orderId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: customerId,
+      type: NotificationType.PAYMENT_SUCCESS,
+      title: 'Payment Successful',
+      message: 'Your payment has been processed successfully',
+      data: { orderId },
+      actionUrl: `/orders/${orderId}`,
+    });
+  }
+
+  async notifyPaymentFailed(customerId: string, orderId: string, reason?: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: customerId,
+      type: NotificationType.PAYMENT_FAILED,
+      title: 'Payment Failed',
+      message: reason || 'Your payment could not be processed',
+      data: { orderId, reason },
+      actionUrl: `/orders/${orderId}`,
+    });
+  }
+
+  async notifyPaymentRefunded(customerId: string, orderId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: customerId,
+      type: NotificationType.PAYMENT_SUCCESS,
+      title: 'Payment Refunded',
+      message: 'Your payment has been refunded successfully',
+      data: { orderId },
+      actionUrl: `/orders/${orderId}`,
+    });
+  }
+
+  // DISPUTE NOTIFICATIONS
+  async notifyDisputeCreated(complainantId: string, disputeId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: complainantId,
+      type: NotificationType.DISPUTE,
+      title: 'Dispute Created',
+      message: 'Your dispute has been submitted and is under review',
+      data: { disputeId },
+      actionUrl: `/disputes/${disputeId}`,
+    });
+  }
+
+  async notifyDisputeUpdated(recipientId: string, disputeId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId,
+      type: NotificationType.DISPUTE,
+      title: 'Dispute Update',
+      message: 'There is an update on your dispute',
+      data: { disputeId },
+      actionUrl: `/disputes/${disputeId}`,
+    });
+  }
+
+  // RETURN NOTIFICATIONS
+  async notifyReturnCreated(sellerId: string, returnId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: sellerId,
+      type: NotificationType.RETURN,
+      title: 'Return Request',
+      message: 'A customer has requested a return for your order',
+      data: { returnId },
+      actionUrl: `/returns/${returnId}`,
+    });
+  }
+
+  async notifyReturnUpdated(requesterId: string, returnId: string): Promise<void> {
+    await this.sendNotification({
+      recipientId: requesterId,
+      type: NotificationType.RETURN,
+      title: 'Return Update',
+      message: 'There is an update on your return request',
+      data: { returnId },
+      actionUrl: `/returns/${returnId}`,
     });
   }
 }

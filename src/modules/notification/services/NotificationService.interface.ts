@@ -36,12 +36,33 @@ export interface INotificationService {
   notifyLike(postId: string, likerId: string, postOwnerId: string): Promise<void>;
   notifyComment(postId: string, commenterId: string, postOwnerId: string): Promise<void>;
   notifyFollow(followerId: string, followingId: string): Promise<void>;
-  notifyOrder(orderId: string, customerId: string, sellerId: string, status: string): Promise<void>;
+  notifyMessage(messageId: string, senderId: string, receiverId: string): Promise<void>;
+
+  // ORDER NOTIFICATIONS
+  notifyOrderCreated(customerId: string, orderId: string): Promise<void>;
+  notifyNewOrderForSeller(sellerId: string, orderId: string): Promise<void>;
+  notifyOrderStatusChanged(customerId: string, orderId: string, status: string): Promise<void>;
+  notifyOrderCancelled(customerId: string, orderId: string): Promise<void>;
+  notifyOrderCancelledForSeller(sellerId: string, orderId: string): Promise<void>;
+
+  // PAYMENT NOTIFICATIONS
+  notifyPaymentSuccess(customerId: string, orderId: string): Promise<void>;
+  notifyPaymentFailed(customerId: string, orderId: string, reason?: string): Promise<void>;
+  notifyPaymentRefunded(customerId: string, orderId: string): Promise<void>;
+
+  // QUOTE NOTIFICATIONS
   notifyQuote(
     quoteId: string,
     customerId: string,
     artisanId: string,
     action: string,
   ): Promise<void>;
-  notifyMessage(messageId: string, senderId: string, receiverId: string): Promise<void>;
+
+  // DISPUTE NOTIFICATIONS
+  notifyDisputeCreated(complainantId: string, disputeId: string): Promise<void>;
+  notifyDisputeUpdated(recipientId: string, disputeId: string): Promise<void>;
+
+  // RETURN NOTIFICATIONS
+  notifyReturnCreated(sellerId: string, returnId: string): Promise<void>;
+  notifyReturnUpdated(requesterId: string, returnId: string): Promise<void>;
 }

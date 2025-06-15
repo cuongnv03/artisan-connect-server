@@ -106,6 +106,7 @@ export class NotificationRepository implements INotificationRepository {
         },
         data: {
           isRead: true,
+          readAt: new Date(),
         },
       });
 
@@ -124,6 +125,7 @@ export class NotificationRepository implements INotificationRepository {
         },
         data: {
           isRead: true,
+          readAt: new Date(),
         },
       });
 

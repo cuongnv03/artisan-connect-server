@@ -6,7 +6,9 @@ export interface Notification {
   title: string;
   message: string;
   data?: any;
+  actionUrl?: string;
   isRead: boolean;
+  readAt?: Date;
   createdAt: Date;
 }
 
@@ -27,6 +29,7 @@ export interface CreateNotificationDto {
   title: string;
   message: string;
   data?: any;
+  actionUrl?: string; // THÊM MỚI
 }
 
 export interface NotificationQueryOptions {
@@ -50,5 +53,7 @@ export enum NotificationType {
   QUOTE_RESPONSE = 'QUOTE_RESPONSE',
   CUSTOM_ORDER = 'CUSTOM_ORDER',
   MESSAGE = 'MESSAGE',
+  DISPUTE = 'DISPUTE',
+  RETURN = 'RETURN',
   SYSTEM = 'SYSTEM',
 }
