@@ -72,8 +72,6 @@ container.register('commentRepository', new CommentRepository(prisma));
 container.register('wishlistRepository', new WishlistRepository(prisma));
 
 container.register('priceNegotiationRepository', new PriceNegotiationRepository(prisma));
-
-container.register('priceNegotiationRepository', new PriceNegotiationRepository(prisma));
 container.register('customOrderRepository', new CustomOrderRepository(prisma));
 container.register('cartRepository', new CartRepository(prisma));
 container.register('orderRepository', new OrderRepository(prisma));
