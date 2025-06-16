@@ -23,4 +23,5 @@ export interface IArtisanProfileRepository extends BaseRepository<ArtisanProfile
   getTopArtisans(limit: number): Promise<ArtisanProfileWithUser[]>;
   getArtisansBySpecialty(specialty: string, limit: number): Promise<ArtisanProfileWithUser[]>;
   verifyArtisan(profileId: string, isVerified: boolean): Promise<ArtisanProfile>;
+  getSuggestedArtisans(excludeUserIds: string[], limit: number): Promise<ArtisanProfileWithUser[]>;
 }

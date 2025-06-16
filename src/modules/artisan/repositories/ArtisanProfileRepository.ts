@@ -368,4 +368,45 @@ export class ArtisanProfileRepository
       throw AppError.internal('Failed to verify artisan', 'DATABASE_ERROR');
     }
   }
+
+  async getSuggestedArtisans(
+    excludeUserIds: string[] = [],
+    limit: number = 5,
+  ): Promise<ArtisanProfileWithUser[]> {
+    try {
+      const profiles = await this.prisma.artisanProfile.findMany({
+        where: {
+          isVerified: true,
+          userId: {
+            notIn: excludeUserIds,
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              username: true,
+              avatarUrl: true,
+              followerCount: true,
+            },
+          },
+        },
+        orderBy: [
+          { user: { followerCount: 'desc' } },
+          { rating: 'desc' },
+          { totalSales: 'desc' },
+          { reviewCount: 'desc' },
+        ],
+        take: limit,
+      });
+
+      return profiles as ArtisanProfileWithUser[];
+    } catch (error) {
+      this.logger.error(`Error getting suggested artisans: ${error}`);
+      throw AppError.internal('Failed to get suggested artisans', 'DATABASE_ERROR');
+    }
+  }
 }

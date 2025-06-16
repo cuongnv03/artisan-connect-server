@@ -3,126 +3,319 @@
 ## 📋 Table of Contents
 
 - [Overview](#overview)
-- [Features](#features)
 - [Architecture](#architecture)
+- [Business Model](#business-model)
+- [Key Features](#key-features)
+- [Complex Workflows](#complex-workflows)
+- [Module Structure](#module-structure)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Variables](#environment-variables)
-  - [Database Setup](#database-setup)
-- [Project Structure](#project-structure)
 - [API Documentation](#api-documentation)
 - [Database Schema](#database-schema)
-- [Core Concepts](#core-concepts)
-  - [Dependency Injection](#dependency-injection)
-  - [Error Handling](#error-handling)
-  - [Event System](#event-system)
+- [Real-time Features](#real-time-features)
 - [Development](#development)
-  - [Coding Standards](#coding-standards)
-  - [Testing](#testing)
 - [Deployment](#deployment)
 - [Contributing](#contributing)
-- [License](#license)
 
 ## Overview
 
-Artisan Connect is a specialized social commerce platform designed specifically for artisans and craftspeople. It combines the best aspects of social media and e-commerce to create a unique ecosystem where artisans can build their brand, share their creative journey, and sell their handcrafted products with flexible pricing and customization options.
+**Artisan Connect** is a comprehensive social commerce platform specifically designed for artisans and craftspeople. It bridges the gap between social media engagement and e-commerce functionality, creating a unique ecosystem where artisans can build their brand, showcase their creative journey, and sell both ready-made and custom handcrafted products.
 
-The platform focuses on storytelling, artisan branding, and dynamic negotiation - features particularly valuable in the handcraft industry where products are often unique and pricing can be flexible.
+The platform emphasizes **storytelling**, **community building**, and **flexible commerce** - features particularly valuable in the handcraft industry where products are often unique, customizable, and pricing can be negotiable.
 
-## Features
+### Core Value Propositions
 
-### User & Authentication
-- Complete user authentication flow (register, login, refresh token)
-- Password management (change, reset, forgot)
-- Email verification
-- Profile management with detailed user information
-- Multi-role support (Customer, Artisan, Admin)
-
-### Artisan Profiles
-- Customizable shop profiles with templates
-- Template generation with AI assistance
-- Artisan-specific information (specialties, experience, etc.)
-- Upgrade request system (Customer → Artisan)
-
-### Social Features
-- Follow system for users and artisans
-- Rich content posting with structured blog-style content
-- Social engagement (likes, comments, saves)
-- Notifications for social interactions
-
-### E-commerce
-- Product catalog management
-- Category organization
-- Flexible pricing system
-- Quote request system for price negotiation
-- Cart and checkout process
-- Order management
-- Product reviews and ratings
-
-### Address & Shipping
-- Multiple address management
-- Default shipping address
-- Address validation
-
-### Real-time Features
-- Real-time notifications
-- Messaging system
-- Live status updates
-
-### Analytics
-- View tracking
-- Engagement metrics
-- Performance analytics
+- **Social Commerce**: Combines social media features with e-commerce capabilities
+- **Flexible Pricing**: Supports price negotiation and custom quotes
+- **Artisan-Centric**: Designed specifically for the unique needs of craftspeople
+- **Community Building**: Follow system and engagement features for artisan discovery
+- **Custom Orders**: Full workflow for bespoke product creation
+- **Real-time Communication**: Integrated messaging with quote discussions
 
 ## Architecture
 
-Artisan Connect follows a modular architecture pattern, organized by domain with clear separation of concerns. The application is structured following clean architecture principles:
+Artisan Connect follows **Clean Architecture** principles with a modular, domain-driven design:
 
-- **Domain Layer**: Core business entities and interfaces
-- **Application Layer**: Business logic and use cases
-- **Infrastructure Layer**: External services and database interactions
-- **Interface Layer**: Controllers, routes, and validators
+```
+┌─────────────────────────────────────────┐
+│             Interface Layer             │
+│   (Controllers, Routes, Validators)     │
+├─────────────────────────────────────────┤
+│            Application Layer            │
+│         (Services, Use Cases)           │
+├─────────────────────────────────────────┤
+│              Domain Layer               │
+│       (Entities, Interfaces)            │
+├─────────────────────────────────────────┤
+│           Infrastructure Layer          │
+│  (Database, External Services, Events)  │
+└─────────────────────────────────────────┘
+```
 
-This design facilitates:
-- Independent development of modules
-- Maintainability and testability
-- Potential transition to microservices
+### Key Architectural Patterns
+
+- **Dependency Injection**: Custom DI container for loose coupling
+- **Repository Pattern**: Data access abstraction
+- **Service Layer**: Business logic encapsulation
+- **Event-Driven**: Pub/sub system for cross-cutting concerns
+- **Error Chaining**: Comprehensive error handling with context
+- **Socket.io Integration**: Real-time features throughout the system
+
+## Business Model
+
+### User Roles & Permissions
+
+1. **CUSTOMER**: Can browse, purchase, follow artisans, negotiate prices
+2. **ARTISAN**: Can create products/posts, receive orders, manage shop
+3. **ADMIN**: Full system access and management capabilities
+
+### Key Business Rules
+
+- **Artisan-Only Content**: Only artisans can create products and posts
+- **Follow Restrictions**: Users can only follow artisans (not other customers)
+- **Pricing Flexibility**: Support for fixed prices, negotiations, and custom quotes
+- **Order Types**: Regular orders from cart + custom orders from accepted quotes
+
+## Key Features
+
+### 🔐 Authentication & Authorization
+
+- JWT-based authentication with refresh tokens
+- Role-based access control (Customer/Artisan/Admin)
+- Email verification and password reset
+- Secure session management
+
+### 👤 User Management
+
+- Comprehensive user profiles with preferences
+- Multi-address management for shipping
+- Follow system (customers can follow artisans)
+- Activity tracking and analytics
+
+### 🎨 Artisan Ecosystem
+
+- Rich artisan profiles with shop customization
+- Customer-to-artisan upgrade requests with admin approval
+- Artisan verification system
+- Business analytics and performance metrics
+
+### 📝 Content & Social Features
+
+- Rich blog-style posts with media support
+- Social engagement (likes, comments, follows)
+- Content types: tutorials, showcases, behind-the-scenes
+- Wishlist system for products and posts
+
+### 🛍️ E-commerce Core
+
+- Product catalog with categories and variants
+- Shopping cart with multi-seller support
+- Comprehensive order management
+- Inventory tracking and availability
+
+### 💰 Flexible Pricing System
+
+- **Fixed Pricing**: Standard product pricing
+- **Price Negotiation**: Customers can negotiate prices for existing products
+- **Custom Orders**: Full quote system for bespoke items
+- **Dynamic Cart**: Supports both regular and negotiated items
+
+### 🔄 Order Management
+
+- Order creation from cart or accepted quotes
+- Status tracking with detailed history
+- Dispute resolution system
+- Return/refund management
+- Multi-seller order handling
+
+### 💬 Real-time Communication
+
+- Socket.io-powered messaging system
+- Quote discussions integrated with chat
+- Custom order negotiations in real-time
+- Typing indicators and read receipts
+- Online/offline status
+
+### 🔔 Notification System
+
+- Real-time notifications via Socket.io
+- Comprehensive notification types
+- Email notifications (configurable)
+- Push notification support ready
+
+### ⭐ Review & Rating System
+
+- Product reviews with media support
+- Purchase verification
+- Review statistics and analytics
+- Helpful review voting
+
+### 📊 Analytics & Reporting
+
+- User engagement analytics
+- Business performance metrics
+- Platform-wide statistics
+- Custom reporting capabilities
+
+## Complex Workflows
+
+### 1. Price Negotiation Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Customer
+    participant S as System
+    participant A as Artisan
+    participant N as Notification
+
+    C->>S: Request price negotiation
+    S->>S: Validate product & permissions
+    S->>N: Notify artisan
+    A->>S: Respond (Accept/Reject/Counter)
+    S->>N: Notify customer
+    alt Accepted
+        C->>S: Add to cart with negotiated price
+    else Counter Offer
+        C->>S: Accept/Reject counter
+    end
+```
+
+### 2. Custom Order Workflow
+
+```mermaid
+sequenceDiagram
+    participant C as Customer
+    participant S as System
+    participant A as Artisan
+    participant M as Messaging
+    participant O as Order
+
+    C->>S: Create custom order request
+    S->>A: Send quote request
+    A->>S: Review and respond
+    alt Accept/Counter
+        A->>M: Discuss via chat
+        C->>S: Accept final quote
+        S->>O: Create order from quote
+    else Reject
+        S->>C: Notify rejection
+    end
+```
+
+### 3. Multi-Seller Cart & Checkout
+
+```mermaid
+sequenceDiagram
+    participant C as Customer
+    participant Cart as Cart System
+    participant V as Validation
+    participant O as Order
+    participant P as Payment
+
+    C->>Cart: Add items from multiple sellers
+    C->>Cart: Proceed to checkout
+    Cart->>V: Validate cart items
+    V->>V: Check stock, pricing, negotiations
+    V->>O: Create order with multiple sellers
+    O->>P: Process payment
+    P->>O: Confirm payment
+    O->>O: Notify all sellers
+```
+
+### 4. Real-time Messaging with Quotes
+
+```mermaid
+sequenceDiagram
+    participant C as Customer
+    participant M as Messaging
+    participant Q as Quote System
+    participant A as Artisan
+    participant S as Socket.io
+
+    C->>M: Send custom order in chat
+    M->>Q: Create quote request
+    Q->>S: Real-time notification to artisan
+    A->>M: Respond via chat
+    M->>Q: Update quote status
+    Q->>S: Real-time update to customer
+```
+
+## Module Structure
+
+### Core Infrastructure Modules
+
+- **`core/`**: Infrastructure services, DI, error handling, events
+- **`shared/`**: Common utilities, base classes, interfaces
+
+### Business Domain Modules
+
+- **`auth/`**: Authentication, authorization, user management
+- **`user/`**: User profiles, addresses, follow relationships
+- **`artisan/`**: Artisan profiles, shop management, upgrade requests
+- **`post/`**: Content creation and blog functionality
+- **`product/`**: Product catalog, categories, inventory
+- **`social/`**: Likes, comments, wishlist, social interactions
+- **`cart/`**: Shopping cart with negotiation support
+- **`price-negotiation/`**: Price negotiation for existing products
+- **`custom-order/`**: Quote requests and custom order management
+- **`order/`**: Order processing, disputes, returns
+- **`review/`**: Product reviews and ratings
+- **`messaging/`**: Real-time chat with quote integration
+- **`notification/`**: Real-time notification system
+- **`analytics/`**: Business intelligence and reporting
+
+Each module follows consistent structure:
+
+```
+module/
+├── models/           # Domain entities and DTOs
+├── repositories/     # Data access layer
+├── services/         # Business logic
+├── interface/
+│   ├── controllers/  # Request handlers
+│   ├── routes/       # Route definitions
+│   └── validators/   # Input validation
+└── index.ts         # Module exports
+```
 
 ## Tech Stack
 
-### Core
-- **Node.js** - JavaScript runtime
-- **Express** - Web framework
-- **TypeScript** - Type-safe JavaScript
-- **Prisma ORM** - Database toolkit
+### Backend Core
+
+- **Node.js 18+** - JavaScript runtime
+- **TypeScript** - Type-safe development
+- **Express.js** - Web framework
+- **Prisma ORM** - Database toolkit with migrations
 - **PostgreSQL** - Primary database
 
-### Authentication & Security
-- **JWT** - JSON Web Tokens for authentication
-- **Bcrypt** - Password hashing
-- **Helmet** - HTTP security headers
-- **Cors** - Cross-Origin Resource Sharing
+### Real-time & Communication
 
-### Validation & Error Handling
-- **Joi** - Schema validation
-- **Custom error handling middleware**
-
-### Storage & Media
-- **Cloudinary** - Cloud media storage and transformation
-
-### Communication
+- **Socket.io** - Real-time bidirectional communication
 - **Nodemailer** - Email service integration
 
-### Performance & Logging
-- **Redis** (planned) - Caching and real-time features
-- **Custom logging system**
+### Authentication & Security
+
+- **JWT** - JSON Web Tokens
+- **Bcrypt** - Password hashing
+- **Helmet** - Security headers
+- **CORS** - Cross-origin resource sharing
+- **Rate Limiting** - API protection
+
+### Storage & Media
+
+- **Cloudinary** - Cloud media storage and transformation
+- **Multer** - File upload handling
+
+### Validation & Error Handling
+
+- **Joi** - Schema validation
+- **Custom error chaining** - Comprehensive error context
 
 ### Development & Quality
+
 - **ESLint** - Code linting
 - **Prettier** - Code formatting
-- **Jest** (planned) - Testing
+- **Custom logging** - Structured logging system
 
 ## Getting Started
 
@@ -135,65 +328,71 @@ This design facilitates:
 
 ### Installation
 
-1. Clone the repository:
+1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/your-organization/artisan-connect-backend.git
    cd artisan-connect-backend
    ```
 
-2. Install dependencies:
+2. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
-3. Set up environment variables (see [Environment Variables](#environment-variables) section)
+3. **Environment setup:**
 
-4. Generate Prisma client:
    ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+4. **Database setup:**
+
+   ```bash
+   # Generate Prisma client
    npx prisma generate
-   ```
 
-5. Run database migrations:
-   ```bash
+   # Run migrations
    npx prisma migrate dev
+
+   # (Optional) Seed data
+   npm run seed
    ```
 
-6. Start the development server:
+5. **Start development server:**
    ```bash
    npm run dev
    ```
 
 ### Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
-
-```
-# Server
+```env
+# Server Configuration
 PORT=5000
 NODE_ENV=development
 API_PREFIX=/api
 
 # Database
-DATABASE_URL="postgresql://postgres:password@localhost:5432/artisan_connect?schema=public"
+DATABASE_URL="postgresql://user:password@localhost:5432/artisan_connect"
 
-# JWT
+# JWT Secrets
 JWT_ACCESS_SECRET=your_access_secret_key
 JWT_REFRESH_SECRET=your_refresh_secret_key
-JWT_ACCESS_EXPIRATION=15m
+JWT_ACCESS_EXPIRATION=24h
 JWT_REFRESH_EXPIRATION=7d
 
-# Cookie
+# Security
 COOKIE_SECRET=your_cookie_secret
-
-# CORS
 CORS_ORIGIN=http://localhost:3000
 
-# Cloudinary
+# External Services
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
 
-# Email
+# Email Configuration
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=465
 EMAIL_SECURE=true
@@ -201,79 +400,10 @@ EMAIL_USER=your_email@gmail.com
 EMAIL_PASSWORD=your_email_password
 EMAIL_FROM_NAME=Artisan Connect
 EMAIL_FROM_ADDRESS=noreply@artisanconnect.com
+
+# Client URLs
 CLIENT_URL=http://localhost:3000
 ```
-
-Adjust values according to your development environment.
-
-### Database Setup
-
-1. Create a PostgreSQL database:
-   ```sql
-   CREATE DATABASE artisan_connect;
-   ```
-
-2. Run Prisma migrations to set up the schema:
-   ```bash
-   npx prisma migrate dev
-   ```
-
-3. (Optional) Seed the database with initial data:
-   ```bash
-   npm run seed
-   ```
-
-4. (Optional) Explore your database with Prisma Studio:
-   ```bash
-   npx prisma studio
-   ```
-
-## Project Structure
-
-```
-src/
-├── config/                 # Configuration settings
-├── core/                   # Core functionality
-│   ├── database/           # Database connections
-│   ├── di/                 # Dependency injection
-│   ├── errors/             # Error handling
-│   ├── events/             # Event system
-│   ├── infrastructure/     # External services
-│   │   ├── ai/             # AI features
-│   │   ├── email/          # Email services
-│   │   ├── security/       # Authentication & security
-│   │   └── storage/        # Storage services
-│   ├── logging/            # Logging system
-│   └── schedulers/         # Scheduled tasks
-├── modules/                # Business modules
-│   ├── analytics/          # Analytics module
-│   ├── artisanProfile/     # Artisan profile module
-│   ├── cart/               # Shopping cart module
-│   ├── notification/       # Notifications module
-│   ├── order/              # Order management module
-│   ├── post/               # Content posting module
-│   ├── product/            # Product module
-│   ├── profile/            # User profile module
-│   ├── quote/              # Quote negotiations module
-│   ├── review/             # Reviews module
-│   ├── social/             # Social features module
-│   ├── system/             # System settings module
-│   └── user/               # User & authentication module
-└── shared/                 # Shared code
-    ├── baseClasses/        # Base abstract classes
-    ├── interfaces/         # Common interfaces
-    ├── middlewares/        # Express middlewares
-    └── utils/              # Utility functions
-app.ts                      # Express application setup
-index.ts                    # Entry point
-routes.ts                   # Route registration
-```
-
-Each module typically contains:
-- `models/` - Domain entities and DTOs
-- `repositories/` - Data access layer
-- `services/` - Business logic
-- `interface/` - Controllers, routes, and validators
 
 ## API Documentation
 
@@ -285,195 +415,327 @@ http://localhost:5000/api
 
 ### Authentication Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /auth/register | Register new user |
-| POST | /auth/login | Authenticate user |
-| POST | /auth/logout | End user session |
-| POST | /auth/refresh-token | Refresh access token |
-| POST | /auth/forgot-password | Request password reset |
-| POST | /auth/reset-password | Reset password with token |
-| GET | /auth/verify-email/:token | Verify email address |
-| POST | /auth/send-verification-email | Request new verification email |
-| GET | /auth/me | Get current user |
-| POST | /auth/change-password | Change password |
+| Method | Endpoint              | Description          |
+| ------ | --------------------- | -------------------- |
+| POST   | `/auth/register`      | Register new user    |
+| POST   | `/auth/login`         | User authentication  |
+| POST   | `/auth/logout`        | End session          |
+| POST   | `/auth/refresh-token` | Refresh access token |
+| GET    | `/auth/me`            | Get current user     |
 
-### User Endpoints
+### Core Business Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /users/:id | Get user profile |
-| PATCH | /users/profile | Update user details |
-| DELETE | /users/account | Delete account |
-| GET | /users/search | Search users |
+#### User & Profile Management
 
-### Profile Endpoints
+| Method | Endpoint           | Description               |
+| ------ | ------------------ | ------------------------- |
+| GET    | `/users/:id`       | Get user profile (public) |
+| PATCH  | `/users/profile`   | Update user details       |
+| GET    | `/users/addresses` | Get user addresses        |
+| POST   | `/users/addresses` | Create new address        |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /profiles/me | Get own profile |
-| PATCH | /profiles/me | Update profile |
-| GET | /profiles/users/:userId | Get profile by user ID |
-| GET | /profiles/addresses | Get user addresses |
-| POST | /profiles/addresses | Create address |
-| PATCH | /profiles/addresses/:id | Update address |
-| DELETE | /profiles/addresses/:id | Delete address |
-| POST | /profiles/addresses/:id/default | Set address as default |
-| GET | /profiles/addresses/default | Get default address |
+#### Artisan Management
 
-### Artisan Profile Endpoints
+| Method | Endpoint                    | Description             |
+| ------ | --------------------------- | ----------------------- |
+| POST   | `/artisans/profile`         | Create artisan profile  |
+| GET    | `/artisans/profile/me`      | Get own artisan profile |
+| POST   | `/artisans/upgrade-request` | Request artisan upgrade |
+| GET    | `/artisans/search`          | Search artisans         |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /artisan-profiles/templates | Get template options |
-| GET | /artisan-profiles/:id | Get artisan profile |
-| GET | /artisan-profiles/user/:userId | Get artisan profile by user ID |
-| POST | /artisan-profiles | Create artisan profile |
-| GET | /artisan-profiles | Get own artisan profile |
-| PATCH | /artisan-profiles | Update artisan profile |
-| POST | /artisan-profiles/generate-template | Generate custom template |
-| POST | /artisan-profiles/upgrade-request | Request artisan upgrade |
-| GET | /artisan-profiles/upgrade-request/status | Check upgrade request status |
-| GET | /artisan-profiles/upgrade-requests | List upgrade requests (admin) |
-| POST | /artisan-profiles/upgrade-requests/:id/approve | Approve upgrade request |
-| POST | /artisan-profiles/upgrade-requests/:id/reject | Reject upgrade request |
+#### Product & Commerce
 
-For complete API documentation, refer to the Postman collection (link) when running the development server.
+| Method | Endpoint        | Description                   |
+| ------ | --------------- | ----------------------------- |
+| GET    | `/products`     | Get products with filtering   |
+| POST   | `/products`     | Create product (artisan only) |
+| GET    | `/products/:id` | Get product details           |
+| GET    | `/categories`   | Get product categories        |
+
+#### Shopping & Orders
+
+| Method | Endpoint            | Description            |
+| ------ | ------------------- | ---------------------- |
+| GET    | `/cart`             | Get cart items         |
+| POST   | `/cart`             | Add item to cart       |
+| POST   | `/orders/from-cart` | Create order from cart |
+| GET    | `/orders/my-orders` | Get user orders        |
+
+#### Price Negotiation
+
+| Method | Endpoint                        | Description              |
+| ------ | ------------------------------- | ------------------------ |
+| POST   | `/negotiations`                 | Create price negotiation |
+| POST   | `/negotiations/:id/respond`     | Artisan response         |
+| GET    | `/negotiations/my-negotiations` | Get user negotiations    |
+
+#### Custom Orders
+
+| Method | Endpoint               | Description                 |
+| ------ | ---------------------- | --------------------------- |
+| POST   | `/customs`             | Create custom order request |
+| POST   | `/customs/:id/respond` | Artisan response to quote   |
+| GET    | `/customs/my-orders`   | Get custom orders           |
+
+#### Social Features
+
+| Method | Endpoint           | Description                 |
+| ------ | ------------------ | --------------------------- |
+| POST   | `/social/like`     | Toggle like on post/comment |
+| POST   | `/social/comments` | Create comment              |
+| GET    | `/social/wishlist` | Get wishlist items          |
+
+#### Real-time Communication
+
+| Method | Endpoint                  | Description               |
+| ------ | ------------------------- | ------------------------- |
+| GET    | `/messages/conversations` | Get conversations         |
+| POST   | `/messages`               | Send message              |
+| POST   | `/messages/custom-order`  | Send custom order in chat |
 
 ## Database Schema
 
-Artisan Connect uses a relational database schema with the following core entities:
+### Core User Tables
 
-- **User**: Core user information and authentication
-- **Profile**: Extended user information
-- **Address**: Shipping and billing addresses
+- **User**: Authentication and basic user info
+- **Profile**: Extended user profile information
+- **Address**: Multiple shipping addresses per user
 - **ArtisanProfile**: Specialized profile for artisan users
-- **Post**: Content creation and sharing
-- **Product**: Items for sale
-- **Category**: Product categorization
-- **Order**: Purchase transactions
-- **Quote**: Custom quote negotiations
+
+### Social & Content Tables
+
+- **Post**: Content creation (blog-style posts)
+- **Follow**: User following relationships (customers → artisans)
+- **Like**: Social engagement on posts/comments
+- **Comment**: Threaded comments on posts
+- **Wishlist**: Saved products and posts
+
+### Commerce Tables
+
+- **Product**: Product catalog with variants
+- **Category**: Hierarchical product categorization
+- **CartItem**: Shopping cart with negotiation support
+- **Order**: Order management with status tracking
+- **OrderItem**: Order line items (supports custom orders)
+
+### Pricing & Negotiation Tables
+
+- **PriceNegotiation**: Price negotiations for existing products
+- **QuoteRequest**: Custom order quotes and negotiations
+- **PriceHistory**: Product price change tracking
+
+### Communication Tables
+
+- **Message**: Real-time messaging with quote integration
+- **Notification**: System notifications
+
+### Business Support Tables
+
 - **Review**: Product reviews and ratings
-- **Follow**: Social connections
-- **Comment**: Social interactions on posts
-- **Like**: Social engagement
-- **Notification**: User notifications
-- **Message**: User-to-user communication
+- **OrderDispute**: Dispute resolution system
+- **OrderReturn**: Return/refund management
 
-For detailed schema information, see the `prisma/schema.prisma` file.
+## Real-time Features
 
-## Core Concepts
+### Socket.io Integration
 
-### Dependency Injection
+The platform extensively uses Socket.io for real-time features:
 
-Artisan Connect uses a custom dependency injection container to manage service and repository dependencies:
+#### Connection Management
 
-```typescript
-// Register a dependency
-container.register('userRepository', new UserRepository(prisma));
+- Authenticated connections with JWT verification
+- User presence tracking (online/offline)
+- Automatic reconnection handling
 
-// Resolve a dependency
-const userRepository = container.resolve<IUserRepository>('userRepository');
-```
+#### Real-time Notifications
 
-This promotes:
-- Loose coupling between components
-- Testability with mock implementations
-- Centralized dependency management
+```javascript
+// Server emits notification
+socketService.sendNotification(userId, {
+  type: 'PRICE_NEGOTIATION',
+  title: 'New Price Negotiation',
+  message: 'Someone wants to negotiate...',
+  data: { productId, negotiationId },
+});
 
-### Error Handling
-
-The application implements a comprehensive error handling strategy:
-
-- **AppError**: Custom error class with standardized structure
-- **Error Middleware**: Centralized error processing
-- **Error Context**: Rich error information including cause chain
-- **Operational vs Programmer Errors**: Distinction between expected and unexpected errors
-
-Example:
-
-```typescript
-// Creating an error
-throw AppError.notFound('User not found', 'USER_NOT_FOUND');
-
-// With error chaining
-throw AppError.internal('Failed to process payment', 'PAYMENT_ERROR', {
-  cause: error,
-  metadata: { orderId, amount },
+// Client receives
+socket.on('notification', (notification) => {
+  // Handle notification
 });
 ```
 
-### Event System
+#### Live Messaging
 
-A publish-subscribe event system handles cross-cutting concerns:
+```javascript
+// Real-time message delivery
+socketService.sendMessage(receiverId, messageData);
 
-```typescript
-// Subscribe to an event
-eventBus.subscribe('user.registered', this.handleUserRegistered.bind(this));
+// Typing indicators
+socketService.updateTypingStatus(roomId, userId, true);
 
-// Publish an event
-eventBus.publish('post.published', { 
-  postId, 
-  authorId,
-  title 
+// Read receipts
+socketService.broadcastToUser(senderId, 'message-read', {
+  messageId,
+  readBy: userId,
 });
 ```
 
-This enables:
-- Decoupling services
-- Asynchronous processing
-- Extensibility without modifying core code
+#### Business Event Broadcasting
+
+- Order status updates
+- Negotiation responses
+- Custom order updates
+- Payment confirmations
 
 ## Development
 
-### Coding Standards
+### Code Organization
 
-- **TypeScript**: Strict typing for all code
-- **ESLint**: Code linting with custom rules
-- **Prettier**: Consistent code formatting
-- **Error Handling**: Proper error propagation and handling
-- **Documentation**: JSDoc comments for public APIs
-- **Layer Separation**: Clear boundaries between layers
+#### Base Classes
 
-### Testing
+- **BaseController**: Standard request/response handling
+- **BaseService**: Error handling and logging
+- **BasePrismaRepository**: Common database operations
 
-(Coming soon)
+#### Error Handling
+
+- **AppError**: Structured error class with chaining
+- **ErrorHandler**: Global error processing middleware
+- **Error Context**: Rich error information for debugging
+
+#### Validation
+
+- **Joi Schemas**: Input validation
+- **Custom Validators**: Business rule validation
+- **Request Sanitization**: Data cleaning and normalization
+
+### Development Workflow
+
+1. **Module Development**:
+
+   ```bash
+   # Create new module structure
+   mkdir src/modules/new-module/{models,repositories,services,interface}
+   ```
+
+2. **Database Changes**:
+
+   ```bash
+   # Create migration
+   npx prisma migrate dev --name add_new_feature
+
+   # Generate client
+   npx prisma generate
+   ```
+
+3. **Testing**:
+
+   ```bash
+   # Run tests (when implemented)
+   npm test
+
+   # Lint code
+   npm run lint
+
+   # Format code
+   npm run format
+   ```
+
+### API Testing
+
+Use the provided Postman collection or test with curl:
+
+```bash
+# Login
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"emailOrUsername": "user@example.com", "password": "password"}'
+
+# Create product (with auth token)
+curl -X POST http://localhost:5000/api/products \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Handmade Vase", "price": 50, "categoryIds": ["cat-id"]}'
+```
 
 ## Deployment
 
 ### Production Setup
 
-1. Build the application:
+1. **Build the application**:
+
    ```bash
    npm run build
    ```
 
-2. Set production environment variables
+2. **Environment Configuration**:
 
-3. Start the application:
+   - Set production environment variables
+   - Configure database connection
+   - Set up external services (Cloudinary, Email)
+
+3. **Database Migration**:
+
+   ```bash
+   npx prisma migrate deploy
+   ```
+
+4. **Start Production Server**:
    ```bash
    npm start
    ```
 
 ### Docker Deployment
 
-A Dockerfile is provided to containerize the application:
-
-```bash
-# Build the Docker image
-docker build -t artisan-connect-backend .
-
-# Run the container
-docker run -p 5000:5000 --env-file .env.production artisan-connect-backend
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npx prisma generate
+EXPOSE 5000
+CMD ["npm", "start"]
 ```
+
+### Health Monitoring
+
+The application provides health check endpoints:
+
+- `/health` - Basic health status
+- `/socket-status` - Socket.io connection info
 
 ## Contributing
 
+### Development Guidelines
+
+1. **Code Style**: Follow TypeScript and ESLint configurations
+2. **Module Structure**: Maintain consistent module organization
+3. **Error Handling**: Use AppError for business logic errors
+4. **Documentation**: Comment complex business logic
+5. **Testing**: Write tests for critical business flows
+
+### Pull Request Process
+
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add some amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a pull request
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Implement changes following project conventions
+4. Add tests for new functionality
+5. Update documentation as needed
+6. Submit pull request with detailed description
+
+### Architecture Decisions
+
+When extending the system:
+
+- Follow Clean Architecture principles
+- Maintain module independence
+- Use dependency injection for services
+- Implement proper error handling
+- Consider real-time requirements
+- Maintain backward compatibility
+
+---
 
 ## License
 
@@ -482,3 +744,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ---
 
 © 2025 Artisan Connect. All rights reserved.
+
+**Built with ❤️ for the artisan community**

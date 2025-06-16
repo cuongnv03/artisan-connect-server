@@ -15,6 +15,7 @@ import { UpgradeRequestStatus } from '../models/ArtisanEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 import { IArtisanProfileRepository } from '../repositories/ArtisanProfileRepository.interface';
 import { IUpgradeRequestRepository } from '../repositories/UpgradeRequestRepository.interface';
+import { IFollowRepository } from '../../user';
 import { IUserRepository } from '../../auth';
 import { CloudinaryService } from '../../../core/infrastructure/storage/CloudinaryService';
 import { AppError } from '../../../core/errors/AppError';
@@ -235,6 +236,29 @@ export class ArtisanProfileService implements IArtisanProfileService {
       this.logger.error(`Error getting featured artisans: ${error}`);
       if (error instanceof AppError) throw error;
       throw AppError.internal('Failed to get featured artisans', 'SERVICE_ERROR');
+    }
+  }
+
+  async getSuggestedArtisans(userId: string, limit: number = 5): Promise<ArtisanProfileWithUser[]> {
+    try {
+      // Lấy danh sách nghệ nhân đã follow
+      const followedArtisanIds = await this.getFollowedArtisanIds(userId);
+
+      // Thêm chính user hiện tại vào danh sách loại trừ
+      const excludeUserIds = [...followedArtisanIds, userId];
+
+      const suggestions = await this.artisanProfileRepository.getSuggestedArtisans(
+        excludeUserIds,
+        limit,
+      );
+
+      this.logger.info(`Retrieved ${suggestions.length} unfollowed artisans for user ${userId}`);
+
+      return suggestions;
+    } catch (error) {
+      this.logger.error(`Error getting suggested artisans: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get suggested artisans', 'SERVICE_ERROR');
     }
   }
 
@@ -479,5 +503,29 @@ export class ArtisanProfileService implements IArtisanProfileService {
 
     const publicId = withoutParams.split('.')[0];
     return publicId;
+  }
+
+  // Helper method để lấy danh sách artisan đã follow
+  private async getFollowedArtisanIds(userId: string): Promise<string[]> {
+    try {
+      const followRepository = container.resolve<IFollowRepository>('followRepository');
+
+      // Sử dụng Prisma trực tiếp để lấy danh sách follow
+      const { PrismaClientManager } = await import('../../../core/database/PrismaClient');
+      const prisma = PrismaClientManager.getClient();
+
+      const follows = await prisma.follow.findMany({
+        where: {
+          followerId: userId,
+          following: { role: 'ARTISAN' }, // Chỉ lấy những người follow là ARTISAN
+        },
+        select: { followingId: true },
+      });
+
+      return follows.map((f) => f.followingId);
+    } catch (error) {
+      this.logger.error(`Error getting followed artisan IDs: ${error}`);
+      return []; // Trả về mảng rỗng nếu có lỗi
+    }
   }
 }

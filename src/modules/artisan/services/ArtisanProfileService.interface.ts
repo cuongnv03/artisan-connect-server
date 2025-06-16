@@ -37,6 +37,7 @@ export interface IArtisanProfileService {
   getTopArtisans(limit?: number): Promise<ArtisanProfileWithUser[]>;
   getArtisansBySpecialty(specialty: string, limit?: number): Promise<ArtisanProfileWithUser[]>;
   getFeaturedArtisans(): Promise<ArtisanProfileWithUser[]>;
+  getSuggestedArtisans(userId: string, limit?: number): Promise<ArtisanProfileWithUser[]>;
 
   // Upgrade Request Management
   requestUpgrade(userId: string, data: CreateUpgradeRequestDto): Promise<ArtisanUpgradeRequest>;

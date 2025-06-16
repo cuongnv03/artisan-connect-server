@@ -75,6 +75,13 @@ export const searchArtisansSchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(10),
 });
 
+export const getSuggestedArtisansSchema = Joi.object({
+  limit: Joi.number().integer().min(1).max(20).default(5).messages({
+    'number.min': 'Limit must be at least 1',
+    'number.max': 'Limit cannot exceed 20',
+  }),
+});
+
 // Upgrade request validation
 export const upgradeRequestSchema = Joi.object({
   shopName: Joi.string().required().min(3).max(100),

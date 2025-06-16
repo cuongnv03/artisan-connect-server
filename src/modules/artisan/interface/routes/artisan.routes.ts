@@ -11,6 +11,7 @@ import {
   verifyArtisanSchema,
   getSpecialtyArtisansSchema,
   getTopArtisansSchema,
+  getSuggestedArtisansSchema,
 } from '../validators/artisan.validator';
 
 // Profile Controllers
@@ -26,6 +27,7 @@ import { SearchArtisansController } from '../controllers/discovery/SearchArtisan
 import { GetTopArtisansController } from '../controllers/discovery/GetTopArtisansController';
 import { GetArtisansBySpecialtyController } from '../controllers/discovery/GetArtisansBySpecialtyController';
 import { GetFeaturedArtisansController } from '../controllers/discovery/GetFeaturedArtisansController';
+import { GetSuggestedArtisansController } from '../controllers/discovery/GetSuggestedArtisansController';
 
 // Upgrade Controllers
 import { RequestUpgradeController } from '../controllers/upgrade/RequestUpgradeController';
@@ -52,6 +54,7 @@ const searchArtisansController = new SearchArtisansController();
 const getTopArtisansController = new GetTopArtisansController();
 const getArtisansBySpecialtyController = new GetArtisansBySpecialtyController();
 const getFeaturedArtisansController = new GetFeaturedArtisansController();
+const getSuggestedArtisansController = new GetSuggestedArtisansController();
 
 const requestUpgradeController = new RequestUpgradeController();
 const getUpgradeRequestStatusController = new GetUpgradeRequestStatusController();
@@ -117,6 +120,13 @@ router.patch(
   authenticate,
   validate(upgradeRequestSchema),
   updateUpgradeRequestController.execute,
+);
+
+router.get(
+  '/suggestions',
+  authenticate,
+  validate(getSuggestedArtisansSchema, 'query'),
+  getSuggestedArtisansController.execute,
 );
 
 // === ADMIN ROUTES ===
