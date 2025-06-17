@@ -53,6 +53,7 @@ export interface IArtisanProfileService {
     page?: number,
     limit?: number,
   ): Promise<PaginatedResult<ArtisanUpgradeRequestWithUser>>;
+  getUpgradeRequestById(requestId: string): Promise<ArtisanUpgradeRequestWithUser | null>;
   approveUpgradeRequest(
     requestId: string,
     adminId: string,

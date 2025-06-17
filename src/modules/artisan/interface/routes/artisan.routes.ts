@@ -36,6 +36,7 @@ import { UpdateUpgradeRequestController } from '../controllers/upgrade/UpdateUpg
 
 // Admin Controllers
 import { GetUpgradeRequestsController } from '../controllers/upgrade/GetUpgradeRequestsController';
+import { GetUpgradeRequestByIdController } from '../controllers/upgrade/GetUpgradeRequestByIdController';
 import { ApproveUpgradeRequestController } from '../controllers/upgrade/ApproveUpgradeRequestController';
 import { RejectUpgradeRequestController } from '../controllers/upgrade/RejectUpgradeRequestController';
 import { VerifyArtisanController } from '../controllers/upgrade/VerifyArtisanController';
@@ -61,6 +62,7 @@ const getUpgradeRequestStatusController = new GetUpgradeRequestStatusController(
 const updateUpgradeRequestController = new UpdateUpgradeRequestController();
 
 const getUpgradeRequestsController = new GetUpgradeRequestsController();
+const getUpgradeRequestByIdController = new GetUpgradeRequestByIdController();
 const approveUpgradeRequestController = new ApproveUpgradeRequestController();
 const rejectUpgradeRequestController = new RejectUpgradeRequestController();
 const verifyArtisanController = new VerifyArtisanController();
@@ -136,6 +138,13 @@ router.get(
   authenticate,
   authorize(['ADMIN']),
   getUpgradeRequestsController.execute,
+);
+router.get(
+  '/admin/upgrade-requests/:id',
+  authenticate,
+  authorize(['ADMIN']),
+  validateIdParam(),
+  getUpgradeRequestByIdController.execute,
 );
 router.post(
   '/admin/upgrade-requests/:id/approve',

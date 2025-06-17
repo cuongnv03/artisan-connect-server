@@ -10,6 +10,7 @@ import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IUpgradeRequestRepository extends BaseRepository<ArtisanUpgradeRequest, string> {
   findByUserId(userId: string): Promise<ArtisanUpgradeRequest | null>;
+  findByIdWithUser(id: string): Promise<ArtisanUpgradeRequestWithUser | null>;
   createRequest(userId: string, data: CreateUpgradeRequestDto): Promise<ArtisanUpgradeRequest>;
   updateRequest(id: string, data: Partial<ArtisanUpgradeRequest>): Promise<ArtisanUpgradeRequest>;
   getRequests(

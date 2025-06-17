@@ -379,6 +379,7 @@ export class ProductRepository
     }
   }
 
+  // src/modules/product/repositories/ProductRepository.ts
   async updateProduct(
     id: string,
     sellerId: string,
@@ -399,20 +400,22 @@ export class ProductRepository
         throw AppError.forbidden('You can only update your own products', 'FORBIDDEN');
       }
 
-      const updateData: any = { ...data };
+      // Separate categoryIds and variants from update data
+      const { categoryIds, variants, ...updateData } = data; // ✅ Extract these fields
 
       // Generate new slug if name changed
-      if (data.name && data.name !== existingProduct.name) {
-        updateData.slug = await this.generateSlug(data.name, sellerId);
+      if (updateData.name && updateData.name !== existingProduct.name) {
+        updateData.slug = await this.generateSlug(updateData.name, sellerId);
       }
 
       await this.prisma.$transaction(async (tx) => {
         // Update categories if provided
-        if (data.categoryIds !== undefined) {
+        if (categoryIds !== undefined) {
+          // ✅ Use extracted categoryIds
           await tx.categoryProduct.deleteMany({ where: { productId: id } });
-          if (data.categoryIds.length > 0) {
+          if (categoryIds.length > 0) {
             await Promise.all(
-              data.categoryIds.map((categoryId) =>
+              categoryIds.map((categoryId) =>
                 tx.categoryProduct.create({
                   data: { productId: id, categoryId },
                 }),
@@ -421,18 +424,61 @@ export class ProductRepository
           }
         }
 
-        // Update product
+        // Update product (without categoryIds and variants)
         await tx.product.update({
           where: { id },
-          data: updateData,
+          data: updateData, // ✅ Only pass valid Product fields
         });
 
+        // Handle variants if provided
+        if (variants !== undefined) {
+          // ✅ Use extracted variants
+          // Delete existing variants
+          await tx.productVariant.deleteMany({ where: { productId: id } });
+
+          // Create new variants
+          if (variants.length > 0) {
+            for (const [index, variantData] of variants.entries()) {
+              await tx.productVariant.create({
+                data: {
+                  productId: id,
+                  sku:
+                    variantData.sku || (await this.generateVariantSku(id, variantData.attributes)),
+                  name: variantData.name,
+                  price: variantData.price || updateData.price || existingProduct.price,
+                  discountPrice: variantData.discountPrice,
+                  quantity: variantData.quantity,
+                  images: variantData.images || [],
+                  weight: variantData.weight,
+                  dimensions: variantData.dimensions,
+                  attributes: variantData.attributes,
+                  isActive: variantData.isActive ?? true,
+                  isDefault: variantData.isDefault ?? index === 0,
+                  sortOrder: variantData.sortOrder ?? index,
+                },
+              });
+            }
+
+            // Update hasVariants flag
+            await tx.product.update({
+              where: { id },
+              data: { hasVariants: true },
+            });
+          } else {
+            // No variants, set hasVariants to false
+            await tx.product.update({
+              where: { id },
+              data: { hasVariants: false },
+            });
+          }
+        }
+
         // Create price history if price changed
-        if (data.price !== undefined && data.price !== Number(existingProduct.price)) {
+        if (updateData.price !== undefined && updateData.price !== Number(existingProduct.price)) {
           await tx.priceHistory.create({
             data: {
               productId: id,
-              price: data.price,
+              price: updateData.price,
               changeNote: 'Price updated',
               changedBy: sellerId,
             },

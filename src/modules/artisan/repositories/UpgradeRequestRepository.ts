@@ -35,6 +35,32 @@ export class UpgradeRequestRepository
     }
   }
 
+  async findByIdWithUser(id: string): Promise<ArtisanUpgradeRequestWithUser | null> {
+    try {
+      const request = await this.prisma.artisanUpgradeRequest.findUnique({
+        where: { id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              username: true,
+              avatarUrl: true,
+              phone: true,
+            },
+          },
+        },
+      });
+
+      return request as ArtisanUpgradeRequestWithUser | null;
+    } catch (error) {
+      this.logger.error(`Error finding upgrade request by ID with user: ${error}`);
+      return null;
+    }
+  }
+
   async createRequest(
     userId: string,
     data: CreateUpgradeRequestDto,

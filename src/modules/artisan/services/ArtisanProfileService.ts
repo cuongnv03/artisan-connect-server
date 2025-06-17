@@ -373,6 +373,20 @@ export class ArtisanProfileService implements IArtisanProfileService {
     }
   }
 
+  async getUpgradeRequestById(requestId: string): Promise<ArtisanUpgradeRequestWithUser | null> {
+    try {
+      const request = await this.upgradeRequestRepository.findByIdWithUser(requestId);
+      if (!request) {
+        throw AppError.notFound('Upgrade request not found');
+      }
+      return request;
+    } catch (error) {
+      this.logger.error(`Error getting upgrade request by ID: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get upgrade request', 'SERVICE_ERROR');
+    }
+  }
+
   async approveUpgradeRequest(
     requestId: string,
     adminId: string,

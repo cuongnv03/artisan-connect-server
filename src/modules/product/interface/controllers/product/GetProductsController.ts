@@ -18,7 +18,14 @@ export class GetProductsController extends BaseController {
       page: parseInt(req.query.page as string) || 1,
       limit: parseInt(req.query.limit as string) || 10,
       sellerId: req.query.sellerId as string,
-      categoryId: req.query.categoryId as string,
+      // FIX: Handle both singular and array categoryIds
+      categoryIds: req.query.categoryIds
+        ? Array.isArray(req.query.categoryIds)
+          ? (req.query.categoryIds as string[])
+          : [req.query.categoryIds as string]
+        : req.query.categoryId
+          ? [req.query.categoryId as string] // Fallback for singular
+          : undefined,
       search: req.query.search as string,
       status: req.query.status ? [req.query.status as any] : undefined,
       sortBy: (req.query.sortBy as string) || 'createdAt',
