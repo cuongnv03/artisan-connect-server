@@ -258,6 +258,9 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
 
       const updateData: any = { ...data };
 
+      // Remove productMentions from updateData since we handle it separately
+      delete updateData.productMentions;
+
       // Generate new slug if title changed
       if (data.title && data.title !== existingPost.title) {
         updateData.slug = await this.generateSlug(data.title);
@@ -272,41 +275,40 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
           order: block.order !== undefined ? block.order : index,
         }));
 
-        updateData.content = cleanedContent;
+        updateData.content = { blocks: cleanedContent };
         updateData.contentText = this.extractTextContent(cleanedContent);
         updateData.mediaUrls = this.extractMediaUrls(cleanedContent);
       }
 
-      await this.prisma.$transaction(async (tx) => {
-        // Update the main post record
-        await tx.post.update({
+      // Use transaction for atomic updates
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Update the main post record (without productMentions)
+        const updatedPost = await tx.post.update({
           where: { id },
           data: updateData,
         });
 
-        // Handle product mentions update
+        // Handle product mentions separately
         if (data.productMentions !== undefined) {
-          // Remove all existing mentions
+          // First, delete all existing product mentions
           await tx.postProductMention.deleteMany({
             where: { postId: id },
           });
 
-          // Add new mentions if provided
+          // Then create new product mentions if any
           if (data.productMentions.length > 0) {
-            await Promise.all(
-              data.productMentions.map((mention) =>
-                tx.postProductMention.create({
-                  data: {
-                    postId: id,
-                    productId: mention.productId,
-                    contextText: mention.contextText,
-                    position: mention.position,
-                  },
-                }),
-              ),
-            );
+            await tx.postProductMention.createMany({
+              data: data.productMentions.map((mention) => ({
+                postId: id,
+                productId: mention.productId,
+                contextText: mention.contextText,
+                position: mention.position,
+              })),
+            });
           }
         }
+
+        return updatedPost;
       });
 
       return (await this.findByIdWithUser(id, userId)) as PostWithUser;
@@ -687,9 +689,34 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
   private transformPostWithUser(post: any, requestUserId?: string): PostWithUser {
     const { likes, wishlistItems, productMentions, ...postData } = post;
 
+    // Fix content parsing - extract blocks from the JSON structure
+    let processedContent: ContentBlock[] = [];
+    if (postData.content) {
+      if (Array.isArray(postData.content)) {
+        // Already an array of blocks
+        processedContent = postData.content;
+      } else if (postData.content.blocks && Array.isArray(postData.content.blocks)) {
+        // Extract blocks from {blocks: [...]} structure
+        processedContent = postData.content.blocks;
+      } else if (typeof postData.content === 'string') {
+        // Parse JSON string if needed
+        try {
+          const parsed = JSON.parse(postData.content);
+          if (parsed.blocks && Array.isArray(parsed.blocks)) {
+            processedContent = parsed.blocks;
+          } else if (Array.isArray(parsed)) {
+            processedContent = parsed;
+          }
+        } catch (error) {
+          console.warn('Failed to parse post content JSON:', error);
+          processedContent = [];
+        }
+      }
+    }
+
     return {
       ...postData,
-      content: Array.isArray(postData.content) ? postData.content : [],
+      content: processedContent,
       productMentions: productMentions || [],
       isLiked: requestUserId ? likes?.length > 0 : undefined,
       isSaved: requestUserId ? wishlistItems?.length > 0 : undefined,
