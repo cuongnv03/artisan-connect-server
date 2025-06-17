@@ -24,6 +24,82 @@ export class CartRepository
     super(prisma, 'cartItem');
   }
 
+  /**
+   * Helper method to find cart item handling null variantId properly
+   */
+  private async findCartItem(userId: string, productId: string, variantId?: string | null) {
+    if (variantId) {
+      // When variantId is provided, use the unique constraint
+      return await this.prisma.cartItem.findUnique({
+        where: {
+          userId_productId_variantId: {
+            userId,
+            productId,
+            variantId,
+          },
+        },
+      });
+    } else {
+      // When variantId is null, use findFirst with explicit null check
+      return await this.prisma.cartItem.findFirst({
+        where: {
+          userId,
+          productId,
+          variantId: null,
+        },
+      });
+    }
+  }
+
+  /**
+   * Helper method to find all cart items for a user with optional filters
+   */
+  private async findCartItems(
+    userId: string,
+    filters?: {
+      productId?: string;
+      variantId?: string | null;
+    },
+  ) {
+    const where: any = { userId };
+
+    if (filters?.productId) {
+      where.productId = filters.productId;
+    }
+
+    if (filters?.variantId !== undefined) {
+      where.variantId = filters.variantId;
+    }
+
+    return await this.prisma.cartItem.findMany({
+      where,
+      include: {
+        product: {
+          include: {
+            seller: {
+              include: {
+                artisanProfile: {
+                  select: { shopName: true, isVerified: true },
+                },
+              },
+            },
+          },
+        },
+        variant: true,
+        negotiation: {
+          select: {
+            id: true,
+            originalPrice: true,
+            finalPrice: true,
+            status: true,
+            expiresAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async addToCart(
     userId: string,
     productId: string,
@@ -42,16 +118,8 @@ export class CartRepository
           negotiationId,
         );
 
-      // Check existing cart item
-      const existingCartItem = await this.prisma.cartItem.findUnique({
-        where: {
-          userId_productId_variantId: {
-            userId,
-            productId,
-            variantId: variantId || null,
-          },
-        },
-      });
+      // Check existing cart item using helper method
+      const existingCartItem = await this.findCartItem(userId, productId, variantId);
 
       let cartItem: any;
 
@@ -95,7 +163,7 @@ export class CartRepository
           data: {
             userId,
             productId,
-            variantId: variantId || null,
+            variantId: variantId || null, // Explicitly set to null if undefined
             quantity,
             price: new Decimal(finalPrice.toString()),
             negotiationId,
@@ -154,16 +222,8 @@ export class CartRepository
         );
       }
 
-      // Find cart item using unique constraint
-      const existingItem = await this.prisma.cartItem.findUnique({
-        where: {
-          userId_productId_variantId: {
-            userId,
-            productId,
-            variantId: variantId || null,
-          },
-        },
-      });
+      // Find cart item using helper method
+      const existingItem = await this.findCartItem(userId, productId, variantId);
 
       if (!existingItem) {
         throw new AppError('Cart item not found', 404, 'CART_ITEM_NOT_FOUND');
@@ -184,15 +244,8 @@ export class CartRepository
 
   async removeFromCart(userId: string, productId: string, variantId?: string): Promise<boolean> {
     try {
-      const existingItem = await this.prisma.cartItem.findUnique({
-        where: {
-          userId_productId_variantId: {
-            userId,
-            productId,
-            variantId: variantId || null,
-          },
-        },
-      });
+      // Find cart item using helper method
+      const existingItem = await this.findCartItem(userId, productId, variantId);
 
       if (!existingItem) {
         return false; // Item not found
@@ -223,34 +276,7 @@ export class CartRepository
 
   async getCartItems(userId: string): Promise<CartItem[]> {
     try {
-      const cartItems = await this.prisma.cartItem.findMany({
-        where: { userId },
-        include: {
-          product: {
-            include: {
-              seller: {
-                include: {
-                  artisanProfile: {
-                    select: { shopName: true, isVerified: true },
-                  },
-                },
-              },
-            },
-          },
-          variant: true,
-          negotiation: {
-            select: {
-              id: true,
-              originalPrice: true,
-              finalPrice: true,
-              status: true,
-              expiresAt: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
+      const cartItems = await this.findCartItems(userId);
       return cartItems.map((item) => this.transformCartItem(item));
     } catch (error) {
       this.logger.error(`Error getting cart items: ${error}`);
