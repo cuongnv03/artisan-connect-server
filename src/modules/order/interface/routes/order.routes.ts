@@ -16,17 +16,17 @@ import { ProcessPaymentController } from '../controllers/ProcessPaymentControlle
 import { GetOrderStatsController } from '../controllers/GetOrderStatsController';
 import { GetOrderStatusHistoryController } from '../controllers/GetOrderStatusHistoryController';
 
-// Dispute Controllers
-import { CreateDisputeController } from '../controllers/dispute/CreateDisputeController';
-import { GetMyDisputesController } from '../controllers/dispute/GetMyDisputesController';
-import { UpdateDisputeController } from '../controllers/dispute/UpdateDisputeController';
-import { GetDisputeController } from '../controllers/dispute/GetDisputeController';
+// // Dispute Controllers
+// import { CreateDisputeController } from '../controllers/dispute/CreateDisputeController';
+// import { GetMyDisputesController } from '../controllers/dispute/GetMyDisputesController';
+// import { UpdateDisputeController } from '../controllers/dispute/UpdateDisputeController';
+// import { GetDisputeController } from '../controllers/dispute/GetDisputeController';
 
-// Return Controllers
-import { CreateReturnController } from '../controllers/return/CreateReturnController';
-import { GetMyReturnsController } from '../controllers/return/GetMyReturnsController';
-import { UpdateReturnController } from '../controllers/return/UpdateReturnController';
-import { GetReturnController } from '../controllers/return/GetReturnController';
+// // Return Controllers
+// import { CreateReturnController } from '../controllers/return/CreateReturnController';
+// import { GetMyReturnsController } from '../controllers/return/GetMyReturnsController';
+// import { UpdateReturnController } from '../controllers/return/UpdateReturnController';
+// import { GetReturnController } from '../controllers/return/GetReturnController';
 
 // Admin Controllers
 import { GetAllDisputesController } from '../controllers/dispute/GetAllDisputesController';
@@ -41,12 +41,12 @@ import {
   processPaymentSchema,
   getOrdersQuerySchema,
   getOrderStatsQuerySchema,
-  createDisputeSchema,
-  updateDisputeSchema,
-  getDisputesQuerySchema,
-  createReturnSchema,
-  updateReturnSchema,
-  getReturnsQuerySchema,
+  // createDisputeSchema,
+  // updateDisputeSchema,
+  // getDisputesQuerySchema,
+  // createReturnSchema,
+  // updateReturnSchema,
+  // getReturnsQuerySchema,
 } from '../validators/order.validator';
 
 const router = Router();
@@ -64,15 +64,15 @@ const processPaymentController = new ProcessPaymentController();
 const getOrderStatsController = new GetOrderStatsController();
 const getOrderStatusHistoryController = new GetOrderStatusHistoryController();
 
-const createDisputeController = new CreateDisputeController();
-const getMyDisputesController = new GetMyDisputesController();
-const updateDisputeController = new UpdateDisputeController();
-const getDisputeController = new GetDisputeController();
+// const createDisputeController = new CreateDisputeController();
+// const getMyDisputesController = new GetMyDisputesController();
+// const updateDisputeController = new UpdateDisputeController();
+// const getDisputeController = new GetDisputeController();
 
-const createReturnController = new CreateReturnController();
-const getMyReturnsController = new GetMyReturnsController();
-const updateReturnController = new UpdateReturnController();
-const getReturnController = new GetReturnController();
+// const createReturnController = new CreateReturnController();
+// const getMyReturnsController = new GetMyReturnsController();
+// const updateReturnController = new UpdateReturnController();
+// const getReturnController = new GetReturnController();
 
 const getAllDisputesController = new GetAllDisputesController();
 const getAllReturnsController = new GetAllReturnsController();
@@ -132,45 +132,45 @@ router.post(
   processPaymentController.execute,
 );
 
-// === DISPUTE ROUTES ===
-router.post('/disputes', validate(createDisputeSchema), createDisputeController.execute);
-router.get(
-  '/disputes/my',
-  validate(getDisputesQuerySchema, 'query'),
-  getMyDisputesController.execute,
-);
-router.get('/disputes/:id', validateIdParam(), getDisputeController.execute);
-router.patch(
-  '/disputes/:id',
-  validateIdParam(),
-  validate(updateDisputeSchema),
-  updateDisputeController.execute,
-);
+// // === DISPUTE ROUTES ===
+// router.post('/disputes', validate(createDisputeSchema), createDisputeController.execute);
+// router.get(
+//   '/disputes/my',
+//   validate(getDisputesQuerySchema, 'query'),
+//   getMyDisputesController.execute,
+// );
+// router.get('/disputes/:id', validateIdParam(), getDisputeController.execute);
+// router.patch(
+//   '/disputes/:id',
+//   validateIdParam(),
+//   validate(updateDisputeSchema),
+//   updateDisputeController.execute,
+// );
 
-// === RETURN ROUTES ===
-router.post('/returns', validate(createReturnSchema), createReturnController.execute);
-router.get('/returns/my', validate(getReturnsQuerySchema, 'query'), getMyReturnsController.execute);
-router.get('/returns/:id', validateIdParam(), getReturnController.execute);
-router.patch(
-  '/returns/:id',
-  validateIdParam(),
-  validate(updateReturnSchema),
-  updateReturnController.execute,
-);
+// // === RETURN ROUTES ===
+// router.post('/returns', validate(createReturnSchema), createReturnController.execute);
+// router.get('/returns/my', validate(getReturnsQuerySchema, 'query'), getMyReturnsController.execute);
+// router.get('/returns/:id', validateIdParam(), getReturnController.execute);
+// router.patch(
+//   '/returns/:id',
+//   validateIdParam(),
+//   validate(updateReturnSchema),
+//   updateReturnController.execute,
+// );
 
 // === ADMIN ROUTES ===
-router.get(
-  '/admin/disputes',
-  authorize(['ADMIN']),
-  validate(getDisputesQuerySchema, 'query'),
-  getAllDisputesController.execute,
-);
+// router.get(
+//   '/admin/disputes',
+//   authorize(['ADMIN']),
+//   validate(getDisputesQuerySchema, 'query'),
+//   getAllDisputesController.execute,
+// );
 
-router.get(
-  '/admin/returns',
-  authorize(['ADMIN']),
-  validate(getReturnsQuerySchema, 'query'),
-  getAllReturnsController.execute,
-);
+// router.get(
+//   '/admin/returns',
+//   authorize(['ADMIN']),
+//   validate(getReturnsQuerySchema, 'query'),
+//   getAllReturnsController.execute,
+// );
 
 export default router;

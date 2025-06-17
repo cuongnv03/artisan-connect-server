@@ -376,51 +376,51 @@ export class NotificationService implements INotificationService {
     });
   }
 
-  // DISPUTE NOTIFICATIONS
-  async notifyDisputeCreated(complainantId: string, disputeId: string): Promise<void> {
-    await this.sendNotification({
-      recipientId: complainantId,
-      type: NotificationType.DISPUTE,
-      title: 'Dispute Created',
-      message: 'Your dispute has been submitted and is under review',
-      data: { disputeId },
-      actionUrl: `/disputes/${disputeId}`,
-    });
-  }
+  // // DISPUTE NOTIFICATIONS
+  // async notifyDisputeCreated(complainantId: string, disputeId: string): Promise<void> {
+  //   await this.sendNotification({
+  //     recipientId: complainantId,
+  //     type: NotificationType.DISPUTE,
+  //     title: 'Dispute Created',
+  //     message: 'Your dispute has been submitted and is under review',
+  //     data: { disputeId },
+  //     actionUrl: `/disputes/${disputeId}`,
+  //   });
+  // }
 
-  async notifyDisputeUpdated(recipientId: string, disputeId: string): Promise<void> {
-    await this.sendNotification({
-      recipientId,
-      type: NotificationType.DISPUTE,
-      title: 'Dispute Update',
-      message: 'There is an update on your dispute',
-      data: { disputeId },
-      actionUrl: `/disputes/${disputeId}`,
-    });
-  }
+  // async notifyDisputeUpdated(recipientId: string, disputeId: string): Promise<void> {
+  //   await this.sendNotification({
+  //     recipientId,
+  //     type: NotificationType.DISPUTE,
+  //     title: 'Dispute Update',
+  //     message: 'There is an update on your dispute',
+  //     data: { disputeId },
+  //     actionUrl: `/disputes/${disputeId}`,
+  //   });
+  // }
 
-  // RETURN NOTIFICATIONS
-  async notifyReturnCreated(sellerId: string, returnId: string): Promise<void> {
-    await this.sendNotification({
-      recipientId: sellerId,
-      type: NotificationType.RETURN,
-      title: 'Return Request',
-      message: 'A customer has requested a return for your order',
-      data: { returnId },
-      actionUrl: `/returns/${returnId}`,
-    });
-  }
+  // // RETURN NOTIFICATIONS
+  // async notifyReturnCreated(sellerId: string, returnId: string): Promise<void> {
+  //   await this.sendNotification({
+  //     recipientId: sellerId,
+  //     type: NotificationType.RETURN,
+  //     title: 'Return Request',
+  //     message: 'A customer has requested a return for your order',
+  //     data: { returnId },
+  //     actionUrl: `/returns/${returnId}`,
+  //   });
+  // }
 
-  async notifyReturnUpdated(requesterId: string, returnId: string): Promise<void> {
-    await this.sendNotification({
-      recipientId: requesterId,
-      type: NotificationType.RETURN,
-      title: 'Return Update',
-      message: 'There is an update on your return request',
-      data: { returnId },
-      actionUrl: `/returns/${returnId}`,
-    });
-  }
+  // async notifyReturnUpdated(requesterId: string, returnId: string): Promise<void> {
+  //   await this.sendNotification({
+  //     recipientId: requesterId,
+  //     type: NotificationType.RETURN,
+  //     title: 'Return Update',
+  //     message: 'There is an update on your return request',
+  //     data: { returnId },
+  //     actionUrl: `/returns/${returnId}`,
+  //   });
+  // }
 
   // PRICE NEGOTIATION NOTIFICATIONS
   async notifyPriceNegotiationRequest(

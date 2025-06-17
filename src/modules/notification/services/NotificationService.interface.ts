@@ -69,13 +69,13 @@ export interface INotificationService {
     artisanId: string,
   ): Promise<void>;
 
-  // DISPUTE NOTIFICATIONS
-  notifyDisputeCreated(complainantId: string, disputeId: string): Promise<void>;
-  notifyDisputeUpdated(recipientId: string, disputeId: string): Promise<void>;
+  // // DISPUTE NOTIFICATIONS
+  // notifyDisputeCreated(complainantId: string, disputeId: string): Promise<void>;
+  // notifyDisputeUpdated(recipientId: string, disputeId: string): Promise<void>;
 
-  // RETURN NOTIFICATIONS
-  notifyReturnCreated(sellerId: string, returnId: string): Promise<void>;
-  notifyReturnUpdated(requesterId: string, returnId: string): Promise<void>;
+  // // RETURN NOTIFICATIONS
+  // notifyReturnCreated(sellerId: string, returnId: string): Promise<void>;
+  // notifyReturnUpdated(requesterId: string, returnId: string): Promise<void>;
 
   // PRICE NEGOTIATION NOTIFICATIONS
   notifyPriceNegotiationRequest(
