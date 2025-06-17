@@ -44,6 +44,13 @@ export interface IPriceNegotiationService {
     action?: string,
   ): Promise<boolean>;
   getNegotiationStats(userId?: string, userRole?: string): Promise<NegotiationStats>;
+  checkExistingNegotiation(
+    customerId: string,
+    productId: string,
+  ): Promise<{
+    hasActive: boolean;
+    negotiation?: PriceNegotiationWithDetails;
+  }>;
 
   // Background tasks
   expireOldNegotiations(): Promise<number>;

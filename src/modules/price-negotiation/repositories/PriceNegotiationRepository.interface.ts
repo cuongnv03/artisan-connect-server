@@ -42,6 +42,10 @@ export interface IPriceNegotiationRepository extends BaseRepository<PriceNegotia
     finalPrice?: number,
   ): Promise<PriceNegotiationWithDetails>;
   expireNegotiations(): Promise<number>;
+  checkExistingNegotiation(
+    customerId: string,
+    productId: string,
+  ): Promise<PriceNegotiationWithDetails | null>;
 
   // Validation & utilities
   isUserInvolvedInNegotiation(negotiationId: string, userId: string): Promise<boolean>;

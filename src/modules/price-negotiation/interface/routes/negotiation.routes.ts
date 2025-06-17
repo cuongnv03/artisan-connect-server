@@ -10,6 +10,7 @@ import { GetNegotiationController } from '../controllers/GetNegotiationControlle
 import { GetMyNegotiationsController } from '../controllers/GetMyNegotiationsController';
 import { CancelNegotiationController } from '../controllers/CancelNegotiationController';
 import { GetNegotiationStatsController } from '../controllers/GetNegotiationStatsController';
+import { CheckExistingNegotiationController } from '../controllers/CheckExistingNegotiationController';
 
 // Validators
 import {
@@ -18,6 +19,7 @@ import {
   cancelNegotiationSchema,
   getNegotiationsQuerySchema,
   getNegotiationStatsQuerySchema,
+  checkExistingNegotiationParamsSchema,
 } from '../validators/negotiation.validator';
 
 const router = Router();
@@ -29,6 +31,7 @@ const getNegotiationController = new GetNegotiationController();
 const getMyNegotiationsController = new GetMyNegotiationsController();
 const cancelNegotiationController = new CancelNegotiationController();
 const getNegotiationStatsController = new GetNegotiationStatsController();
+const checkExistingNegotiationController = new CheckExistingNegotiationController();
 
 // All routes require authentication
 router.use(authenticate);
@@ -70,6 +73,13 @@ router.post(
   validateIdParam(),
   validate(cancelNegotiationSchema),
   cancelNegotiationController.execute,
+);
+
+router.get(
+  '/check/:productId',
+  validateIdParam('productId'),
+  validate(checkExistingNegotiationParamsSchema, 'params'),
+  checkExistingNegotiationController.execute,
 );
 
 export default router;

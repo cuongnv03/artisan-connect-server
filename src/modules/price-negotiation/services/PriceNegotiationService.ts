@@ -38,6 +38,7 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     customerId: string,
     data: CreateNegotiationDto,
   ): Promise<PriceNegotiationWithDetails> {
+    // Chỉ return negotiation
     try {
       // Validate customer exists
       const customer = await this.userRepository.findById(customerId);
@@ -54,26 +55,35 @@ export class PriceNegotiationService implements IPriceNegotiationService {
       // Additional business validations
       this.validateNegotiationData(data, product);
 
+      // First check if existing negotiation exists
+      const existingCheck = await this.checkExistingNegotiation(customerId, data.productId);
+      if (existingCheck.hasActive && existingCheck.negotiation) {
+        this.logger.info(
+          `Returning existing negotiation for customer ${customerId} and product ${data.productId}`,
+        );
+
+        // Return existing negotiation directly
+        return existingCheck.negotiation;
+      }
+
+      // Create new negotiation if no existing one
       const negotiation = await this.negotiationRepository.createNegotiation(customerId, data);
 
-      // Fix: Get artisan ID from product instead of negotiation object
-      const artisanId = product.sellerId || product.seller?.id;
-
-      // Send notification to artisan
+      // Send notification to artisan for NEW negotiations only
       try {
+        const artisanId = product.sellerId || product.seller?.id;
         await this.notificationService.notifyPriceNegotiationRequest(
           data.productId,
           customerId,
-          artisanId, // Use artisanId from product, not from negotiation.artisan.id
+          artisanId,
           data.proposedPrice,
         );
       } catch (notifError) {
         this.logger.error(`Error sending negotiation notification: ${notifError}`);
-        // Don't throw error here, just log it
       }
 
       this.logger.info(
-        `Price negotiation created: ${negotiation.id} by customer ${customerId} for product ${data.productId}`,
+        `New price negotiation created: ${negotiation.id} by customer ${customerId} for product ${data.productId}`,
       );
 
       return negotiation;
@@ -233,6 +243,47 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     }
   }
 
+  // Thêm vào src/modules/price-negotiation/services/PriceNegotiationService.ts
+
+  async checkExistingNegotiation(
+    customerId: string,
+    productId: string,
+  ): Promise<{
+    hasActive: boolean;
+    negotiation?: PriceNegotiationWithDetails;
+  }> {
+    try {
+      // Validate customer exists
+      const customer = await this.userRepository.findById(customerId);
+      if (!customer) {
+        throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
+      }
+
+      // Get existing negotiation
+      const negotiation = await this.negotiationRepository.checkExistingNegotiation(
+        customerId,
+        productId,
+      );
+
+      if (negotiation) {
+        this.logger.info(
+          `Found existing negotiation ${negotiation.id} for customer ${customerId} and product ${productId}`,
+        );
+
+        return {
+          hasActive: true,
+          negotiation,
+        };
+      }
+
+      return { hasActive: false };
+    } catch (error) {
+      this.logger.error(`Error checking existing negotiation: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to check existing negotiation', 500, 'SERVICE_ERROR');
+    }
+  }
+
   async validateNegotiationAccess(
     negotiationId: string,
     userId: string,
@@ -241,17 +292,29 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     try {
       // Get user role
       const user = await this.userRepository.findById(userId);
-      if (!user) return false;
+      if (!user) {
+        this.logger.warn(`User not found for access validation: ${userId}`);
+        return false;
+      }
 
       // Admins can access everything
-      if (user.role === 'ADMIN') return true;
+      if (user.role === 'ADMIN') {
+        this.logger.info(`Admin access granted for negotiation ${negotiationId}`);
+        return true;
+      }
 
       // Check if user is involved in the negotiation
       const isInvolved = await this.negotiationRepository.isUserInvolvedInNegotiation(
         negotiationId,
         userId,
       );
-      if (!isInvolved) return false;
+
+      if (!isInvolved) {
+        this.logger.warn(`User ${userId} not involved in negotiation ${negotiationId}`);
+        return false;
+      }
+
+      this.logger.info(`Access granted for user ${userId} to negotiation ${negotiationId}`);
 
       // Additional permission checks based on action
       if (action === 'RESPOND') {

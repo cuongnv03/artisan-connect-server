@@ -3,8 +3,9 @@ import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { IPriceNegotiationService } from '../../services/PriceNegotiationService.interface';
 import container from '../../../../core/di/container';
+import { AppError } from '../../../../core/errors/AppError';
 
-export class CreateNegotiationController extends BaseController {
+export class CheckExistingNegotiationController extends BaseController {
   private negotiationService: IPriceNegotiationService;
 
   constructor() {
@@ -16,17 +17,16 @@ export class CreateNegotiationController extends BaseController {
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     this.validateAuth(req);
 
-    const result = await this.negotiationService.createNegotiation(req.user!.id, req.body);
+    const { productId } = req.params;
+    const customerId = req.user!.id;
 
-    if (result.isNew) {
-      ApiResponse.created(res, result.negotiation, 'Price negotiation created successfully');
-    } else {
-      // Return existing as success with 200 status
-      ApiResponse.success(
-        res,
-        result.negotiation,
-        'You already have an active price negotiation for this product',
-      );
+    // Only customers can check for their own negotiations
+    if (req.user!.role !== 'CUSTOMER') {
+      throw new AppError('Only customers can check their own negotiations', 403, 'FORBIDDEN');
     }
+
+    const result = await this.negotiationService.checkExistingNegotiation(customerId, productId);
+
+    ApiResponse.success(res, result, 'Existing negotiation check completed');
   }
 }

@@ -72,3 +72,10 @@ export const getNegotiationStatsQuerySchema = Joi.object({
   dateFrom: Joi.date().iso(),
   dateTo: Joi.date().iso().min(Joi.ref('dateFrom')),
 });
+
+export const checkExistingNegotiationParamsSchema = Joi.object({
+  productId: Joi.string().uuid().required().messages({
+    'string.uuid': 'Product ID must be a valid UUID',
+    'any.required': 'Product ID is required',
+  }),
+});
