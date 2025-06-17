@@ -315,7 +315,26 @@ export class PriceNegotiationRepository
         },
       });
 
-      if (!negotiation) return null;
+      if (!negotiation) {
+        this.logger.warn(`Negotiation not found with ID: ${id}`);
+        return null;
+      }
+
+      // Validate required relationships exist
+      if (!negotiation.customer) {
+        this.logger.error(`Customer not found for negotiation: ${id}`);
+        return null;
+      }
+
+      if (!negotiation.artisan) {
+        this.logger.error(`Artisan not found for negotiation: ${id}`);
+        return null;
+      }
+
+      if (!negotiation.product) {
+        this.logger.error(`Product not found for negotiation: ${id}`);
+        return null;
+      }
 
       return {
         ...negotiation,

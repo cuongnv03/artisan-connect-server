@@ -56,16 +56,20 @@ export class PriceNegotiationService implements IPriceNegotiationService {
 
       const negotiation = await this.negotiationRepository.createNegotiation(customerId, data);
 
+      // Fix: Get artisan ID from product instead of negotiation object
+      const artisanId = product.sellerId || product.seller?.id;
+
       // Send notification to artisan
       try {
         await this.notificationService.notifyPriceNegotiationRequest(
           data.productId,
           customerId,
-          negotiation.artisan.id,
+          artisanId, // Use artisanId from product, not from negotiation.artisan.id
           data.proposedPrice,
         );
       } catch (notifError) {
         this.logger.error(`Error sending negotiation notification: ${notifError}`);
+        // Don't throw error here, just log it
       }
 
       this.logger.info(
