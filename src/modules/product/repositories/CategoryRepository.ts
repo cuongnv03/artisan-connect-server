@@ -207,7 +207,19 @@ export class CategoryRepository
       const allCategories = await this.prisma.category.findMany({
         where: { isActive: true },
         include: {
-          _count: { select: { products: true } },
+          // SỬA ĐÂY - Chỉ đếm published products
+          _count: {
+            select: {
+              products: {
+                where: {
+                  product: {
+                    status: { in: ['PUBLISHED', 'OUT_OF_STOCK'] },
+                    deletedAt: null,
+                  },
+                },
+              },
+            },
+          },
         },
         orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
       });
@@ -257,7 +269,19 @@ export class CategoryRepository
             where: { isActive: true },
             orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
           },
-          _count: { select: { products: true } },
+          // SỬA ĐÂY
+          _count: {
+            select: {
+              products: {
+                where: {
+                  product: {
+                    status: { in: ['PUBLISHED', 'OUT_OF_STOCK'] },
+                    deletedAt: null,
+                  },
+                },
+              },
+            },
+          },
           attributeTemplates: {
             orderBy: { sortOrder: 'asc' },
           },

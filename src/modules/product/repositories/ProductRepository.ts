@@ -137,8 +137,9 @@ export class ProductRepository
               },
             },
           },
+          // SỬA ĐÂY
           categories: {
-            select: {
+            include: {
               category: {
                 select: { id: true, name: true, slug: true },
               },
@@ -172,7 +173,6 @@ export class ProductRepository
             },
             take: 10,
           },
-          // Check if wishlisted by current user
           wishlistItems: userId
             ? {
                 where: { userId, itemType: 'PRODUCT' },
@@ -208,8 +208,9 @@ export class ProductRepository
               },
             },
           },
+          // SỬA ĐÂY - Include categories đúng cách
           categories: {
-            select: {
+            include: {
               category: {
                 select: { id: true, name: true, slug: true },
               },
@@ -217,6 +218,10 @@ export class ProductRepository
           },
           variants: {
             orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
+          },
+          priceHistory: {
+            orderBy: { createdAt: 'desc' },
+            take: 10,
           },
           postMentions: {
             include: {
@@ -297,9 +302,15 @@ export class ProductRepository
         where.hasVariants = hasVariants;
       }
 
-      // Category filter
+      // Category filter - QUAN TRỌNG
       if (categoryIds && categoryIds.length > 0) {
-        where.categories = { some: { categoryId: { in: categoryIds } } };
+        where.categories = {
+          some: {
+            categoryId: {
+              in: Array.isArray(categoryIds) ? categoryIds : [categoryIds],
+            },
+          },
+        };
       }
 
       // Price range filter
@@ -322,6 +333,7 @@ export class ProductRepository
       const total = await this.prisma.product.count({ where });
       const totalPages = Math.ceil(total / limit);
 
+      // QUAN TRỌNG - Đảm bảo include categories đúng cách
       const products = await this.prisma.product.findMany({
         where,
         include: {
@@ -337,8 +349,9 @@ export class ProductRepository
               },
             },
           },
+          // QUAN TRỌNG - Include categories
           categories: {
-            select: {
+            include: {
               category: {
                 select: { id: true, name: true, slug: true },
               },
@@ -496,7 +509,7 @@ export class ProductRepository
       ...product,
       price: Number(product.price),
       discountPrice: product.discountPrice ? Number(product.discountPrice) : null,
-      categories: product.categories?.map((c: any) => c.category) || [],
+      categories: product.categories?.map((cp: any) => cp.category) || [],
       variants:
         product.variants?.map((v: any) => ({
           ...v,
