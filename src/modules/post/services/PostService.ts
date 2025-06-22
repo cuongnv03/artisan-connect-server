@@ -194,7 +194,8 @@ export class PostService implements IPostService {
 
   async viewPost(id: string, userId?: string): Promise<void> {
     try {
-      await this.postRepository.incrementViewCount(id);
+      // Server-side check để đảm bảo không tăng view cho author
+      await this.postRepository.incrementViewCount(id, userId);
 
       if (userId) {
         this.logger.debug(`Post ${id} viewed by user ${userId}`);

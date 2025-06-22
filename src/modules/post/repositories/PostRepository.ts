@@ -625,12 +625,27 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
     return this.getPosts({ ...options, followedOnly: true }, userId);
   }
 
-  async incrementViewCount(id: string): Promise<void> {
+  async incrementViewCount(id: string, userId?: string): Promise<void> {
     try {
+      // Nếu có userId, check xem có phải author không
+      if (userId) {
+        const post = await this.prisma.post.findUnique({
+          where: { id },
+          select: { userId: true },
+        });
+
+        // Không tăng view nếu là author
+        if (post && post.userId === userId) {
+          return;
+        }
+      }
+
       await this.prisma.post.update({
         where: { id },
         data: { viewCount: { increment: 1 } },
       });
+
+      this.logger.debug(`View count incremented for post ${id} by user ${userId || 'anonymous'}`);
     } catch (error) {
       this.logger.error(`Error incrementing view count: ${error}`);
       // Don't throw error for view count updates as they are non-critical

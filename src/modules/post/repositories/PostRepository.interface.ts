@@ -23,7 +23,7 @@ export interface IPostRepository extends BaseRepository<Post, string> {
     userId: string,
     options?: Omit<PostQueryOptions, 'followedOnly'>,
   ): Promise<PostPaginationResult>;
-  incrementViewCount(id: string): Promise<void>;
+  incrementViewCount(id: string, userId?: string): Promise<void>;
   generateSlug(title: string): Promise<string>;
   getPostStatusCounts(userId: string): Promise<Record<string, number>>;
 }
