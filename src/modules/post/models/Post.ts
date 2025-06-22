@@ -116,6 +116,7 @@ export interface CreatePostDto {
   coverImage?: string;
   tags?: string[];
   publishNow?: boolean;
+  mediaUrls?: string[];
   productMentions?: Array<{
     productId: string;
     contextText?: string;
@@ -132,6 +133,7 @@ export interface UpdatePostDto {
   thumbnailUrl?: string;
   coverImage?: string;
   tags?: string[];
+  mediaUrls?: string[];
   productMentions?: Array<{
     productId: string;
     contextText?: string;

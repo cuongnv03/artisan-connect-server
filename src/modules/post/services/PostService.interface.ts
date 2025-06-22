@@ -15,6 +15,7 @@ export interface IPostService {
   deletePost(id: string, userId: string): Promise<boolean>;
   publishPost(id: string, userId: string): Promise<PostWithUser>;
   archivePost(id: string, userId: string): Promise<PostWithUser>;
+  republishPost(id: string, userId: string): Promise<PostWithUser>;
   getPosts(options: PostQueryOptions, requestUserId?: string): Promise<PostPaginationResult>;
   getFollowedPosts(
     userId: string,

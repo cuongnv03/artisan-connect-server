@@ -11,6 +11,7 @@ import { GetPostBySlugController } from '../controllers/GetPostBySlugController'
 import { DeletePostController } from '../controllers/DeletePostController';
 import { PublishPostController } from '../controllers/PublishPostController';
 import { ArchivePostController } from '../controllers/ArchivePostController';
+import { RepublishPostController } from '../controllers/RepublishPostController';
 import { GetPostsController } from '../controllers/GetPostsController';
 import { GetMyPostsController } from '../controllers/GetMyPostsController';
 import { GetFollowedPostsController } from '../controllers/GetFollowedPostsController';
@@ -33,6 +34,7 @@ const getPostBySlugController = new GetPostBySlugController();
 const deletePostController = new DeletePostController();
 const publishPostController = new PublishPostController();
 const archivePostController = new ArchivePostController();
+const republishPostController = new RepublishPostController();
 const getPostsController = new GetPostsController();
 const getMyPostsController = new GetMyPostsController();
 const getFollowedPostsController = new GetFollowedPostsController();
@@ -68,6 +70,9 @@ router.post('/:id/publish', authenticate, validateIdParam(), publishPostControll
 
 // Archive post
 router.post('/:id/archive', authenticate, validateIdParam(), archivePostController.execute);
+
+// Republish post
+router.post('/:id/republish', authenticate, validateIdParam(), republishPostController.execute);
 
 // Get my posts
 router.get(

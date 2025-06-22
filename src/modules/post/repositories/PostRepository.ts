@@ -190,6 +190,10 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
         order: block.order !== undefined ? block.order : index,
       }));
 
+      // Combine media from content blocks AND additional media files
+      const contentMediaUrls = this.extractMediaUrls(cleanedContent);
+      const allMediaUrls = [...contentMediaUrls, ...(data.mediaUrls || [])];
+
       const post = await this.prisma.$transaction(async (tx) => {
         // Create the main post record
         const newPost = await tx.post.create({
@@ -198,13 +202,13 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
             title: data.title,
             slug,
             summary: data.summary,
-            content: cleanedContent as any, // Store content blocks as JSON
-            contentText, // Extracted plain text for search functionality
+            content: cleanedContent as any,
+            contentText,
             type: data.type,
             status: data.publishNow ? PostStatus.PUBLISHED : data.status || PostStatus.DRAFT,
             thumbnailUrl: data.thumbnailUrl,
             coverImage: data.coverImage,
-            mediaUrls: this.extractMediaUrls(cleanedContent),
+            mediaUrls: allMediaUrls, // Sử dụng combined media URLs
             tags: data.tags || [],
             viewCount: 0,
             likeCount: 0,
@@ -245,7 +249,7 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       // Verify post ownership
       const existingPost = await this.prisma.post.findUnique({
         where: { id },
-        select: { userId: true, title: true },
+        select: { userId: true, title: true, mediaUrls: true }, // THÊM: mediaUrls
       });
 
       if (!existingPost) {
@@ -257,8 +261,6 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       }
 
       const updateData: any = { ...data };
-
-      // Remove productMentions from updateData since we handle it separately
       delete updateData.productMentions;
 
       // Generate new slug if title changed
@@ -266,23 +268,37 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
         updateData.slug = await this.generateSlug(data.title);
       }
 
-      // Process content blocks if provided
-      if (data.content) {
-        const cleanedContent = data.content.map((block, index) => ({
-          id: block.id || `block_${Date.now()}_${index}`,
-          type: block.type,
-          data: block.data || {},
-          order: block.order !== undefined ? block.order : index,
-        }));
+      // Process content blocks and media URLs
+      if (data.content || data.mediaUrls) {
+        const cleanedContent = data.content
+          ? data.content.map((block, index) => ({
+              id: block.id || `block_${Date.now()}_${index}`,
+              type: block.type,
+              data: block.data || {},
+              order: block.order !== undefined ? block.order : index,
+            }))
+          : undefined;
 
-        updateData.content = { blocks: cleanedContent };
-        updateData.contentText = this.extractTextContent(cleanedContent);
-        updateData.mediaUrls = this.extractMediaUrls(cleanedContent);
+        if (cleanedContent) {
+          updateData.content = { blocks: cleanedContent };
+          updateData.contentText = this.extractTextContent(cleanedContent);
+
+          // Combine content media with additional media
+          const contentMediaUrls = this.extractMediaUrls(cleanedContent);
+          const additionalMediaUrls = data.mediaUrls || [];
+          const existingMediaUrls = existingPost.mediaUrls || [];
+
+          // Keep existing media URLs and add new ones
+          updateData.mediaUrls = [...new Set([...contentMediaUrls, ...additionalMediaUrls])];
+        } else if (data.mediaUrls) {
+          // Only updating media URLs without content
+          const existingMediaUrls = existingPost.mediaUrls || [];
+          updateData.mediaUrls = [...new Set([...existingMediaUrls, ...data.mediaUrls])];
+        }
       }
 
       // Use transaction for atomic updates
       const result = await this.prisma.$transaction(async (tx) => {
-        // Update the main post record (without productMentions)
         const updatedPost = await tx.post.update({
           where: { id },
           data: updateData,
@@ -290,12 +306,10 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
 
         // Handle product mentions separately
         if (data.productMentions !== undefined) {
-          // First, delete all existing product mentions
           await tx.postProductMention.deleteMany({
             where: { postId: id },
           });
 
-          // Then create new product mentions if any
           if (data.productMentions.length > 0) {
             await tx.postProductMention.createMany({
               data: data.productMentions.map((mention) => ({
@@ -449,6 +463,58 @@ export class PostRepository extends BasePrismaRepository<Post, string> implement
       this.logger.error(`Error archiving post: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to archive post', 500, 'DATABASE_ERROR');
+    }
+  }
+
+  async republishPost(id: string, userId: string): Promise<PostWithUser> {
+    try {
+      const post = await this.prisma.post.findUnique({
+        where: { id },
+        select: { userId: true, status: true },
+      });
+
+      if (!post) {
+        throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
+      }
+
+      if (post.userId !== userId) {
+        throw new AppError('You can only republish your own posts', 403, 'FORBIDDEN');
+      }
+
+      if (post.status !== PostStatus.ARCHIVED) {
+        throw new AppError('Only archived posts can be republished', 400, 'INVALID_OPERATION');
+      }
+
+      const updatedPost = await this.prisma.post.update({
+        where: { id },
+        data: {
+          status: PostStatus.PUBLISHED,
+          publishedAt: new Date(), // Set new publish date
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+              artisanProfile: {
+                select: {
+                  shopName: true,
+                  isVerified: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return this.transformPostWithUser(updatedPost, userId);
+    } catch (error) {
+      this.logger.error(`Error republishing post: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to republish post', 500, 'DATABASE_ERROR');
     }
   }
 

@@ -17,41 +17,21 @@ const productMentionSchema = Joi.object({
 });
 
 export const createPostSchema = Joi.object({
-  title: Joi.string().required().min(3).max(200).messages({
-    'string.empty': 'Title is required',
-    'string.min': 'Title must be at least 3 characters long',
-    'string.max': 'Title cannot exceed 200 characters',
-  }),
-  summary: Joi.string().max(500).allow('').messages({
-    'string.max': 'Summary cannot exceed 500 characters',
-  }),
-  content: Joi.array().items(contentBlockSchema).required().min(1).messages({
-    'array.min': 'Post must have at least one content block',
-    'any.required': 'Content is required',
-  }),
+  title: Joi.string().required().min(3).max(200),
+  summary: Joi.string().max(500).allow(''),
+  content: Joi.array().items(contentBlockSchema).required().min(1),
   type: Joi.string()
     .valid(...Object.values(PostType))
-    .required()
-    .messages({
-      'any.required': 'Post type is required',
-    }),
+    .required(),
   status: Joi.string()
     .valid(...Object.values(PostStatus))
     .default(PostStatus.DRAFT),
-  thumbnailUrl: Joi.string().uri().allow('').messages({
-    'string.uri': 'Thumbnail URL must be a valid URL',
-  }),
-  coverImage: Joi.string().uri().allow('').messages({
-    'string.uri': 'Cover image URL must be a valid URL',
-  }),
-  tags: Joi.array().items(Joi.string().max(50)).max(10).messages({
-    'array.max': 'Maximum 10 tags allowed',
-    'string.max': 'Each tag cannot exceed 50 characters',
-  }),
+  thumbnailUrl: Joi.string().uri().allow(''),
+  coverImage: Joi.string().uri().allow(''),
+  tags: Joi.array().items(Joi.string().max(50)).max(10),
   publishNow: Joi.boolean().default(false),
-  productMentions: Joi.array().items(productMentionSchema).max(5).messages({
-    'array.max': 'Maximum 5 product mentions allowed per post',
-  }),
+  mediaUrls: Joi.array().items(Joi.string().uri()).max(10),
+  productMentions: Joi.array().items(productMentionSchema).max(5),
 });
 
 export const updatePostSchema = Joi.object({
@@ -63,12 +43,9 @@ export const updatePostSchema = Joi.object({
   thumbnailUrl: Joi.string().uri().allow(''),
   coverImage: Joi.string().uri().allow(''),
   tags: Joi.array().items(Joi.string().max(50)).max(10),
+  mediaUrls: Joi.array().items(Joi.string().uri()).max(10),
   productMentions: Joi.array().items(productMentionSchema).max(5),
-})
-  .min(1)
-  .messages({
-    'object.min': 'At least one field must be provided for update',
-  });
+}).min(1);
 
 export const getPostsQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),

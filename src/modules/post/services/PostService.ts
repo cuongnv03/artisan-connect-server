@@ -132,6 +132,20 @@ export class PostService implements IPostService {
     }
   }
 
+  async republishPost(id: string, userId: string): Promise<PostWithUser> {
+    try {
+      const post = await this.postRepository.republishPost(id, userId);
+
+      this.logger.info(`Post republished: ${id} "${post.title}" by user ${userId}`);
+
+      return post;
+    } catch (error) {
+      this.logger.error(`Error republishing post: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to republish post', 500, 'SERVICE_ERROR');
+    }
+  }
+
   async getPosts(options: PostQueryOptions, requestUserId?: string): Promise<PostPaginationResult> {
     try {
       return await this.postRepository.getPosts(options, requestUserId);
