@@ -41,6 +41,9 @@ export const createProductSchema = Joi.object({
   isCustomizable: Joi.boolean().default(false),
   allowNegotiation: Joi.boolean().default(true),
   shippingInfo: Joi.object().allow(null),
+  status: Joi.string()
+    .valid(...Object.values(ProductStatus))
+    .default(ProductStatus.DRAFT), // ✅ THÊM: status validation
   categoryIds: Joi.array().items(Joi.string().uuid()).min(1).max(5).required().messages({
     'array.min': 'At least one category is required',
     'array.max': 'Maximum 5 categories allowed',
@@ -54,7 +57,7 @@ export const createProductSchema = Joi.object({
   featuredImage: Joi.string().uri().allow('').messages({
     'string.uri': 'Featured image must be a valid URL',
   }),
-  tags: Joi.array().items(Joi.string().max(30)).max(10).messages({
+  tags: Joi.array().items(Joi.string().max(30)).max(10).default([]).messages({
     'array.max': 'Maximum 10 tags allowed',
     'string.max': 'Each tag cannot exceed 30 characters',
   }),
@@ -64,9 +67,9 @@ export const createProductSchema = Joi.object({
   seoDescription: Joi.string().max(160).allow('').messages({
     'string.max': 'SEO description cannot exceed 160 characters',
   }),
-  attributes: Joi.object().allow(null),
-  specifications: Joi.object().allow(null),
-  customFields: Joi.object().allow(null),
+  attributes: Joi.object().allow(null).default({}),
+  specifications: Joi.object().allow(null).default({}),
+  customFields: Joi.object().allow(null).default({}),
   variants: Joi.array()
     .items(
       Joi.object({
@@ -74,16 +77,17 @@ export const createProductSchema = Joi.object({
         price: Joi.number().positive(),
         discountPrice: Joi.number().positive(),
         quantity: Joi.number().integer().min(0).required(),
-        images: Joi.array().items(Joi.string().uri()).max(10),
+        images: Joi.array().items(Joi.string().uri()).max(10).default([]),
         weight: Joi.number().positive(),
         dimensions: Joi.object(),
         attributes: Joi.object().required(),
         isActive: Joi.boolean().default(true),
         isDefault: Joi.boolean().default(false),
-        sortOrder: Joi.number().integer().min(0),
+        sortOrder: Joi.number().integer().min(0).default(0),
       }),
     )
     .max(20)
+    .default([])
     .messages({
       'array.max': 'Maximum 20 variants allowed',
     }),

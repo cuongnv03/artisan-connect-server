@@ -50,6 +50,7 @@ export interface IProductRepository extends BaseRepository<Product, string> {
 
   // Utilities
   generateSlug(name: string, sellerId: string): Promise<string>;
+  generateSku(name: string, sellerId: string): Promise<string>;
   generateVariantSku(productId: string, attributes: Record<string, any>): Promise<string>;
   isProductOwner(productId: string, sellerId: string): Promise<boolean>;
 }

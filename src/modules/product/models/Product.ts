@@ -125,6 +125,7 @@ export interface CreateProductDto {
   isCustomizable?: boolean;
   allowNegotiation?: boolean;
   shippingInfo?: Record<string, any>;
+  status?: ProductStatus;
   tags?: string[];
   images: string[];
   featuredImage?: string;

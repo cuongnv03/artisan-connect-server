@@ -30,6 +30,10 @@ export class ProductRepository
     try {
       const slug = await this.generateSlug(data.name, sellerId);
 
+      // Auto-generate SKU nếu không có
+      const sku =
+        data.sku && data.sku.trim() ? data.sku.trim() : await this.generateSku(data.name, sellerId);
+
       const product = await this.prisma.$transaction(async (tx) => {
         // Create product
         const product = await tx.product.create({
@@ -43,7 +47,7 @@ export class ProductRepository
             quantity: data.quantity,
             minOrderQty: data.minOrderQty || 1,
             maxOrderQty: data.maxOrderQty,
-            sku: data.sku,
+            sku,
             barcode: data.barcode,
             weight: data.weight,
             dimensions: data.dimensions,
@@ -53,7 +57,7 @@ export class ProductRepository
             status: ProductStatus.DRAFT,
             tags: data.tags || [],
             images: data.images,
-            featuredImage: data.featuredImage,
+            featuredImage: data.featuredImage || data.images[0],
             seoTitle: data.seoTitle,
             seoDescription: data.seoDescription,
             attributes: data.attributes,
@@ -379,7 +383,6 @@ export class ProductRepository
     }
   }
 
-  // src/modules/product/repositories/ProductRepository.ts
   async updateProduct(
     id: string,
     sellerId: string,
@@ -513,6 +516,60 @@ export class ProductRepository
 
     const randomStr = Math.random().toString(36).substring(2, 7);
     return `${baseSlug}-${randomStr}`;
+  }
+
+  async generateSku(name: string, sellerId: string): Promise<string> {
+    // Tạo base SKU từ tên sản phẩm
+    let baseSku = name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^a-z0-9\s]/g, '') // Remove special chars
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Remove multiple hyphens
+      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+      .substring(0, 20); // Limit length
+
+    if (baseSku.length < 3) {
+      baseSku = `product-${baseSku}-${Date.now()}`;
+    }
+
+    // Kiểm tra tính duy nhất
+    const existing = await this.prisma.product.findFirst({
+      where: {
+        sku: baseSku,
+        sellerId,
+        deletedAt: null,
+      },
+    });
+
+    if (!existing) return baseSku;
+
+    // Nếu trùng, thêm suffix ngẫu nhiên
+    let counter = 1;
+    let uniqueSku = baseSku;
+
+    while (true) {
+      uniqueSku = `${baseSku}-${counter}`;
+      const exists = await this.prisma.product.findFirst({
+        where: {
+          sku: uniqueSku,
+          sellerId,
+          deletedAt: null,
+        },
+      });
+
+      if (!exists) break;
+      counter++;
+
+      // Failsafe: nếu counter quá lớn, dùng timestamp
+      if (counter > 100) {
+        uniqueSku = `${baseSku}-${Date.now()}`;
+        break;
+      }
+    }
+
+    return uniqueSku;
   }
 
   async generateVariantSku(productId: string, attributes: Record<string, any>): Promise<string> {
