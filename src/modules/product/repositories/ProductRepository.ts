@@ -54,7 +54,7 @@ export class ProductRepository
             isCustomizable: data.isCustomizable || false,
             allowNegotiation: data.allowNegotiation ?? true,
             shippingInfo: data.shippingInfo,
-            status: ProductStatus.DRAFT,
+            status: data.status || ProductStatus.DRAFT,
             tags: data.tags || [],
             images: data.images,
             featuredImage: data.featuredImage || data.images[0],
