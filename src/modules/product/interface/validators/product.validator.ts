@@ -74,10 +74,10 @@ export const createProductSchema = Joi.object({
       Joi.object({
         name: Joi.string().max(200).allow(''),
         price: Joi.number().positive(),
-        discountPrice: Joi.number().positive(),
+        discountPrice: Joi.number().positive().allow(null),
         quantity: Joi.number().integer().min(0).required(),
         images: Joi.array().items(Joi.string().uri()).max(10).default([]),
-        weight: Joi.number().positive(),
+        weight: Joi.number().positive().allow(null),
         dimensions: Joi.object(),
         attributes: Joi.object().required(),
         isActive: Joi.boolean().default(true),
