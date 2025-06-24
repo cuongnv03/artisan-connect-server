@@ -6,6 +6,10 @@ export const createNegotiationSchema = Joi.object({
     'string.uuid': 'Product ID must be a valid UUID',
     'any.required': 'Product ID is required',
   }),
+  variantId: Joi.string().uuid().optional().messages({
+    // NEW
+    'string.uuid': 'Variant ID must be a valid UUID',
+  }),
   proposedPrice: Joi.number().positive().required().messages({
     'number.positive': 'Proposed price must be greater than 0',
     'any.required': 'Proposed price is required',
@@ -58,6 +62,7 @@ export const getNegotiationsQuerySchema = Joi.object({
     Joi.array().items(Joi.string().valid(...Object.values(NegotiationStatus))),
   ),
   productId: Joi.string().uuid(),
+  variantId: Joi.string().uuid(), // NEW
   dateFrom: Joi.date().iso(),
   dateTo: Joi.date().iso().min(Joi.ref('dateFrom')),
   sortBy: Joi.string()
@@ -77,5 +82,11 @@ export const checkExistingNegotiationParamsSchema = Joi.object({
   productId: Joi.string().uuid().required().messages({
     'string.uuid': 'Product ID must be a valid UUID',
     'any.required': 'Product ID is required',
+  }),
+});
+
+export const checkExistingNegotiationQuerySchema = Joi.object({
+  variantId: Joi.string().uuid().optional().messages({
+    'string.uuid': 'Variant ID must be a valid UUID',
   }),
 });

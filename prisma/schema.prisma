@@ -169,9 +169,11 @@ enum NotificationType {
   QUOTE_REQUEST
   QUOTE_RESPONSE
   CUSTOM_ORDER
+  CUSTOM_ORDER_UPDATE
   MESSAGE
   DISPUTE
   RETURN
+  PRICE_NEGOTIATION
   SYSTEM
 }
 
@@ -675,9 +677,10 @@ model ProductVariant {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  cartItems  CartItem[]  @relation("VariantCartItems")
-  orderItems OrderItem[] @relation("VariantOrderItems")
+  product          Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems        CartItem[]         @relation("VariantCartItems")
+  orderItems       OrderItem[]        @relation("VariantOrderItems")
+  PriceNegotiation PriceNegotiation[] @relation("VariantNegotiations")
 
   @@index([productId])
   @@index([sku])
@@ -702,6 +705,7 @@ model PriceHistory {
 model PriceNegotiation {
   id                 String            @id @default(uuid())
   productId          String
+  variantId          String?
   customerId         String
   artisanId          String
   originalPrice      Decimal           @db.Decimal(10, 2)
@@ -716,9 +720,10 @@ model PriceNegotiation {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
-  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  customer  User       @relation("CustomerNegotiations", fields: [customerId], references: [id])
-  artisan   User       @relation("ArtisanNegotiations", fields: [artisanId], references: [id])
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation("VariantNegotiations", fields: [variantId], references: [id])
+  customer  User            @relation("CustomerNegotiations", fields: [customerId], references: [id])
+  artisan   User            @relation("ArtisanNegotiations", fields: [artisanId], references: [id])
   cartItems CartItem[]
 
   @@index([productId])

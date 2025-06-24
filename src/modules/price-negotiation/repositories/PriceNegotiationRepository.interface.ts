@@ -45,11 +45,12 @@ export interface IPriceNegotiationRepository extends BaseRepository<PriceNegotia
   checkExistingNegotiation(
     customerId: string,
     productId: string,
+    variantId?: string,
   ): Promise<PriceNegotiationWithDetails | null>;
 
   // Validation & utilities
   isUserInvolvedInNegotiation(negotiationId: string, userId: string): Promise<boolean>;
   canUserRespondToNegotiation(negotiationId: string, userId: string): Promise<boolean>;
-  hasActiveNegotiation(customerId: string, productId: string): Promise<boolean>;
+  hasActiveNegotiation(customerId: string, productId: string, variantId?: string): Promise<boolean>;
   getNegotiationStats(userId?: string, role?: string): Promise<NegotiationStats>;
 }

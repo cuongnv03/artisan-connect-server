@@ -43,6 +43,12 @@ export class PriceNegotiationRepository
                 },
               },
             },
+            variants: data.variantId
+              ? {
+                  // NEW: Include variants if variantId provided
+                  where: { id: data.variantId, isActive: true },
+                }
+              : undefined,
           },
         });
 
@@ -74,13 +80,35 @@ export class PriceNegotiationRepository
           );
         }
 
-        // Check for existing active negotiations
+        // NEW: Validate variant if provided
+        let variant = null;
+        if (data.variantId) {
+          if (!product.hasVariants) {
+            throw new AppError('This product does not have variants', 400, 'PRODUCT_NO_VARIANTS');
+          }
+
+          variant = product.variants?.[0]; // Since we filtered by id, should be the first one
+          if (!variant) {
+            throw new AppError('Product variant not found or inactive', 404, 'VARIANT_NOT_FOUND');
+          }
+        }
+
+        // Check for existing active negotiations (updated with variant)
+        const whereCondition: any = {
+          productId: data.productId,
+          customerId,
+          status: { in: ['PENDING', 'COUNTER_OFFERED'] },
+        };
+
+        // NEW: Include variantId in the check
+        if (data.variantId) {
+          whereCondition.variantId = data.variantId;
+        } else {
+          whereCondition.variantId = null;
+        }
+
         const existingNegotiation = await tx.priceNegotiation.findFirst({
-          where: {
-            productId: data.productId,
-            customerId,
-            status: { in: ['PENDING', 'COUNTER_OFFERED'] },
-          },
+          where: whereCondition,
           include: {
             product: {
               select: {
@@ -93,6 +121,7 @@ export class PriceNegotiationRepository
                 quantity: true,
                 allowNegotiation: true,
                 status: true,
+                hasVariants: true, // NEW
                 seller: {
                   select: {
                     id: true,
@@ -110,6 +139,19 @@ export class PriceNegotiationRepository
                 },
               },
             },
+            variant: {
+              // NEW
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                discountPrice: true,
+                quantity: true,
+                images: true,
+                attributes: true,
+                isActive: true,
+              },
+            },
             customer: {
               select: {
                 id: true,
@@ -117,6 +159,7 @@ export class PriceNegotiationRepository
                 lastName: true,
                 username: true,
                 avatarUrl: true,
+                role: true, // NEW
               },
             },
             artisan: {
@@ -137,40 +180,25 @@ export class PriceNegotiationRepository
           },
         });
 
-        // ✅ If existing negotiation found, return it instead of throwing error
         if (existingNegotiation) {
-          this.logger.info(
-            `Returning existing negotiation ${existingNegotiation.id} for customer ${customerId} and product ${data.productId}`,
-          );
-
-          return {
-            ...existingNegotiation,
-            originalPrice: Number(existingNegotiation.originalPrice),
-            proposedPrice: Number(existingNegotiation.proposedPrice),
-            finalPrice: existingNegotiation.finalPrice
-              ? Number(existingNegotiation.finalPrice)
-              : null,
-            product: {
-              ...existingNegotiation.product,
-              price: Number(existingNegotiation.product.price),
-              discountPrice: existingNegotiation.product.discountPrice
-                ? Number(existingNegotiation.product.discountPrice)
-                : null,
-            },
-          } as PriceNegotiationWithDetails;
+          return this.transformToNegotiationWithDetails(existingNegotiation);
         }
+
+        // Calculate original price (NEW: consider variant price)
+        const originalPrice = variant
+          ? variant.discountPrice || variant.price
+          : product.discountPrice || product.price;
 
         // Calculate expiration date
         const expiresAt = data.expiresInDays
           ? new Date(Date.now() + data.expiresInDays * 24 * 60 * 60 * 1000)
           : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // Default 3 days
 
-        const originalPrice = product.discountPrice || product.price;
-
         // Create new negotiation
         const negotiation = await tx.priceNegotiation.create({
           data: {
             productId: data.productId,
+            variantId: data.variantId || null, // NEW
             customerId,
             artisanId: product.sellerId,
             originalPrice,
@@ -185,6 +213,7 @@ export class PriceNegotiationRepository
                 actor: 'customer',
                 price: data.proposedPrice,
                 reason: data.customerReason,
+                variantId: data.variantId, // NEW: Include variant info in history
                 timestamp: new Date().toISOString(),
               },
             ],
@@ -192,10 +221,90 @@ export class PriceNegotiationRepository
         });
 
         this.logger.info(
-          `New negotiation created: ${negotiation.id} for customer ${customerId} and product ${data.productId}`,
+          `New negotiation created: ${negotiation.id} for customer ${customerId}, product ${data.productId}${data.variantId ? `, variant ${data.variantId}` : ''}`,
         );
 
-        return (await this.findByIdWithDetails(negotiation.id)) as PriceNegotiationWithDetails;
+        const fullNegotiation = await tx.priceNegotiation.findUnique({
+          where: { id: negotiation.id },
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                images: true,
+                price: true,
+                discountPrice: true,
+                quantity: true,
+                allowNegotiation: true,
+                status: true,
+                hasVariants: true,
+                seller: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    username: true,
+                    avatarUrl: true,
+                    artisanProfile: {
+                      select: {
+                        shopName: true,
+                        isVerified: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            variant: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                discountPrice: true,
+                quantity: true,
+                images: true,
+                attributes: true,
+                isActive: true,
+              },
+            },
+            customer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                avatarUrl: true,
+                role: true,
+              },
+            },
+            artisan: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                avatarUrl: true,
+                artisanProfile: {
+                  select: {
+                    shopName: true,
+                    isVerified: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (!fullNegotiation) {
+          throw new AppError(
+            'Failed to retrieve created negotiation',
+            500,
+            'NEGOTIATION_RETRIEVAL_FAILED',
+          );
+        }
+
+        return this.transformToNegotiationWithDetails(fullNegotiation);
       });
     } catch (error) {
       this.logger.error(`Error creating price negotiation: ${error}`);
@@ -344,6 +453,7 @@ export class PriceNegotiationRepository
               quantity: true,
               allowNegotiation: true,
               status: true,
+              hasVariants: true, // NEW
               seller: {
                 select: {
                   id: true,
@@ -361,6 +471,19 @@ export class PriceNegotiationRepository
               },
             },
           },
+          variant: {
+            // NEW
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              discountPrice: true,
+              quantity: true,
+              images: true,
+              attributes: true,
+              isActive: true,
+            },
+          },
           customer: {
             select: {
               id: true,
@@ -368,6 +491,7 @@ export class PriceNegotiationRepository
               lastName: true,
               username: true,
               avatarUrl: true,
+              role: true, // NEW
             },
           },
           artisan: {
@@ -389,39 +513,10 @@ export class PriceNegotiationRepository
       });
 
       if (!negotiation) {
-        this.logger.warn(`Negotiation not found with ID: ${id}`);
         return null;
       }
 
-      // Validate required relationships exist
-      if (!negotiation.customer) {
-        this.logger.error(`Customer not found for negotiation: ${id}`);
-        return null;
-      }
-
-      if (!negotiation.artisan) {
-        this.logger.error(`Artisan not found for negotiation: ${id}`);
-        return null;
-      }
-
-      if (!negotiation.product) {
-        this.logger.error(`Product not found for negotiation: ${id}`);
-        return null;
-      }
-
-      return {
-        ...negotiation,
-        originalPrice: Number(negotiation.originalPrice),
-        proposedPrice: Number(negotiation.proposedPrice),
-        finalPrice: negotiation.finalPrice ? Number(negotiation.finalPrice) : null,
-        product: {
-          ...negotiation.product,
-          price: Number(negotiation.product.price),
-          discountPrice: negotiation.product.discountPrice
-            ? Number(negotiation.product.discountPrice)
-            : null,
-        },
-      } as PriceNegotiationWithDetails;
+      return this.transformToNegotiationWithDetails(negotiation);
     } catch (error) {
       this.logger.error(`Error finding negotiation with details: ${error}`);
       return null;
@@ -438,6 +533,7 @@ export class PriceNegotiationRepository
         customerId,
         artisanId,
         productId,
+        variantId, // NEW
         status,
         dateFrom,
         dateTo,
@@ -451,6 +547,7 @@ export class PriceNegotiationRepository
       if (customerId) where.customerId = customerId;
       if (artisanId) where.artisanId = artisanId;
       if (productId) where.productId = productId;
+      if (variantId) where.variantId = variantId; // NEW
       if (status) {
         where.status = Array.isArray(status) ? { in: status } : status;
       }
@@ -472,12 +569,21 @@ export class PriceNegotiationRepository
                 images: true,
               },
             },
+            variant: {
+              // NEW
+              select: {
+                id: true,
+                name: true,
+                attributes: true,
+              },
+            },
             customer: {
               select: {
                 id: true,
                 firstName: true,
                 lastName: true,
                 username: true,
+                role: true, // NEW
               },
             },
             artisan: {
@@ -502,6 +608,9 @@ export class PriceNegotiationRepository
         id: negotiation.id,
         productName: negotiation.product.name,
         productImages: negotiation.product.images,
+        variantId: negotiation.variantId, // NEW
+        variantName: negotiation.variant?.name || null, // NEW
+        variantAttributes: negotiation.variant?.attributes || null, // NEW
         originalPrice: Number(negotiation.originalPrice),
         proposedPrice: Number(negotiation.proposedPrice),
         finalPrice: negotiation.finalPrice ? Number(negotiation.finalPrice) : null,
@@ -514,6 +623,7 @@ export class PriceNegotiationRepository
               id: negotiation.customer.id,
               name: `${negotiation.customer.firstName} ${negotiation.customer.lastName}`,
               username: negotiation.customer.username,
+              role: negotiation.customer.role, // NEW
             }
           : undefined,
         artisan: negotiation.artisan
@@ -642,14 +752,27 @@ export class PriceNegotiationRepository
     }
   }
 
-  async hasActiveNegotiation(customerId: string, productId: string): Promise<boolean> {
+  async hasActiveNegotiation(
+    customerId: string,
+    productId: string,
+    variantId?: string, // NEW
+  ): Promise<boolean> {
     try {
+      const whereCondition: any = {
+        customerId,
+        productId,
+        status: { in: ['PENDING', 'COUNTER_OFFERED'] },
+      };
+
+      // NEW: Include variantId in the check
+      if (variantId) {
+        whereCondition.variantId = variantId;
+      } else {
+        whereCondition.variantId = null;
+      }
+
       const negotiation = await this.prisma.priceNegotiation.findFirst({
-        where: {
-          customerId,
-          productId,
-          status: { in: ['PENDING', 'COUNTER_OFFERED'] },
-        },
+        where: whereCondition,
       });
 
       return !!negotiation;
@@ -662,14 +785,24 @@ export class PriceNegotiationRepository
   async checkExistingNegotiation(
     customerId: string,
     productId: string,
+    variantId?: string, // NEW
   ): Promise<PriceNegotiationWithDetails | null> {
     try {
+      const whereCondition: any = {
+        customerId,
+        productId,
+        status: { in: ['PENDING', 'COUNTER_OFFERED', 'ACCEPTED'] },
+      };
+
+      // NEW: Include variantId in the check
+      if (variantId) {
+        whereCondition.variantId = variantId;
+      } else {
+        whereCondition.variantId = null;
+      }
+
       const negotiation = await this.prisma.priceNegotiation.findFirst({
-        where: {
-          customerId,
-          productId,
-          status: { in: ['PENDING', 'COUNTER_OFFERED', 'ACCEPTED'] },
-        },
+        where: whereCondition,
         include: {
           product: {
             select: {
@@ -682,6 +815,7 @@ export class PriceNegotiationRepository
               quantity: true,
               allowNegotiation: true,
               status: true,
+              hasVariants: true, // NEW
               seller: {
                 select: {
                   id: true,
@@ -699,6 +833,19 @@ export class PriceNegotiationRepository
               },
             },
           },
+          variant: {
+            // NEW
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              discountPrice: true,
+              quantity: true,
+              images: true,
+              attributes: true,
+              isActive: true,
+            },
+          },
           customer: {
             select: {
               id: true,
@@ -706,6 +853,7 @@ export class PriceNegotiationRepository
               lastName: true,
               username: true,
               avatarUrl: true,
+              role: true, // NEW
             },
           },
           artisan: {
@@ -731,25 +879,7 @@ export class PriceNegotiationRepository
         return null;
       }
 
-      // Validate required relationships exist
-      if (!negotiation.customer || !negotiation.artisan || !negotiation.product) {
-        this.logger.error(`Incomplete negotiation data for ID: ${negotiation.id}`);
-        return null;
-      }
-
-      return {
-        ...negotiation,
-        originalPrice: Number(negotiation.originalPrice),
-        proposedPrice: Number(negotiation.proposedPrice),
-        finalPrice: negotiation.finalPrice ? Number(negotiation.finalPrice) : null,
-        product: {
-          ...negotiation.product,
-          price: Number(negotiation.product.price),
-          discountPrice: negotiation.product.discountPrice
-            ? Number(negotiation.product.discountPrice)
-            : null,
-        },
-      } as PriceNegotiationWithDetails;
+      return this.transformToNegotiationWithDetails(negotiation);
     } catch (error) {
       this.logger.error(`Error checking existing negotiation: ${error}`);
       return null;
@@ -818,5 +948,30 @@ export class PriceNegotiationRepository
       this.logger.error(`Error getting negotiation stats: ${error}`);
       throw new AppError('Failed to get negotiation stats', 500, 'NEGOTIATION_STATS_FAILED');
     }
+  }
+
+  private transformToNegotiationWithDetails(negotiation: any): PriceNegotiationWithDetails {
+    return {
+      ...negotiation,
+      originalPrice: Number(negotiation.originalPrice),
+      proposedPrice: Number(negotiation.proposedPrice),
+      finalPrice: negotiation.finalPrice ? Number(negotiation.finalPrice) : null,
+      product: {
+        ...negotiation.product,
+        price: Number(negotiation.product.price),
+        discountPrice: negotiation.product.discountPrice
+          ? Number(negotiation.product.discountPrice)
+          : null,
+      },
+      variant: negotiation.variant
+        ? {
+            ...negotiation.variant,
+            price: Number(negotiation.variant.price),
+            discountPrice: negotiation.variant.discountPrice
+              ? Number(negotiation.variant.discountPrice)
+              : null,
+          }
+        : null,
+    } as PriceNegotiationWithDetails;
   }
 }

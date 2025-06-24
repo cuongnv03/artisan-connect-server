@@ -20,6 +20,7 @@ import {
   getNegotiationsQuerySchema,
   getNegotiationStatsQuerySchema,
   checkExistingNegotiationParamsSchema,
+  checkExistingNegotiationQuerySchema,
 } from '../validators/negotiation.validator';
 
 const router = Router();
@@ -79,6 +80,7 @@ router.get(
   '/check/:productId',
   validateIdParam('productId'),
   validate(checkExistingNegotiationParamsSchema, 'params'),
+  validate(checkExistingNegotiationQuerySchema, 'query'), // NEW
   checkExistingNegotiationController.execute,
 );
 

@@ -18,6 +18,7 @@ export class CheckExistingNegotiationController extends BaseController {
     this.validateAuth(req);
 
     const { productId } = req.params;
+    const { variantId } = req.query; // NEW: Get variantId from query
     const customerId = req.user!.id;
 
     // Only customers can check for their own negotiations
@@ -25,7 +26,11 @@ export class CheckExistingNegotiationController extends BaseController {
       throw new AppError('Only customers can check their own negotiations', 403, 'FORBIDDEN');
     }
 
-    const result = await this.negotiationService.checkExistingNegotiation(customerId, productId);
+    const result = await this.negotiationService.checkExistingNegotiation(
+      customerId,
+      productId,
+      variantId as string, // NEW
+    );
 
     ApiResponse.success(res, result, 'Existing negotiation check completed');
   }

@@ -3,6 +3,7 @@ import { NegotiationStatus } from './PriceNegotiationEnums';
 export interface PriceNegotiation {
   id: string;
   productId: string;
+  variantId?: string | null;
   customerId: string;
   artisanId: string;
   originalPrice: number; // Decimal converted to number
@@ -29,6 +30,7 @@ export interface PriceNegotiationWithDetails extends PriceNegotiation {
     quantity: number;
     allowNegotiation: boolean;
     status: string;
+    hasVariants: boolean;
     seller: {
       id: string;
       firstName: string;
@@ -41,12 +43,24 @@ export interface PriceNegotiationWithDetails extends PriceNegotiation {
       } | null;
     };
   };
+  variant?: {
+    // NEW
+    id: string;
+    name?: string | null;
+    price: number;
+    discountPrice?: number | null;
+    quantity: number;
+    images: string[];
+    attributes: Record<string, any>;
+    isActive: boolean;
+  } | null;
   customer: {
     id: string;
     firstName: string;
     lastName: string;
     username: string;
     avatarUrl?: string | null;
+    role: string;
   };
   artisan: {
     id: string;
@@ -64,6 +78,7 @@ export interface PriceNegotiationWithDetails extends PriceNegotiation {
 // DTOs
 export interface CreateNegotiationDto {
   productId: string;
+  variantId?: string;
   proposedPrice: number;
   quantity?: number;
   customerReason?: string;
@@ -82,6 +97,7 @@ export interface NegotiationQueryOptions {
   customerId?: string;
   artisanId?: string;
   productId?: string;
+  variantId?: string;
   status?: NegotiationStatus | NegotiationStatus[];
   dateFrom?: Date;
   dateTo?: Date;
@@ -93,6 +109,9 @@ export interface NegotiationSummary {
   id: string;
   productName: string;
   productImages: string[];
+  variantId?: string | null;
+  variantName?: string | null;
+  variantAttributes?: Record<string, any> | null;
   originalPrice: number;
   proposedPrice: number;
   finalPrice?: number | null;
@@ -104,6 +123,7 @@ export interface NegotiationSummary {
     id: string;
     name: string;
     username: string;
+    role: string;
   };
   artisan?: {
     id: string;

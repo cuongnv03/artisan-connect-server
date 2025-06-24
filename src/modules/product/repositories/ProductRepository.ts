@@ -10,6 +10,7 @@ import {
   ProductPaginationResult,
   PriceHistory,
   ProductStats,
+  ProductVariant,
 } from '../models/Product';
 import { ProductStatus } from '../models/ProductEnums';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
@@ -797,6 +798,66 @@ export class ProductRepository
     } catch (error) {
       this.logger.error(`Error getting price history: ${error}`);
       throw AppError.internal('Failed to get price history', 'PRICE_HISTORY_ERROR');
+    }
+  }
+
+  async getProductVariantById(variantId: string): Promise<ProductVariant | null> {
+    try {
+      const variant = await this.prisma.productVariant.findUnique({
+        where: { id: variantId },
+      });
+
+      if (!variant) {
+        return null;
+      }
+
+      return {
+        ...variant,
+        price: Number(variant.price),
+        discountPrice: variant.discountPrice ? Number(variant.discountPrice) : null,
+      } as ProductVariant;
+    } catch (error) {
+      this.logger.error(`Error getting product variant by ID: ${error}`);
+      return null;
+    }
+  }
+
+  async getProductVariantsByProductId(productId: string): Promise<ProductVariant[]> {
+    try {
+      const variants = await this.prisma.productVariant.findMany({
+        where: {
+          productId,
+          isActive: true,
+        },
+        orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
+      });
+
+      return variants.map((variant) => ({
+        ...variant,
+        price: Number(variant.price),
+        discountPrice: variant.discountPrice ? Number(variant.discountPrice) : null,
+      })) as ProductVariant[];
+    } catch (error) {
+      this.logger.error(`Error getting product variants: ${error}`);
+      return [];
+    }
+  }
+
+  async isVariantBelongsToProduct(variantId: string, productId: string): Promise<boolean> {
+    try {
+      const variant = await this.prisma.productVariant.findUnique({
+        where: {
+          id: variantId,
+          productId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      return !!variant;
+    } catch (error) {
+      this.logger.error(`Error checking variant ownership: ${error}`);
+      return false;
     }
   }
 

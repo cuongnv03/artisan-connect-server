@@ -2,6 +2,7 @@ import { BaseRepository } from '../../../shared/interfaces/BaseRepository';
 import {
   Product,
   ProductWithDetails,
+  ProductVariant,
   CreateProductDto,
   UpdateProductDto,
   ProductQueryOptions,
@@ -39,6 +40,11 @@ export interface IProductRepository extends BaseRepository<Product, string> {
     page?: number,
     limit?: number,
   ): Promise<PaginatedResult<PriceHistory>>;
+
+  // NEW: Add variant methods
+  getProductVariantById(variantId: string): Promise<ProductVariant | null>;
+  getProductVariantsByProductId(productId: string): Promise<ProductVariant[]>;
+  isVariantBelongsToProduct(variantId: string, productId: string): Promise<boolean>;
 
   // Status management
   publishProduct(id: string, sellerId: string): Promise<ProductWithDetails>;

@@ -47,6 +47,7 @@ export interface IPriceNegotiationService {
   checkExistingNegotiation(
     customerId: string,
     productId: string,
+    variantId?: string, // NEW
   ): Promise<{
     hasActive: boolean;
     negotiation?: PriceNegotiationWithDetails;

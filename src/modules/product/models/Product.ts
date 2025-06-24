@@ -42,8 +42,8 @@ export interface ProductVariant {
   productId: string;
   sku: string;
   name?: string | null;
-  price: Decimal;
-  discountPrice?: Decimal | null;
+  price: number;
+  discountPrice?: number | null;
   quantity: number;
   images: string[];
   weight?: number | null;
@@ -59,7 +59,7 @@ export interface ProductVariant {
 export interface PriceHistory {
   id: string;
   productId: string;
-  price: Decimal;
+  price: number;
   changeNote?: string | null;
   changedBy?: string | null;
   createdAt: Date;

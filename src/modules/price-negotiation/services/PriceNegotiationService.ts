@@ -38,7 +38,6 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     customerId: string,
     data: CreateNegotiationDto,
   ): Promise<PriceNegotiationWithDetails> {
-    // Chỉ return negotiation
     try {
       // Validate customer exists
       const customer = await this.userRepository.findById(customerId);
@@ -52,17 +51,61 @@ export class PriceNegotiationService implements IPriceNegotiationService {
         throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
       }
 
+      // NEW: Validate variant if provided
+      if (data.variantId) {
+        if (!product.hasVariants) {
+          throw new AppError('This product does not have variants', 400, 'PRODUCT_NO_VARIANTS');
+        }
+
+        // Check if variant exists and belongs to the product
+        const variant = await this.productRepository.getProductVariantById(data.variantId);
+        if (!variant) {
+          throw new AppError('Product variant not found', 404, 'VARIANT_NOT_FOUND');
+        }
+
+        // Verify variant belongs to the product
+        const variantBelongsToProduct = await this.productRepository.isVariantBelongsToProduct(
+          data.variantId,
+          data.productId,
+        );
+
+        if (!variantBelongsToProduct) {
+          throw new AppError(
+            'Variant does not belong to this product',
+            400,
+            'VARIANT_PRODUCT_MISMATCH',
+          );
+        }
+
+        if (!variant.isActive) {
+          throw new AppError('Product variant is not active', 400, 'VARIANT_INACTIVE');
+        }
+
+        // Check variant quantity
+        if (data.quantity && data.quantity > variant.quantity) {
+          throw new AppError(
+            `Requested quantity (${data.quantity}) exceeds available variant quantity (${variant.quantity})`,
+            400,
+            'INSUFFICIENT_VARIANT_QUANTITY',
+          );
+        }
+      }
+
       // Additional business validations
       this.validateNegotiationData(data, product);
 
-      // First check if existing negotiation exists
-      const existingCheck = await this.checkExistingNegotiation(customerId, data.productId);
+      // First check if existing negotiation exists (updated with variant)
+      const existingCheck = await this.checkExistingNegotiation(
+        customerId,
+        data.productId,
+        data.variantId, // NEW
+      );
+
       if (existingCheck.hasActive && existingCheck.negotiation) {
         this.logger.info(
-          `Returning existing negotiation for customer ${customerId} and product ${data.productId}`,
+          `Returning existing negotiation for customer ${customerId}, product ${data.productId}${data.variantId ? `, variant ${data.variantId}` : ''}`,
         );
 
-        // Return existing negotiation directly
         return existingCheck.negotiation;
       }
 
@@ -70,20 +113,25 @@ export class PriceNegotiationService implements IPriceNegotiationService {
       const negotiation = await this.negotiationRepository.createNegotiation(customerId, data);
 
       // Send notification to artisan for NEW negotiations only
-      try {
-        const artisanId = product.sellerId || product.seller?.id;
-        await this.notificationService.notifyPriceNegotiationRequest(
-          data.productId,
-          customerId,
-          artisanId,
-          data.proposedPrice,
-        );
-      } catch (notifError) {
-        this.logger.error(`Error sending negotiation notification: ${notifError}`);
-      }
+      setImmediate(async () => {
+        try {
+          const artisanId = product.sellerId || product.seller?.id;
+          if (artisanId) {
+            await this.notificationService.notifyPriceNegotiationRequest(
+              data.productId,
+              customerId,
+              artisanId,
+              data.proposedPrice,
+            );
+          }
+        } catch (notifError) {
+          this.logger.error(`Error sending negotiation notification: ${notifError}`);
+          // Don't throw - just log the error
+        }
+      });
 
       this.logger.info(
-        `New price negotiation created: ${negotiation.id} by customer ${customerId} for product ${data.productId}`,
+        `New price negotiation created: ${negotiation.id} by customer ${customerId} for product ${data.productId}${data.variantId ? `, variant ${data.variantId}` : ''}`,
       );
 
       return negotiation;
@@ -243,11 +291,10 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     }
   }
 
-  // Thêm vào src/modules/price-negotiation/services/PriceNegotiationService.ts
-
   async checkExistingNegotiation(
     customerId: string,
     productId: string,
+    variantId?: string, // NEW
   ): Promise<{
     hasActive: boolean;
     negotiation?: PriceNegotiationWithDetails;
@@ -259,15 +306,16 @@ export class PriceNegotiationService implements IPriceNegotiationService {
         throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
       }
 
-      // Get existing negotiation
+      // Get existing negotiation (updated with variant support)
       const negotiation = await this.negotiationRepository.checkExistingNegotiation(
         customerId,
         productId,
+        variantId, // NEW
       );
 
       if (negotiation) {
         this.logger.info(
-          `Found existing negotiation ${negotiation.id} for customer ${customerId} and product ${productId}`,
+          `Found existing negotiation ${negotiation.id} for customer ${customerId}, product ${productId}${variantId ? `, variant ${variantId}` : ''}`,
         );
 
         return {
@@ -360,13 +408,23 @@ export class PriceNegotiationService implements IPriceNegotiationService {
       throw new AppError('Proposed price must be greater than 0', 400, 'INVALID_PROPOSED_PRICE');
     }
 
+    // Get the correct price to compare against (variant price or product price)
+    let originalPrice = Number(product.discountPrice || product.price);
+
+    // NEW: If variant is specified, use variant price
+    if (data.variantId && product.variants && product.variants.length > 0) {
+      const variant = product.variants.find((v: any) => v.id === data.variantId);
+      if (variant) {
+        originalPrice = Number(variant.discountPrice || variant.price);
+      }
+    }
+
     // Check if proposed price is reasonable (not too low compared to original price)
-    const originalPrice = product.discountPrice || product.price;
     const minAcceptablePrice = originalPrice * 0.3; // At least 30% of original price
 
     if (data.proposedPrice < minAcceptablePrice) {
       throw new AppError(
-        `Proposed price is too low. Minimum acceptable price is $${minAcceptablePrice.toFixed(2)}`,
+        `Proposed price is too low. Minimum acceptable price is ${minAcceptablePrice.toFixed(2)}`,
         400,
         'PROPOSED_PRICE_TOO_LOW',
       );
@@ -382,12 +440,32 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     }
 
     // Validate quantity
-    if (data.quantity && (data.quantity <= 0 || data.quantity > product.quantity)) {
-      throw new AppError(
-        `Quantity must be between 1 and ${product.quantity}`,
-        400,
-        'INVALID_QUANTITY',
-      );
+    if (data.quantity && data.quantity <= 0) {
+      throw new AppError('Quantity must be greater than 0', 400, 'INVALID_QUANTITY');
+    }
+
+    // Check product/variant quantity
+    if (data.quantity) {
+      if (data.variantId) {
+        // Check variant quantity
+        const variant = product.variants?.find((v: any) => v.id === data.variantId);
+        if (variant && data.quantity > variant.quantity) {
+          throw new AppError(
+            `Quantity must not exceed available variant stock (${variant.quantity})`,
+            400,
+            'INVALID_QUANTITY',
+          );
+        }
+      } else {
+        // Check product quantity
+        if (data.quantity > product.quantity) {
+          throw new AppError(
+            `Quantity must not exceed available stock (${product.quantity})`,
+            400,
+            'INVALID_QUANTITY',
+          );
+        }
+      }
     }
 
     // Validate reason
