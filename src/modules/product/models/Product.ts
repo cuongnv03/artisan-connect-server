@@ -16,7 +16,6 @@ export interface Product {
   barcode?: string | null;
   weight?: number | null;
   dimensions?: Record<string, any> | null;
-  isCustomizable: boolean;
   allowNegotiation: boolean;
   shippingInfo?: Record<string, any> | null;
   status: ProductStatus;
@@ -122,7 +121,6 @@ export interface CreateProductDto {
   barcode?: string;
   weight?: number;
   dimensions?: Record<string, any>;
-  isCustomizable?: boolean;
   allowNegotiation?: boolean;
   shippingInfo?: Record<string, any>;
   status?: ProductStatus;
@@ -150,7 +148,6 @@ export interface UpdateProductDto {
   barcode?: string;
   weight?: number;
   dimensions?: Record<string, any>;
-  isCustomizable?: boolean;
   allowNegotiation?: boolean;
   shippingInfo?: Record<string, any>;
   status?: ProductStatus;

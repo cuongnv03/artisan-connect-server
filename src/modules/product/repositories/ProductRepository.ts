@@ -51,7 +51,6 @@ export class ProductRepository
             barcode: data.barcode,
             weight: data.weight,
             dimensions: data.dimensions,
-            isCustomizable: data.isCustomizable || false,
             allowNegotiation: data.allowNegotiation ?? true,
             shippingInfo: data.shippingInfo,
             status: data.status || ProductStatus.DRAFT,

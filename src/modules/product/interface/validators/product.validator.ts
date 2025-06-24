@@ -38,7 +38,6 @@ export const createProductSchema = Joi.object({
     'number.positive': 'Weight must be positive',
   }),
   dimensions: Joi.object().allow(null),
-  isCustomizable: Joi.boolean().default(false),
   allowNegotiation: Joi.boolean().default(true),
   shippingInfo: Joi.object().allow(null),
   status: Joi.string()

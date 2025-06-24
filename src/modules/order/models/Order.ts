@@ -81,7 +81,6 @@ export interface OrderItemWithDetails extends OrderItem {
     name: string;
     slug?: string | null;
     images: string[];
-    isCustomizable: boolean;
   } | null; // Make optional
   variant?: {
     id: string;

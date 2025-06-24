@@ -48,7 +48,6 @@ export interface CustomOrderWithDetails extends CustomOrderRequest {
     slug?: string | null;
     images: string[];
     price: number;
-    isCustomizable: boolean;
   } | null;
   messages: CustomOrderMessage[];
 }

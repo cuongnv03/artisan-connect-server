@@ -391,7 +391,6 @@ export class OrderRepository
                   name: true,
                   slug: true,
                   images: true,
-                  isCustomizable: true,
                 },
               },
               variant: {

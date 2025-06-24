@@ -616,7 +616,6 @@ model Product {
   barcode          String?
   weight           Float?
   dimensions       Json?
-  isCustomizable   Boolean       @default(false)
   allowNegotiation Boolean       @default(true)
   shippingInfo     Json?
   status           ProductStatus @default(DRAFT)
