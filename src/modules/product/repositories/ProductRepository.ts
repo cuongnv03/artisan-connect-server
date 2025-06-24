@@ -34,7 +34,7 @@ export class ProductRepository
       const sku =
         data.sku && data.sku.trim() ? data.sku.trim() : await this.generateSku(data.name, sellerId);
 
-      const product = await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         // Create product
         const product = await tx.product.create({
           data: {
@@ -66,6 +66,7 @@ export class ProductRepository
             viewCount: 0,
             salesCount: 0,
             reviewCount: 0,
+            deletedAt: null,
           },
         });
 
@@ -96,7 +97,7 @@ export class ProductRepository
             await tx.productVariant.create({
               data: {
                 productId: product.id,
-                sku: await this.generateVariantSku(product.id, variantData.attributes),
+                sku: await this.generateVariantSku(product.id, variantData.attributes, tx), // ✅ Pass tx
                 name: variantData.name,
                 price: variantData.price || data.price,
                 discountPrice: variantData.discountPrice,
@@ -113,12 +114,51 @@ export class ProductRepository
           }
         }
 
-        return product;
+        // Get product with full relations INSIDE transaction
+        const productWithDetails = await tx.product.findUnique({
+          where: { id: product.id },
+          include: {
+            seller: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                avatarUrl: true,
+                artisanProfile: {
+                  select: { shopName: true, isVerified: true },
+                },
+              },
+            },
+            categories: {
+              include: {
+                category: {
+                  select: { id: true, name: true, slug: true },
+                },
+              },
+            },
+            variants: {
+              orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }],
+            },
+            priceHistory: {
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+            },
+          },
+        });
+
+        if (!productWithDetails) {
+          throw new Error('Failed to retrieve created product');
+        }
+
+        return productWithDetails;
       });
 
-      return (await this.getProductById(product.id)) as ProductWithDetails;
+      // Transform result outside transaction (after commit)
+      return this.transformProductWithDetails(result);
     } catch (error) {
       this.logger.error(`Error creating product: ${error}`);
+      if (error instanceof AppError) throw error;
       throw AppError.internal('Failed to create product', 'PRODUCT_CREATE_ERROR');
     }
   }
@@ -126,7 +166,10 @@ export class ProductRepository
   async getProductById(id: string, userId?: string): Promise<ProductWithDetails | null> {
     try {
       const product = await this.prisma.product.findUnique({
-        where: { id, deletedAt: null },
+        where: {
+          id,
+          OR: [{ deletedAt: null }, { deletedAt: { equals: null } }],
+        },
         include: {
           seller: {
             select: {
@@ -140,7 +183,6 @@ export class ProductRepository
               },
             },
           },
-          // SỬA ĐÂY
           categories: {
             include: {
               category: {
@@ -571,8 +613,15 @@ export class ProductRepository
     return uniqueSku;
   }
 
-  async generateVariantSku(productId: string, attributes: Record<string, any>): Promise<string> {
-    const product = await this.prisma.product.findUnique({
+  async generateVariantSku(
+    productId: string,
+    attributes: Record<string, any>,
+    tx?: any,
+  ): Promise<string> {
+    // Use transaction client if provided, otherwise use default prisma
+    const prismaClient = tx || this.prisma;
+
+    const product = await prismaClient.product.findUnique({
       where: { id: productId },
       select: { name: true },
     });
@@ -596,7 +645,7 @@ export class ProductRepository
 
     const sku = `${baseSku}-${attrPart}`;
 
-    const existing = await this.prisma.productVariant.findUnique({
+    const existing = await prismaClient.productVariant.findUnique({
       where: { sku },
     });
 
