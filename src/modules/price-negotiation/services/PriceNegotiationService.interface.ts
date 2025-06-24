@@ -30,6 +30,17 @@ export interface IPriceNegotiationService {
     options?: Partial<NegotiationQueryOptions>,
   ): Promise<PaginatedResult<NegotiationSummary>>;
 
+  // NEW: Specific methods for sent/received
+  getCustomerNegotiations(
+    customerId: string,
+    options?: Partial<NegotiationQueryOptions>,
+  ): Promise<PaginatedResult<NegotiationSummary>>;
+
+  getArtisanNegotiations(
+    artisanId: string,
+    options?: Partial<NegotiationQueryOptions>,
+  ): Promise<PaginatedResult<NegotiationSummary>>;
+
   // Negotiation status management
   cancelNegotiation(
     negotiationId: string,
@@ -47,7 +58,7 @@ export interface IPriceNegotiationService {
   checkExistingNegotiation(
     customerId: string,
     productId: string,
-    variantId?: string, // NEW
+    variantId?: string,
   ): Promise<{
     hasActive: boolean;
     negotiation?: PriceNegotiationWithDetails;

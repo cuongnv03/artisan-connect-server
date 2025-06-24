@@ -248,6 +248,43 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     }
   }
 
+  async getCustomerNegotiations(
+    customerId: string,
+    options: Partial<NegotiationQueryOptions> = {},
+  ): Promise<PaginatedResult<NegotiationSummary>> {
+    try {
+      this.logger.info(`Getting negotiations sent by customer: ${customerId}`);
+      // This should call repository method that filters by customerId
+      return await this.negotiationRepository.getCustomerNegotiations(customerId, options);
+    } catch (error) {
+      this.logger.error(`Error getting customer negotiations: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get customer negotiations', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async getArtisanNegotiations(
+    artisanId: string,
+    options: Partial<NegotiationQueryOptions> = {},
+  ): Promise<PaginatedResult<NegotiationSummary>> {
+    try {
+      this.logger.info(`Getting negotiations received by artisan: ${artisanId}`);
+
+      // Validate user is artisan
+      const user = await this.userRepository.findById(artisanId);
+      if (!user || user.role !== 'ARTISAN') {
+        throw new AppError('Only artisans can view received negotiations', 403, 'FORBIDDEN');
+      }
+
+      // This should call repository method that filters by artisanId
+      return await this.negotiationRepository.getArtisanNegotiations(artisanId, options);
+    } catch (error) {
+      this.logger.error(`Error getting artisan negotiations: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to get artisan negotiations', 500, 'SERVICE_ERROR');
+    }
+  }
+
   async cancelNegotiation(
     negotiationId: string,
     userId: string,
