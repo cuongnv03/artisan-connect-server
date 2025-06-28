@@ -14,7 +14,10 @@ export interface IPriceNegotiationService {
   createNegotiation(
     customerId: string,
     data: CreateNegotiationDto,
-  ): Promise<PriceNegotiationWithDetails>;
+  ): Promise<{
+    negotiation: PriceNegotiationWithDetails;
+    isNew: boolean;
+  }>;
   respondToNegotiation(
     negotiationId: string,
     artisanId: string,

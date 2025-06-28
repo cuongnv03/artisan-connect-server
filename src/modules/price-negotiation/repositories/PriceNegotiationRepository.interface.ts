@@ -13,6 +13,13 @@ import { BaseRepository } from '../../../shared/interfaces/BaseRepository';
 
 export interface IPriceNegotiationRepository extends BaseRepository<PriceNegotiation, string> {
   // Negotiation creation & management
+  checkAndCreateNegotiation(
+    customerId: string,
+    data: CreateNegotiationDto,
+  ): Promise<{
+    negotiation: PriceNegotiationWithDetails;
+    isNew: boolean;
+  }>;
   createNegotiation(
     customerId: string,
     data: CreateNegotiationDto,

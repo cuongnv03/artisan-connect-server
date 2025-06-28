@@ -26,6 +26,301 @@ export class PriceNegotiationRepository
     super(prisma, 'priceNegotiation');
   }
 
+  // Thêm method mới để handle atomic check and create
+  async checkAndCreateNegotiation(
+    customerId: string,
+    data: CreateNegotiationDto,
+  ): Promise<{
+    negotiation: PriceNegotiationWithDetails;
+    isNew: boolean;
+  }> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Check existing negotiation first (trong transaction)
+        const whereCondition: any = {
+          productId: data.productId,
+          customerId,
+          status: { in: ['PENDING', 'COUNTER_OFFERED'] },
+        };
+
+        if (data.variantId) {
+          whereCondition.variantId = data.variantId;
+        } else {
+          whereCondition.variantId = null;
+        }
+
+        const existingNegotiation = await tx.priceNegotiation.findFirst({
+          where: whereCondition,
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                images: true,
+                price: true,
+                discountPrice: true,
+                quantity: true,
+                allowNegotiation: true,
+                status: true,
+                hasVariants: true,
+                seller: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    username: true,
+                    avatarUrl: true,
+                    artisanProfile: {
+                      select: {
+                        shopName: true,
+                        isVerified: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            variant: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                discountPrice: true,
+                quantity: true,
+                images: true,
+                attributes: true,
+                isActive: true,
+              },
+            },
+            customer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                avatarUrl: true,
+                role: true,
+              },
+            },
+            artisan: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                avatarUrl: true,
+                artisanProfile: {
+                  select: {
+                    shopName: true,
+                    isVerified: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // 2. If existing found, return it
+        if (existingNegotiation) {
+          return {
+            negotiation: this.transformToNegotiationWithDetails(existingNegotiation),
+            isNew: false,
+          };
+        }
+
+        // 3. If not existing, create new (rest of existing createNegotiation logic)
+        const product = await tx.product.findUnique({
+          where: { id: data.productId },
+          include: {
+            seller: {
+              include: {
+                artisanProfile: {
+                  select: { shopName: true, isVerified: true },
+                },
+              },
+            },
+            variants: data.variantId
+              ? {
+                  where: { id: data.variantId, isActive: true },
+                }
+              : undefined,
+          },
+        });
+
+        if (!product) {
+          throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
+        }
+
+        if (product.status !== 'PUBLISHED') {
+          throw new AppError(
+            'Product is not available for price negotiation',
+            400,
+            'PRODUCT_NOT_AVAILABLE',
+          );
+        }
+
+        if (!product.allowNegotiation) {
+          throw new AppError(
+            'This product does not allow price negotiation',
+            400,
+            'NEGOTIATION_NOT_ALLOWED',
+          );
+        }
+
+        if (product.sellerId === customerId) {
+          throw new AppError(
+            'You cannot negotiate price for your own product',
+            400,
+            'CANNOT_NEGOTIATE_OWN_PRODUCT',
+          );
+        }
+
+        // Validate variant if provided
+        let variant = null;
+        if (data.variantId) {
+          if (!product.hasVariants) {
+            throw new AppError('This product does not have variants', 400, 'PRODUCT_NO_VARIANTS');
+          }
+
+          variant = product.variants?.[0];
+          if (!variant) {
+            throw new AppError('Product variant not found or inactive', 404, 'VARIANT_NOT_FOUND');
+          }
+        }
+
+        // Calculate original price
+        const originalPrice = variant
+          ? variant.discountPrice || variant.price
+          : product.discountPrice || product.price;
+
+        // Calculate expiration date
+        const expiresAt = data.expiresInDays
+          ? new Date(Date.now() + data.expiresInDays * 24 * 60 * 60 * 1000)
+          : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+
+        // Create new negotiation
+        const negotiation = await tx.priceNegotiation.create({
+          data: {
+            productId: data.productId,
+            variantId: data.variantId || null,
+            customerId,
+            artisanId: product.sellerId,
+            originalPrice,
+            proposedPrice: data.proposedPrice,
+            quantity: data.quantity || 1,
+            customerReason: data.customerReason,
+            status: NegotiationStatus.PENDING,
+            expiresAt,
+            negotiationHistory: [
+              {
+                action: 'PROPOSE',
+                actor: 'customer',
+                price: data.proposedPrice,
+                reason: data.customerReason,
+                variantId: data.variantId,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+        });
+
+        this.logger.info(
+          `New negotiation created: ${negotiation.id} for customer ${customerId}, product ${data.productId}${data.variantId ? `, variant ${data.variantId}` : ''}`,
+        );
+
+        const fullNegotiation = await tx.priceNegotiation.findUnique({
+          where: { id: negotiation.id },
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                images: true,
+                price: true,
+                discountPrice: true,
+                quantity: true,
+                allowNegotiation: true,
+                status: true,
+                hasVariants: true,
+                seller: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    username: true,
+                    avatarUrl: true,
+                    artisanProfile: {
+                      select: {
+                        shopName: true,
+                        isVerified: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            variant: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                discountPrice: true,
+                quantity: true,
+                images: true,
+                attributes: true,
+                isActive: true,
+              },
+            },
+            customer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                avatarUrl: true,
+                role: true,
+              },
+            },
+            artisan: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                avatarUrl: true,
+                artisanProfile: {
+                  select: {
+                    shopName: true,
+                    isVerified: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (!fullNegotiation) {
+          throw new AppError(
+            'Failed to retrieve created negotiation',
+            500,
+            'NEGOTIATION_RETRIEVAL_FAILED',
+          );
+        }
+
+        return {
+          negotiation: this.transformToNegotiationWithDetails(fullNegotiation),
+          isNew: true,
+        };
+      });
+    } catch (error) {
+      this.logger.error(`Error in checkAndCreateNegotiation: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to create price negotiation', 500, 'NEGOTIATION_CREATION_FAILED');
+    }
+  }
+
   async createNegotiation(
     customerId: string,
     data: CreateNegotiationDto,

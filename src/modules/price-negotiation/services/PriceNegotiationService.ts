@@ -37,33 +37,34 @@ export class PriceNegotiationService implements IPriceNegotiationService {
   async createNegotiation(
     customerId: string,
     data: CreateNegotiationDto,
-  ): Promise<PriceNegotiationWithDetails> {
+  ): Promise<{
+    negotiation: PriceNegotiationWithDetails;
+    isNew: boolean;
+  }> {
     try {
-      // Validate customer exists
+      // Validate customer exists (through repository if needed)
       const customer = await this.userRepository.findById(customerId);
       if (!customer) {
         throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
       }
 
-      // Validate product exists and get details
+      // Validate product exists (through repository)
       const product = await this.productRepository.getProductById(data.productId);
       if (!product) {
         throw new AppError('Product not found', 404, 'PRODUCT_NOT_FOUND');
       }
 
-      // NEW: Validate variant if provided
+      // NEW: Validate variant if provided (through repository)
       if (data.variantId) {
         if (!product.hasVariants) {
           throw new AppError('This product does not have variants', 400, 'PRODUCT_NO_VARIANTS');
         }
 
-        // Check if variant exists and belongs to the product
         const variant = await this.productRepository.getProductVariantById(data.variantId);
         if (!variant) {
           throw new AppError('Product variant not found', 404, 'VARIANT_NOT_FOUND');
         }
 
-        // Verify variant belongs to the product
         const variantBelongsToProduct = await this.productRepository.isVariantBelongsToProduct(
           data.variantId,
           data.productId,
@@ -81,7 +82,6 @@ export class PriceNegotiationService implements IPriceNegotiationService {
           throw new AppError('Product variant is not active', 400, 'VARIANT_INACTIVE');
         }
 
-        // Check variant quantity
         if (data.quantity && data.quantity > variant.quantity) {
           throw new AppError(
             `Requested quantity (${data.quantity}) exceeds available variant quantity (${variant.quantity})`,
@@ -91,50 +91,40 @@ export class PriceNegotiationService implements IPriceNegotiationService {
         }
       }
 
-      // Additional business validations
+      // Business validation
       this.validateNegotiationData(data, product);
 
-      // First check if existing negotiation exists (updated with variant)
-      const existingCheck = await this.checkExistingNegotiation(
-        customerId,
-        data.productId,
-        data.variantId, // NEW
-      );
+      // FIXED: Use atomic repository method instead of manual check
+      const result = await this.negotiationRepository.checkAndCreateNegotiation(customerId, data);
 
-      if (existingCheck.hasActive && existingCheck.negotiation) {
+      // Send notification ONLY for new negotiations
+      if (result.isNew) {
+        setImmediate(async () => {
+          try {
+            const artisanId = product.sellerId || product.seller?.id;
+            if (artisanId) {
+              await this.notificationService.notifyPriceNegotiationRequest(
+                data.productId,
+                customerId,
+                artisanId,
+                data.proposedPrice,
+              );
+            }
+          } catch (notifError) {
+            this.logger.error(`Error sending negotiation notification: ${notifError}`);
+          }
+        });
+
         this.logger.info(
-          `Returning existing negotiation for customer ${customerId}, product ${data.productId}${data.variantId ? `, variant ${data.variantId}` : ''}`,
+          `New price negotiation created: ${result.negotiation.id} by customer ${customerId} for product ${data.productId}${data.variantId ? `, variant ${data.variantId}` : ''}`,
         );
-
-        return existingCheck.negotiation;
+      } else {
+        this.logger.info(
+          `Returning existing negotiation ${result.negotiation.id} for customer ${customerId}, product ${data.productId}${data.variantId ? `, variant ${data.variantId}` : ''}`,
+        );
       }
 
-      // Create new negotiation if no existing one
-      const negotiation = await this.negotiationRepository.createNegotiation(customerId, data);
-
-      // Send notification to artisan for NEW negotiations only
-      setImmediate(async () => {
-        try {
-          const artisanId = product.sellerId || product.seller?.id;
-          if (artisanId) {
-            await this.notificationService.notifyPriceNegotiationRequest(
-              data.productId,
-              customerId,
-              artisanId,
-              data.proposedPrice,
-            );
-          }
-        } catch (notifError) {
-          this.logger.error(`Error sending negotiation notification: ${notifError}`);
-          // Don't throw - just log the error
-        }
-      });
-
-      this.logger.info(
-        `New price negotiation created: ${negotiation.id} by customer ${customerId} for product ${data.productId}${data.variantId ? `, variant ${data.variantId}` : ''}`,
-      );
-
-      return negotiation;
+      return result;
     } catch (error) {
       this.logger.error(`Error creating price negotiation: ${error}`);
       if (error instanceof AppError) throw error;

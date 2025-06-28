@@ -21,10 +21,10 @@ export class CreateNegotiationController extends BaseController {
     if (result.isNew) {
       ApiResponse.created(res, result.negotiation, 'Price negotiation created successfully');
     } else {
-      // Return existing as success with 200 status
+      // FIXED: Return the negotiation data, not null
       ApiResponse.success(
         res,
-        result.negotiation,
+        result.negotiation, // Important: return actual data
         'You already have an active price negotiation for this product',
       );
     }
