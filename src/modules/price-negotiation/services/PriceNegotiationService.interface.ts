@@ -23,12 +23,6 @@ export interface IPriceNegotiationService {
 
   // Negotiation retrieval
   getNegotiationById(id: string): Promise<PriceNegotiationWithDetails | null>;
-  getNegotiations(options?: NegotiationQueryOptions): Promise<PaginatedResult<NegotiationSummary>>;
-  getMyNegotiations(
-    userId: string,
-    userRole: string,
-    options?: Partial<NegotiationQueryOptions>,
-  ): Promise<PaginatedResult<NegotiationSummary>>;
 
   // NEW: Specific methods for sent/received
   getCustomerNegotiations(
@@ -54,7 +48,7 @@ export interface IPriceNegotiationService {
     userId: string,
     action?: string,
   ): Promise<boolean>;
-  getNegotiationStats(userId?: string, userRole?: string): Promise<NegotiationStats>;
+  getNegotiationStats(userId?: string, type?: 'sent' | 'received'): Promise<NegotiationStats>;
   checkExistingNegotiation(
     customerId: string,
     productId: string,

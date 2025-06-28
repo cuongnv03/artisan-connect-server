@@ -523,125 +523,6 @@ export class PriceNegotiationRepository
     }
   }
 
-  async getNegotiations(
-    options: NegotiationQueryOptions,
-  ): Promise<PaginatedResult<NegotiationSummary>> {
-    try {
-      const {
-        page = 1,
-        limit = 10,
-        customerId,
-        artisanId,
-        productId,
-        variantId, // NEW
-        status,
-        dateFrom,
-        dateTo,
-        sortBy = 'createdAt',
-        sortOrder = 'desc',
-      } = options;
-
-      const where: Prisma.PriceNegotiationWhereInput = {};
-
-      // Filters
-      if (customerId) where.customerId = customerId;
-      if (artisanId) where.artisanId = artisanId;
-      if (productId) where.productId = productId;
-      if (variantId) where.variantId = variantId; // NEW
-      if (status) {
-        where.status = Array.isArray(status) ? { in: status } : status;
-      }
-      if (dateFrom || dateTo) {
-        where.createdAt = {};
-        if (dateFrom) where.createdAt.gte = dateFrom;
-        if (dateTo) where.createdAt.lte = dateTo;
-      }
-
-      const skip = PaginationUtils.calculateSkip(page, limit);
-
-      const [negotiations, total] = await Promise.all([
-        this.prisma.priceNegotiation.findMany({
-          where,
-          include: {
-            product: {
-              select: {
-                name: true,
-                images: true,
-              },
-            },
-            variant: {
-              // NEW
-              select: {
-                id: true,
-                name: true,
-                attributes: true,
-              },
-            },
-            customer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                username: true,
-                role: true, // NEW
-              },
-            },
-            artisan: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                artisanProfile: {
-                  select: { shopName: true },
-                },
-              },
-            },
-          },
-          orderBy: { [sortBy]: sortOrder },
-          skip,
-          take: limit,
-        }),
-        this.prisma.priceNegotiation.count({ where }),
-      ]);
-
-      const negotiationSummaries: NegotiationSummary[] = negotiations.map((negotiation) => ({
-        id: negotiation.id,
-        productName: negotiation.product.name,
-        productImages: negotiation.product.images,
-        variantId: negotiation.variantId, // NEW
-        variantName: negotiation.variant?.name || null, // NEW
-        variantAttributes: negotiation.variant?.attributes || null, // NEW
-        originalPrice: Number(negotiation.originalPrice),
-        proposedPrice: Number(negotiation.proposedPrice),
-        finalPrice: negotiation.finalPrice ? Number(negotiation.finalPrice) : null,
-        quantity: negotiation.quantity,
-        status: negotiation.status as NegotiationStatus,
-        createdAt: negotiation.createdAt,
-        expiresAt: negotiation.expiresAt,
-        customer: negotiation.customer
-          ? {
-              id: negotiation.customer.id,
-              name: `${negotiation.customer.firstName} ${negotiation.customer.lastName}`,
-              username: negotiation.customer.username,
-              role: negotiation.customer.role, // NEW
-            }
-          : undefined,
-        artisan: negotiation.artisan
-          ? {
-              id: negotiation.artisan.id,
-              name: `${negotiation.artisan.firstName} ${negotiation.artisan.lastName}`,
-              shopName: negotiation.artisan.artisanProfile?.shopName,
-            }
-          : undefined,
-      }));
-
-      return PaginationUtils.createPaginatedResult(negotiationSummaries, total, page, limit);
-    } catch (error) {
-      this.logger.error(`Error getting negotiations: ${error}`);
-      throw new AppError('Failed to get negotiations', 500, 'NEGOTIATION_QUERY_FAILED');
-    }
-  }
-
   async getCustomerNegotiations(
     customerId: string,
     options: Partial<NegotiationQueryOptions> = {},
@@ -1106,14 +987,19 @@ export class PriceNegotiationRepository
     }
   }
 
-  async getNegotiationStats(userId?: string, role?: string): Promise<NegotiationStats> {
+  async getNegotiationStats(
+    userId?: string,
+    type?: 'sent' | 'received',
+  ): Promise<NegotiationStats> {
     try {
       const where: Prisma.PriceNegotiationWhereInput = {};
 
-      if (userId && role) {
-        if (role === 'CUSTOMER') {
+      if (userId && type) {
+        if (type === 'sent') {
+          // Stats for negotiations sent by user (user is customer)
           where.customerId = userId;
-        } else if (role === 'ARTISAN') {
+        } else if (type === 'received') {
+          // Stats for negotiations received by user (user is artisan)
           where.artisanId = userId;
         }
       }

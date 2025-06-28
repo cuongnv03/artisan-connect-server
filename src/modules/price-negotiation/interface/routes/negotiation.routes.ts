@@ -7,9 +7,11 @@ import { validateIdParam } from '../../../../shared/middlewares/request-validati
 import { CreateNegotiationController } from '../controllers/CreateNegotiationController';
 import { RespondToNegotiationController } from '../controllers/RespondToNegotiationController';
 import { GetNegotiationController } from '../controllers/GetNegotiationController';
-import { GetMyNegotiationsController } from '../controllers/GetMyNegotiationsController';
+import { GetMySentNegotiationsController } from '../controllers/GetMySentNegotiationsController';
+import { GetMyReceivedNegotiationsController } from '../controllers/GetMyReceivedNegotiationsController';
 import { CancelNegotiationController } from '../controllers/CancelNegotiationController';
-import { GetNegotiationStatsController } from '../controllers/GetNegotiationStatsController';
+import { GetMySentNegotiationStatsController } from '../controllers/GetMySentNegotiationStatsController';
+import { GetMyReceivedNegotiationStatsController } from '../controllers/GetMyReceivedNegotiationStatsController';
 import { CheckExistingNegotiationController } from '../controllers/CheckExistingNegotiationController';
 
 // Validators
@@ -29,9 +31,11 @@ const router = Router();
 const createNegotiationController = new CreateNegotiationController();
 const respondToNegotiationController = new RespondToNegotiationController();
 const getNegotiationController = new GetNegotiationController();
-const getMyNegotiationsController = new GetMyNegotiationsController();
+const getMySentNegotiationsController = new GetMySentNegotiationsController();
+const getMyReceivedNegotiationsController = new GetMyReceivedNegotiationsController();
 const cancelNegotiationController = new CancelNegotiationController();
-const getNegotiationStatsController = new GetNegotiationStatsController();
+const getMySentNegotiationStatsController = new GetMySentNegotiationStatsController();
+const getMyReceivedNegotiationStatsController = new GetMyReceivedNegotiationStatsController();
 const checkExistingNegotiationController = new CheckExistingNegotiationController();
 
 // All routes require authentication
@@ -41,18 +45,31 @@ router.use(authenticate);
 // Create new price negotiation
 router.post('/', validate(createNegotiationSchema), createNegotiationController.execute);
 
-// Get my price negotiations (customer negotiations or artisan received negotiations)
+// Get my sent negotiations (customer view - negotiations I sent)
 router.get(
-  '/my-negotiations',
+  '/my-sent',
   validate(getNegotiationsQuerySchema, 'query'),
-  getMyNegotiationsController.execute,
+  getMySentNegotiationsController.execute,
+);
+
+// Get my received negotiations (artisan view - negotiations I received)
+router.get(
+  '/my-received',
+  validate(getNegotiationsQuerySchema, 'query'),
+  getMyReceivedNegotiationsController.execute,
 );
 
 // Get price negotiation statistics
 router.get(
-  '/stats',
+  '/stats/sent',
   validate(getNegotiationStatsQuerySchema, 'query'),
-  getNegotiationStatsController.execute,
+  getMySentNegotiationStatsController.execute,
+);
+
+router.get(
+  '/stats/received',
+  validate(getNegotiationStatsQuerySchema, 'query'),
+  getMyReceivedNegotiationStatsController.execute,
 );
 
 // Get specific price negotiation

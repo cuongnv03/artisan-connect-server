@@ -3,8 +3,9 @@ import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { IPriceNegotiationService } from '../../services/PriceNegotiationService.interface';
 import container from '../../../../core/di/container';
+import { AppError } from '../../../../core/errors/AppError';
 
-export class GetNegotiationStatsController extends BaseController {
+export class GetMyReceivedNegotiationStatsController extends BaseController {
   private negotiationService: IPriceNegotiationService;
 
   constructor() {
@@ -16,18 +17,20 @@ export class GetNegotiationStatsController extends BaseController {
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
     this.validateAuth(req);
 
-    let stats;
-
-    if (req.user!.role === 'ADMIN') {
-      // Admin can get overall stats or specific user stats
-      const userId = req.query.userId as string;
-      const userRole = req.query.userRole as string;
-      stats = await this.negotiationService.getNegotiationStats(userId, userRole);
-    } else {
-      // Get user's own stats
-      stats = await this.negotiationService.getNegotiationStats(req.user!.id, req.user!.role);
+    // Only artisans can view received negotiation stats
+    if (req.user!.role !== 'ARTISAN') {
+      throw new AppError(
+        'Only artisans can view received negotiation statistics',
+        403,
+        'FORBIDDEN',
+      );
     }
 
-    ApiResponse.success(res, stats, 'Price negotiation statistics retrieved successfully');
+    const userId = req.user!.id;
+
+    // Get stats for negotiations received by current user
+    const stats = await this.negotiationService.getNegotiationStats(userId, 'received');
+
+    ApiResponse.success(res, stats, 'Received negotiation statistics retrieved successfully');
   }
 }

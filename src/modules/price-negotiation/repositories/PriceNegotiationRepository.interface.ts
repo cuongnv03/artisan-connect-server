@@ -25,7 +25,6 @@ export interface IPriceNegotiationRepository extends BaseRepository<PriceNegotia
 
   // Negotiation retrieval
   findByIdWithDetails(id: string): Promise<PriceNegotiationWithDetails | null>;
-  getNegotiations(options: NegotiationQueryOptions): Promise<PaginatedResult<NegotiationSummary>>;
   getCustomerNegotiations(
     customerId: string,
     options?: Partial<NegotiationQueryOptions>,
@@ -52,5 +51,5 @@ export interface IPriceNegotiationRepository extends BaseRepository<PriceNegotia
   isUserInvolvedInNegotiation(negotiationId: string, userId: string): Promise<boolean>;
   canUserRespondToNegotiation(negotiationId: string, userId: string): Promise<boolean>;
   hasActiveNegotiation(customerId: string, productId: string, variantId?: string): Promise<boolean>;
-  getNegotiationStats(userId?: string, role?: string): Promise<NegotiationStats>;
+  getNegotiationStats(userId?: string, type?: 'sent' | 'received'): Promise<NegotiationStats>;
 }

@@ -214,40 +214,6 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     }
   }
 
-  async getNegotiations(
-    options: NegotiationQueryOptions = {},
-  ): Promise<PaginatedResult<NegotiationSummary>> {
-    try {
-      return await this.negotiationRepository.getNegotiations(options);
-    } catch (error) {
-      this.logger.error(`Error getting negotiations: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get negotiations', 500, 'SERVICE_ERROR');
-    }
-  }
-
-  async getMyNegotiations(
-    userId: string,
-    userRole: string,
-    options: Partial<NegotiationQueryOptions> = {},
-  ): Promise<PaginatedResult<NegotiationSummary>> {
-    try {
-      if (userRole === 'CUSTOMER') {
-        return await this.negotiationRepository.getCustomerNegotiations(userId, options);
-      } else if (userRole === 'ARTISAN') {
-        return await this.negotiationRepository.getArtisanNegotiations(userId, options);
-      } else if (userRole === 'ADMIN') {
-        return await this.negotiationRepository.getNegotiations(options);
-      } else {
-        throw new AppError('Invalid user role for price negotiations', 403, 'FORBIDDEN');
-      }
-    } catch (error) {
-      this.logger.error(`Error getting my negotiations: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to get my negotiations', 500, 'SERVICE_ERROR');
-    }
-  }
-
   async getCustomerNegotiations(
     customerId: string,
     options: Partial<NegotiationQueryOptions> = {},
@@ -413,9 +379,12 @@ export class PriceNegotiationService implements IPriceNegotiationService {
     }
   }
 
-  async getNegotiationStats(userId?: string, userRole?: string): Promise<NegotiationStats> {
+  async getNegotiationStats(
+    userId?: string,
+    type?: 'sent' | 'received',
+  ): Promise<NegotiationStats> {
     try {
-      return await this.negotiationRepository.getNegotiationStats(userId, userRole);
+      return await this.negotiationRepository.getNegotiationStats(userId, type);
     } catch (error) {
       this.logger.error(`Error getting negotiation stats: ${error}`);
       if (error instanceof AppError) throw error;
