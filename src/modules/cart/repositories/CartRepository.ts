@@ -179,6 +179,176 @@ export class CartRepository
     }
   }
 
+  async addNegotiatedItemToCart(
+    userId: string,
+    negotiationId: string,
+    quantity?: number,
+  ): Promise<CartItem> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Get negotiation with full details
+        const negotiation = await tx.priceNegotiation.findUnique({
+          where: { id: negotiationId },
+          include: {
+            product: {
+              include: {
+                seller: {
+                  include: {
+                    artisanProfile: {
+                      select: { shopName: true, isVerified: true },
+                    },
+                  },
+                },
+                variants: negotiation.variantId
+                  ? { where: { id: negotiation.variantId, isActive: true } }
+                  : undefined,
+              },
+            },
+            variant: negotiation.variantId
+              ? {
+                  select: {
+                    id: true,
+                    sku: true,
+                    name: true,
+                    price: true,
+                    discountPrice: true,
+                    quantity: true,
+                    images: true,
+                    attributes: true,
+                    isActive: true,
+                  },
+                }
+              : undefined,
+          },
+        });
+
+        if (!negotiation) {
+          throw new AppError('Price negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
+        }
+
+        // 2. Validate negotiation
+        if (negotiation.customerId !== userId) {
+          throw new AppError(
+            'You can only use your own negotiations',
+            403,
+            'NEGOTIATION_NOT_YOURS',
+          );
+        }
+
+        if (negotiation.status !== 'ACCEPTED') {
+          throw new AppError(
+            'Only accepted negotiations can be used',
+            400,
+            'NEGOTIATION_NOT_ACCEPTED',
+          );
+        }
+
+        if (negotiation.expiresAt && negotiation.expiresAt < new Date()) {
+          throw new AppError('This price negotiation has expired', 400, 'NEGOTIATION_EXPIRED');
+        }
+
+        if (!negotiation.finalPrice) {
+          throw new AppError('Negotiation does not have a final price', 400, 'NO_FINAL_PRICE');
+        }
+
+        // 3. Validate product
+        const product = negotiation.product;
+        if (product.status !== 'PUBLISHED') {
+          throw new AppError('Product is not available', 400, 'PRODUCT_UNAVAILABLE');
+        }
+
+        // 4. Determine quantity and validate stock
+        const finalQuantity = quantity || negotiation.quantity;
+        let availableQuantity = product.quantity;
+
+        if (negotiation.variantId && negotiation.variant) {
+          if (!negotiation.variant.isActive) {
+            throw new AppError('Product variant is not active', 400, 'VARIANT_INACTIVE');
+          }
+          availableQuantity = negotiation.variant.quantity;
+        }
+
+        if (finalQuantity > negotiation.quantity) {
+          throw new AppError(
+            `Requested quantity (${finalQuantity}) exceeds negotiated quantity (${negotiation.quantity})`,
+            400,
+            'EXCEEDS_NEGOTIATED_QUANTITY',
+          );
+        }
+
+        if (finalQuantity > availableQuantity) {
+          throw new AppError(
+            `Insufficient stock. Only ${availableQuantity} available.`,
+            400,
+            'INSUFFICIENT_STOCK',
+          );
+        }
+
+        // 5. Check existing cart item với same negotiation
+        const existingCartItem = await this.findCartItem(
+          userId,
+          negotiation.productId,
+          negotiation.variantId,
+        );
+
+        if (existingCartItem && existingCartItem.negotiationId === negotiationId) {
+          // Update existing cart item
+          const newQuantity = existingCartItem.quantity + finalQuantity;
+
+          if (newQuantity > negotiation.quantity) {
+            throw new AppError(
+              `Total quantity (${newQuantity}) would exceed negotiated quantity (${negotiation.quantity})`,
+              400,
+              'EXCEEDS_NEGOTIATED_QUANTITY',
+            );
+          }
+
+          const updatedItem = await tx.cartItem.update({
+            where: { id: existingCartItem.id },
+            data: {
+              quantity: newQuantity,
+              updatedAt: new Date(),
+            },
+          });
+
+          return this.enrichCartItemWithProduct(
+            updatedItem,
+            product,
+            negotiation.variantId,
+            negotiation,
+          );
+        }
+
+        // 6. Create new cart item with negotiated price
+        const cartItem = await tx.cartItem.create({
+          data: {
+            userId,
+            productId: negotiation.productId,
+            variantId: negotiation.variantId || null,
+            quantity: finalQuantity,
+            price: new Decimal(negotiation.finalPrice.toString()),
+            negotiationId,
+          },
+        });
+
+        this.logger.info(
+          `Added negotiated item to cart: user ${userId}, negotiation ${negotiationId}, quantity ${finalQuantity}`,
+        );
+
+        return this.enrichCartItemWithProduct(
+          cartItem,
+          product,
+          negotiation.variantId,
+          negotiation,
+        );
+      });
+    } catch (error) {
+      this.logger.error(`Error adding negotiated item to cart: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to add negotiated item to cart', 500, 'CART_ADD_ERROR');
+    }
+  }
+
   async updateCartItem(
     userId: string,
     productId: string,

@@ -610,35 +610,18 @@ export class PriceNegotiationRepository
 
   async respondToNegotiation(
     id: string,
-    artisanId: string,
+    userId: string,
     data: RespondToNegotiationDto,
+    respondingAs: 'artisan' | 'customer',
   ): Promise<PriceNegotiationWithDetails> {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Get current negotiation
         const negotiation = await tx.priceNegotiation.findUnique({
           where: { id },
         });
 
         if (!negotiation) {
           throw new AppError('Price negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
-        }
-
-        if (negotiation.artisanId !== artisanId) {
-          throw new AppError(
-            'You can only respond to your own price negotiations',
-            403,
-            'FORBIDDEN',
-          );
-        }
-
-        // Validate current status
-        if (!['PENDING', 'COUNTER_OFFERED'].includes(negotiation.status)) {
-          throw new AppError(
-            'This negotiation cannot be responded to in its current state',
-            400,
-            'INVALID_NEGOTIATION_STATUS',
-          );
         }
 
         // Check if expired
@@ -653,7 +636,6 @@ export class PriceNegotiationRepository
         let newStatus: NegotiationStatus;
         let finalPrice: number | undefined;
         let updateData: any = {
-          artisanResponse: data.artisanResponse,
           updatedAt: new Date(),
         };
 
@@ -666,11 +648,17 @@ export class PriceNegotiationRepository
             finalPrice = Number(negotiation.proposedPrice);
             updateData.finalPrice = finalPrice;
             updateData.status = newStatus;
+
+            // Set response field based on who is responding
+            if (respondingAs === 'artisan') {
+              updateData.artisanResponse = data.artisanResponse;
+            }
+
             currentHistory.push({
               action: 'ACCEPT',
-              actor: 'artisan',
-              price: finalPrice,
-              response: data.artisanResponse,
+              actor: respondingAs,
+              acceptedPrice: finalPrice,
+              response: data.artisanResponse || data.customerResponse,
               timestamp: new Date().toISOString(),
             });
             break;
@@ -678,10 +666,15 @@ export class PriceNegotiationRepository
           case 'REJECT':
             newStatus = NegotiationStatus.REJECTED;
             updateData.status = newStatus;
+
+            if (respondingAs === 'artisan') {
+              updateData.artisanResponse = data.artisanResponse;
+            }
+
             currentHistory.push({
               action: 'REJECT',
-              actor: 'artisan',
-              response: data.artisanResponse,
+              actor: respondingAs,
+              response: data.artisanResponse || data.customerResponse,
               timestamp: new Date().toISOString(),
             });
             break;
@@ -694,15 +687,21 @@ export class PriceNegotiationRepository
                 'INVALID_COUNTER_PRICE',
               );
             }
+
             newStatus = NegotiationStatus.COUNTER_OFFERED;
             updateData.proposedPrice = data.counterPrice;
             updateData.status = newStatus;
+
+            if (respondingAs === 'artisan') {
+              updateData.artisanResponse = data.artisanResponse;
+            }
+
             currentHistory.push({
               action: 'COUNTER',
-              actor: 'artisan',
+              actor: respondingAs,
               previousPrice: Number(negotiation.proposedPrice),
               newPrice: data.counterPrice,
-              response: data.artisanResponse,
+              response: data.artisanResponse || data.customerResponse,
               timestamp: new Date().toISOString(),
             });
             break;
@@ -1082,10 +1081,16 @@ export class PriceNegotiationRepository
           status: { in: [NegotiationStatus.PENDING, NegotiationStatus.COUNTER_OFFERED] },
           expiresAt: { lt: new Date() },
         },
-        data: { status: NegotiationStatus.EXPIRED },
+        data: {
+          status: NegotiationStatus.EXPIRED,
+          updatedAt: new Date(),
+        },
       });
 
-      this.logger.info(`Expired ${result.count} price negotiations`);
+      if (result.count > 0) {
+        this.logger.info(`Expired ${result.count} price negotiations`);
+      }
+
       return result.count;
     } catch (error) {
       this.logger.error(`Error expiring negotiations: ${error}`);

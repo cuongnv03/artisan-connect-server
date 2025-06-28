@@ -134,48 +134,64 @@ export class PriceNegotiationService implements IPriceNegotiationService {
 
   async respondToNegotiation(
     negotiationId: string,
-    artisanId: string,
+    userId: string,
     data: RespondToNegotiationDto,
+    respondingAs: 'artisan' | 'customer',
   ): Promise<PriceNegotiationWithDetails> {
     try {
-      // Validate artisan exists and has correct role
-      const artisan = await this.userRepository.findById(artisanId);
-      if (!artisan) {
-        throw new AppError('Artisan not found', 404, 'ARTISAN_NOT_FOUND');
+      // Validate user exists
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
       }
 
-      if (artisan.role !== 'ARTISAN') {
-        throw new AppError('Only artisans can respond to price negotiations', 403, 'FORBIDDEN');
+      // Get current negotiation
+      const negotiation = await this.negotiationRepository.findByIdWithDetails(negotiationId);
+      if (!negotiation) {
+        throw new AppError('Negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
       }
 
-      // Validate response permission
-      const canRespond = await this.negotiationRepository.canUserRespondToNegotiation(
-        negotiationId,
-        artisanId,
-      );
-      if (!canRespond) {
+      // Validate permissions
+      if (respondingAs === 'artisan' && negotiation.artisan.id !== userId) {
+        throw new AppError('Only the artisan can respond as artisan', 403, 'FORBIDDEN');
+      }
+
+      if (respondingAs === 'customer' && negotiation.customer.id !== userId) {
+        throw new AppError('Only the customer can respond as customer', 403, 'FORBIDDEN');
+      }
+
+      // Validate status for customer response
+      if (respondingAs === 'customer' && negotiation.status !== 'COUNTER_OFFERED') {
+        throw new AppError('Customer can only respond to counter offers', 400, 'INVALID_STATUS');
+      }
+
+      // Validate status for artisan response
+      if (
+        respondingAs === 'artisan' &&
+        !['PENDING', 'COUNTER_OFFERED'].includes(negotiation.status)
+      ) {
         throw new AppError(
-          'You cannot respond to this price negotiation',
-          403,
-          'CANNOT_RESPOND_TO_NEGOTIATION',
+          'Cannot respond to negotiation in current status',
+          400,
+          'INVALID_STATUS',
         );
       }
 
-      // Validate response data
-      this.validateNegotiationResponseData(data);
-
-      const negotiation = await this.negotiationRepository.respondToNegotiation(
+      const result = await this.negotiationRepository.respondToNegotiation(
         negotiationId,
-        artisanId,
+        userId,
         data,
+        respondingAs,
       );
 
-      // Send notification to customer
+      // Send notification to the other party
       try {
+        const recipientId =
+          respondingAs === 'artisan' ? negotiation.customer.id : negotiation.artisan.id;
         await this.notificationService.notifyPriceNegotiationResponse(
           negotiation.product.id,
-          negotiation.customer.id,
-          artisanId,
+          recipientId,
+          userId,
           data.action,
           data.action === 'COUNTER' ? data.counterPrice : negotiation.finalPrice || undefined,
         );
@@ -184,10 +200,10 @@ export class PriceNegotiationService implements IPriceNegotiationService {
       }
 
       this.logger.info(
-        `Price negotiation response: ${negotiationId} - ${data.action} by artisan ${artisanId}`,
+        `Price negotiation response: ${negotiationId} - ${data.action} by ${respondingAs} ${userId}`,
       );
 
-      return negotiation;
+      return result;
     } catch (error) {
       this.logger.error(`Error responding to price negotiation: ${error}`);
       if (error instanceof AppError) throw error;

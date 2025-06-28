@@ -26,8 +26,9 @@ export interface IPriceNegotiationRepository extends BaseRepository<PriceNegotia
   ): Promise<PriceNegotiationWithDetails>;
   respondToNegotiation(
     id: string,
-    artisanId: string,
+    userId: string,
     data: RespondToNegotiationDto,
+    respondingAs: 'artisan' | 'customer',
   ): Promise<PriceNegotiationWithDetails>;
 
   // Negotiation retrieval

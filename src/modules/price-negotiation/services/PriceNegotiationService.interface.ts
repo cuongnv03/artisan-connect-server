@@ -20,8 +20,9 @@ export interface IPriceNegotiationService {
   }>;
   respondToNegotiation(
     negotiationId: string,
-    artisanId: string,
+    userId: string,
     data: RespondToNegotiationDto,
+    respondingAs: 'artisan' | 'customer',
   ): Promise<PriceNegotiationWithDetails>;
 
   // Negotiation retrieval

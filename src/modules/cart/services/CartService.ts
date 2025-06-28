@@ -287,19 +287,22 @@ export class CartService implements ICartService {
     quantity?: number,
   ): Promise<CartItem> {
     try {
-      // Get negotiation details
-      const negotiation = await this.priceNegotiationRepository.findByIdWithDetails(negotiationId);
+      // Validate user exists
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      }
 
+      // Validate negotiation belongs to user and is accepted
+      const negotiation = await this.priceNegotiationRepository.findByIdWithDetails(negotiationId);
       if (!negotiation) {
         throw new AppError('Price negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
       }
 
-      // Validate negotiation ownership
       if (negotiation.customerId !== userId) {
         throw new AppError('You can only use your own negotiations', 403, 'NEGOTIATION_NOT_YOURS');
       }
 
-      // Validate negotiation status
       if (negotiation.status !== 'ACCEPTED') {
         throw new AppError(
           'Only accepted negotiations can be used',
@@ -308,29 +311,17 @@ export class CartService implements ICartService {
         );
       }
 
-      // Check expiration
-      if (negotiation.expiresAt && negotiation.expiresAt < new Date()) {
-        throw new AppError('This price negotiation has expired', 400, 'NEGOTIATION_EXPIRED');
-      }
-
-      // Use negotiated quantity if not provided
-      const finalQuantity = quantity || negotiation.quantity;
-
-      // Validate quantity
-      if (finalQuantity > negotiation.quantity) {
-        throw new AppError(
-          `Requested quantity (${finalQuantity}) exceeds negotiated quantity (${negotiation.quantity})`,
-          400,
-          'EXCEEDS_NEGOTIATED_QUANTITY',
-        );
-      }
-
-      // Add to cart with negotiation
-      return await this.addToCart(userId, {
-        productId: negotiation.productId,
-        quantity: finalQuantity,
+      const cartItem = await this.cartRepository.addNegotiatedItemToCart(
+        userId,
         negotiationId,
-      });
+        quantity,
+      );
+
+      this.logger.info(
+        `User ${userId} added negotiated item ${negotiationId} with quantity ${quantity || negotiation.quantity} to cart`,
+      );
+
+      return this.convertCartItemForApi(cartItem);
     } catch (error) {
       this.logger.error(`Error adding negotiated item to cart: ${error}`);
       if (error instanceof AppError) throw error;
