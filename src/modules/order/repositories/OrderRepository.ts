@@ -88,12 +88,26 @@ export class OrderRepository
           }
 
           let availableQuantity = product.quantity;
-          let price = product.discountPrice || product.price;
+
+          // ===== FIXED: Use correct price logic =====
+          let price: number;
+
+          // Priority 1: Use negotiated price if exists
+          if (item.negotiationId && item.price) {
+            price = Number(item.price); // This is the negotiated price
+          } else {
+            // Priority 2: Use variant price if variant exists
+            if (item.variantId && item.variant) {
+              price = Number(item.variant.discountPrice || item.variant.price);
+            } else {
+              // Priority 3: Use product price
+              price = Number(product.discountPrice || product.price);
+            }
+          }
 
           // Handle variant-specific validation
           if (item.variantId && item.variant) {
             availableQuantity = item.variant.quantity;
-            price = item.variant.discountPrice || item.variant.price || price;
 
             if (!item.variant.isActive) {
               throw new AppError(`Product variant is not available`, 400, 'VARIANT_UNAVAILABLE');
@@ -105,14 +119,15 @@ export class OrderRepository
             throw new AppError(`Insufficient stock for ${productName}`, 400, 'INSUFFICIENT_STOCK');
           }
 
-          subtotal += Number(price) * item.quantity;
+          // ===== FIXED: Use the correct price for calculation =====
+          subtotal += price * item.quantity;
 
           orderItems.push({
             productId: item.productId,
             variantId: item.variantId,
             sellerId: product.sellerId,
             quantity: item.quantity,
-            price: price,
+            price: price, // ===== FIXED: Use correct price (negotiated if available)
           });
 
           // Update stock
