@@ -7,6 +7,9 @@ import {
   UpdateCustomOrderDto,
   CustomOrderQueryOptions,
   CustomOrderStats,
+  CounterOfferDto,
+  AcceptOfferDto,
+  RejectOfferDto,
 } from '../models/CustomOrder';
 import { QuoteStatus } from '../models/CustomOrderEnums';
 import { ICustomOrderRepository } from '../repositories/CustomOrderRepository.interface';
@@ -67,16 +70,24 @@ export class CustomOrderService implements ICustomOrderService {
 
       const order = await this.customOrderRepository.createCustomOrder(customerId, data);
 
-      // Send notification to artisan
-      try {
-        await this.notificationService.notifyCustomOrderRequest(
-          customerId,
-          data.artisanId,
-          order.id,
-        );
-      } catch (notifError) {
-        this.logger.error(`Error sending notification: ${notifError}`);
+      if (!order) {
+        throw AppError.internal('Failed to retrieve created order', 'ORDER_CREATION_FAILED');
       }
+
+      // Send notification asynchronously
+      setImmediate(async () => {
+        try {
+          await this.notificationService.notifyCustomOrderRequest(
+            customerId,
+            data.artisanId,
+            order.id,
+          );
+        } catch (notifError) {
+          this.logger.error(
+            `Error sending notification for custom order ${order.id}: ${notifError}`,
+          );
+        }
+      });
 
       this.logger.info(
         `Custom order created: ${order.id} by user ${customerId} (${customer.role})`,
@@ -86,7 +97,9 @@ export class CustomOrderService implements ICustomOrderService {
     } catch (error) {
       this.logger.error(`Error creating custom order: ${error}`);
       if (error instanceof AppError) throw error;
-      throw AppError.internal('Failed to create custom order', 'SERVICE_ERROR');
+      throw AppError.internal('Failed to create custom order', 'SERVICE_ERROR', {
+        cause: error as Error,
+      });
     }
   }
 
@@ -157,6 +170,230 @@ export class CustomOrderService implements ICustomOrderService {
       this.logger.error(`Error updating custom order: ${error}`);
       if (error instanceof AppError) throw error;
       throw AppError.internal('Failed to update custom order', 'SERVICE_ERROR');
+    }
+  }
+
+  /**
+   * CUSTOMER COUNTER OFFER - Mới thêm
+   */
+  async customerCounterOffer(
+    id: string,
+    customerId: string,
+    counterData: CounterOfferDto,
+  ): Promise<CustomOrderWithDetails> {
+    try {
+      // Get current order
+      const order = await this.customOrderRepository.findByIdWithDetails(id);
+      if (!order) {
+        throw AppError.notFound('Custom order not found', 'ORDER_NOT_FOUND');
+      }
+
+      // Validate customer ownership
+      if (order.customer.id !== customerId) {
+        throw AppError.forbidden('You can only counter-offer your own orders', 'FORBIDDEN');
+      }
+
+      // Validate status - customer can only counter when artisan has made counter offer
+      if (order.status !== 'COUNTER_OFFERED') {
+        throw AppError.badRequest(
+          'Can only counter-offer when artisan has made a counter offer',
+          'INVALID_STATUS',
+        );
+      }
+
+      // Check expiration
+      if (order.expiresAt && order.expiresAt < new Date()) {
+        throw AppError.badRequest('This custom order has expired', 'ORDER_EXPIRED');
+      }
+
+      // Validate counter offer data
+      this.validateCounterOfferData(counterData);
+
+      // Add to negotiation history
+      const historyEntry = {
+        action: 'CUSTOMER_COUNTER_OFFER',
+        actor: 'customer',
+        timestamp: new Date().toISOString(),
+        data: {
+          finalPrice: counterData.finalPrice,
+          timeline: counterData.timeline,
+          message: counterData.message,
+          response: counterData.response,
+        },
+      };
+
+      // Update order
+      const updatedOrder = await this.customOrderRepository.update(id, {
+        finalPrice: counterData.finalPrice,
+        timeline: counterData.timeline ?? order.timeline ?? null,
+        status: QuoteStatus.COUNTER_OFFERED, // Keep in counter offered state
+        negotiationHistory: [...(order.negotiationHistory || []), historyEntry],
+        expiresAt: counterData.expiresInDays
+          ? new Date(Date.now() + counterData.expiresInDays * 24 * 60 * 60 * 1000)
+          : (order.expiresAt ?? null),
+        updatedAt: new Date(),
+      });
+
+      // Send notification to artisan
+      setImmediate(async () => {
+        try {
+          await this.notificationService.notifyCustomOrderResponse(
+            id,
+            order.artisan.id,
+            customerId,
+            'COUNTER_OFFER',
+            counterData.finalPrice,
+          );
+        } catch (notifError) {
+          this.logger.error(`Error sending notification: ${notifError}`);
+        }
+      });
+
+      this.logger.info(`Customer counter offer: ${id} by customer ${customerId}`);
+
+      return (await this.customOrderRepository.findByIdWithDetails(id)) as CustomOrderWithDetails;
+    } catch (error) {
+      this.logger.error(`Error customer counter offer: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to make counter offer', 'SERVICE_ERROR');
+    }
+  }
+
+  /**
+   * CUSTOMER ACCEPT ARTISAN'S OFFER - Mới thêm
+   */
+  async customerAcceptOffer(
+    id: string,
+    customerId: string,
+    acceptData: AcceptOfferDto,
+  ): Promise<CustomOrderWithDetails> {
+    try {
+      // Get current order
+      const order = await this.customOrderRepository.findByIdWithDetails(id);
+      if (!order) {
+        throw AppError.notFound('Custom order not found', 'ORDER_NOT_FOUND');
+      }
+
+      // Validate customer ownership
+      if (order.customer.id !== customerId) {
+        throw AppError.forbidden('You can only accept your own orders', 'FORBIDDEN');
+      }
+
+      // Validate status
+      if (order.status !== 'COUNTER_OFFERED') {
+        throw AppError.badRequest('Only counter offers can be accepted', 'INVALID_STATUS');
+      }
+
+      // Check expiration
+      if (order.expiresAt && order.expiresAt < new Date()) {
+        throw AppError.badRequest('This custom order has expired', 'ORDER_EXPIRED');
+      }
+
+      // Add to negotiation history
+      const historyEntry = {
+        action: 'CUSTOMER_ACCEPT',
+        actor: 'customer',
+        timestamp: new Date().toISOString(),
+        data: {
+          message: acceptData.message,
+          finalPrice: order.finalPrice,
+        },
+      };
+
+      // Update to accepted
+      await this.customOrderRepository.update(id, {
+        status: QuoteStatus.ACCEPTED,
+        negotiationHistory: [...(order.negotiationHistory || []), historyEntry],
+        updatedAt: new Date(),
+      });
+
+      // Send notification to artisan
+      setImmediate(async () => {
+        try {
+          await this.notificationService.notifyCustomOrderCounterAccepted(
+            id,
+            customerId,
+            order.artisan.id,
+          );
+        } catch (notifError) {
+          this.logger.error(`Error sending notification: ${notifError}`);
+        }
+      });
+
+      this.logger.info(`Customer accepted offer: ${id} by customer ${customerId}`);
+
+      return (await this.customOrderRepository.findByIdWithDetails(id)) as CustomOrderWithDetails;
+    } catch (error) {
+      this.logger.error(`Error customer accept offer: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to accept offer', 'SERVICE_ERROR');
+    }
+  }
+
+  /**
+   * CUSTOMER REJECT OFFER - Mới thêm
+   */
+  async customerRejectOffer(
+    id: string,
+    customerId: string,
+    rejectData: RejectOfferDto,
+  ): Promise<CustomOrderWithDetails> {
+    try {
+      // Get current order
+      const order = await this.customOrderRepository.findByIdWithDetails(id);
+      if (!order) {
+        throw AppError.notFound('Custom order not found', 'ORDER_NOT_FOUND');
+      }
+
+      // Validate customer ownership
+      if (order.customer.id !== customerId) {
+        throw AppError.forbidden('You can only reject your own orders', 'FORBIDDEN');
+      }
+
+      // Validate status
+      if (!['PENDING', 'COUNTER_OFFERED'].includes(order.status)) {
+        throw AppError.badRequest('Cannot reject order in current status', 'INVALID_STATUS');
+      }
+
+      // Add to negotiation history
+      const historyEntry = {
+        action: 'CUSTOMER_REJECT',
+        actor: 'customer',
+        timestamp: new Date().toISOString(),
+        data: {
+          reason: rejectData.reason,
+          message: rejectData.message,
+        },
+      };
+
+      // Update to rejected
+      await this.customOrderRepository.update(id, {
+        status: QuoteStatus.REJECTED,
+        negotiationHistory: [...(order.negotiationHistory || []), historyEntry],
+        updatedAt: new Date(),
+      });
+
+      // Send notification to artisan
+      setImmediate(async () => {
+        try {
+          await this.notificationService.notifyCustomOrderResponse(
+            id,
+            order.artisan.id,
+            customerId,
+            'REJECT',
+          );
+        } catch (notifError) {
+          this.logger.error(`Error sending notification: ${notifError}`);
+        }
+      });
+
+      this.logger.info(`Customer rejected offer: ${id} by customer ${customerId}`);
+
+      return (await this.customOrderRepository.findByIdWithDetails(id)) as CustomOrderWithDetails;
+    } catch (error) {
+      this.logger.error(`Error customer reject offer: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to reject offer', 'SERVICE_ERROR');
     }
   }
 
@@ -336,7 +573,7 @@ export class CustomOrderService implements ICustomOrderService {
       }
 
       // Update to accepted
-      const acceptedOrder = await this.customOrderRepository.updateStatus(id, 'ACCEPTED');
+      const acceptedOrder = await this.customOrderRepository.updateStatus(id, QuoteStatus.ACCEPTED);
 
       // Add to negotiation history
       await this.customOrderRepository.addNegotiationEntry(id, {
@@ -388,6 +625,18 @@ export class CustomOrderService implements ICustomOrderService {
 
     if (data.customerBudget !== undefined && data.customerBudget <= 0) {
       throw AppError.badRequest('Customer budget must be greater than 0', 'INVALID_BUDGET');
+    }
+
+    if (data.expiresInDays !== undefined) {
+      if (data.expiresInDays < 1 || data.expiresInDays > 30) {
+        throw AppError.badRequest('Expiration must be between 1 and 30 days', 'INVALID_EXPIRATION');
+      }
+    }
+  }
+
+  private validateCounterOfferData(data: CounterOfferDto): void {
+    if (!data.finalPrice || data.finalPrice <= 0) {
+      throw AppError.badRequest('Final price must be greater than 0', 'INVALID_PRICE');
     }
 
     if (data.expiresInDays !== undefined) {

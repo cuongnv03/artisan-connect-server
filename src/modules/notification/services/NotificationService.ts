@@ -15,7 +15,6 @@ import container from '../../../core/di/container';
 
 export class NotificationService implements INotificationService {
   private notificationRepository: INotificationRepository;
-  private _socketService?: ISocketService;
   private logger = Logger.getInstance();
 
   constructor() {
@@ -23,12 +22,14 @@ export class NotificationService implements INotificationService {
       container.resolve<INotificationRepository>('notificationRepository');
   }
 
-  // Lazy getter for socketService
-  private get socketService(): ISocketService {
-    if (!this._socketService) {
-      this._socketService = container.resolve<ISocketService>('socketService');
+  // Safe getter cho socketService với fallback
+  private get socketService(): ISocketService | null {
+    try {
+      return container.resolve<ISocketService>('socketService');
+    } catch (error) {
+      this.logger.warn('SocketService not available yet, notifications will be stored only');
+      return null;
     }
-    return this._socketService;
   }
 
   async createNotification(data: CreateNotificationDto): Promise<Notification> {
@@ -45,10 +46,21 @@ export class NotificationService implements INotificationService {
     try {
       const notification = await this.createNotification(data);
 
-      // Send real-time notification via Socket.io
-      await this.socketService.sendNotification(data.recipientId, notification);
-
-      this.logger.info(`Notification sent to user ${data.recipientId}: ${data.type}`);
+      // Gửi real-time notification nếu socketService available
+      const socketService = this.socketService;
+      if (socketService) {
+        try {
+          await socketService.sendNotification(data.recipientId, notification);
+          this.logger.info(`Real-time notification sent to user ${data.recipientId}: ${data.type}`);
+        } catch (socketError) {
+          this.logger.error(`Failed to send real-time notification: ${socketError}`);
+          // Không throw error - notification đã được lưu trong DB
+        }
+      } else {
+        this.logger.info(
+          `Notification stored for user ${data.recipientId}: ${data.type} (real-time unavailable)`,
+        );
+      }
     } catch (error) {
       this.logger.error(`Error sending notification: ${error}`);
       if (error instanceof AppError) throw error;

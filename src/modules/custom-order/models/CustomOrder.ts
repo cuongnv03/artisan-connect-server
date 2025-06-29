@@ -100,6 +100,38 @@ export interface UpdateCustomOrderDto {
   timeline?: string;
 }
 
+export interface CounterOfferDto {
+  action: 'COUNTER_OFFER';
+  finalPrice: number;
+  timeline?: string;
+  message?: string;
+  response?: any;
+  expiresInDays?: number;
+}
+
+export interface AcceptOfferDto {
+  action: 'ACCEPT';
+  message?: string;
+}
+
+export interface RejectOfferDto {
+  action: 'REJECT';
+  reason?: string;
+  message?: string;
+}
+
+export interface CustomOrderChatDto {
+  title: string;
+  description: string;
+  estimatedPrice?: number;
+  customerBudget?: number;
+  timeline?: string;
+  specifications?: any;
+  attachments?: string[];
+  referenceProductId?: string;
+  expiresInDays?: number;
+}
+
 export interface CustomOrderQueryOptions {
   page?: number;
   limit?: number;

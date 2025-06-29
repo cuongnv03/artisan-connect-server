@@ -13,56 +13,107 @@ export class SendCustomOrderController extends BaseController {
   }
 
   protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      this.validateAuth(req);
+    this.validateAuth(req);
 
-      const { type, receiverId, content, customOrderData, quoteRequestId, response } = req.body;
+    const {
+      type,
+      receiverId,
+      content,
+      customOrderData,
+      quoteRequestId,
+      response,
+      counterOffer,
+      acceptOffer,
+      rejectOffer,
+    } = req.body;
 
-      let message;
+    let result;
 
-      switch (type) {
-        case 'create_custom_order':
-          // Khách hàng tạo custom order mới
-          message = await this.messageService.sendCustomOrderMessage(
-            req.user!.id,
-            receiverId,
-            customOrderData,
-            content,
-          );
-          break;
+    switch (type) {
+      case 'create_custom_order':
+        // Khách hàng tạo custom order mới qua chat
+        result = await this.messageService.sendCustomOrderMessage(
+          req.user!.id,
+          receiverId,
+          customOrderData,
+          content,
+        );
+        break;
 
-        case 'respond_custom_order':
-          // Nghệ nhân phản hồi custom order
-          message = await this.messageService.respondToCustomOrderInChat(
-            req.user!.id,
-            receiverId,
-            quoteRequestId,
-            {
-              action: response.action,
-              finalPrice: response.finalPrice,
-              message: content,
-              response: response.data,
-            },
-          );
-          break;
+      case 'respond_custom_order':
+        // Nghệ nhân phản hồi custom order qua chat
+        result = await this.messageService.respondToCustomOrderInChat(
+          req.user!.id,
+          receiverId,
+          quoteRequestId,
+          {
+            action: response.action,
+            finalPrice: response.finalPrice,
+            message: content,
+            response: response.data,
+            expiresInDays: response.expiresInDays,
+          },
+        );
+        break;
 
-        case 'quote_discussion':
-          // Tiếp tục thảo luận về quote
-          message = await this.messageService.sendQuoteDiscussionMessage(
-            req.user!.id,
-            receiverId,
-            quoteRequestId,
-            content,
-          );
-          break;
+      case 'customer_counter_offer':
+        // Customer counter offer qua chat
+        result = await this.messageService.customerCounterOfferInChat(
+          req.user!.id,
+          receiverId,
+          quoteRequestId,
+          {
+            action: 'COUNTER_OFFER',
+            finalPrice: counterOffer.finalPrice,
+            timeline: counterOffer.timeline,
+            message: content,
+            response: counterOffer.data,
+            expiresInDays: counterOffer.expiresInDays,
+          },
+        );
+        break;
 
-        default:
-          throw new Error('Invalid custom order message type');
-      }
+      case 'customer_accept_offer':
+        // Customer accept offer qua chat
+        result = await this.messageService.customerAcceptOfferInChat(
+          req.user!.id,
+          receiverId,
+          quoteRequestId,
+          {
+            action: 'ACCEPT',
+            message: content,
+          },
+        );
+        break;
 
-      ApiResponse.created(res, message, 'Custom order message sent successfully');
-    } catch (error) {
-      next(error);
+      case 'customer_reject_offer':
+        // Customer reject offer qua chat
+        result = await this.messageService.customerRejectOfferInChat(
+          req.user!.id,
+          receiverId,
+          quoteRequestId,
+          {
+            action: 'REJECT',
+            reason: rejectOffer.reason,
+            message: content,
+          },
+        );
+        break;
+
+      case 'quote_discussion':
+        // Tiếp tục thảo luận về quote
+        result = await this.messageService.sendQuoteDiscussionMessage(
+          req.user!.id,
+          receiverId,
+          quoteRequestId,
+          content,
+        );
+        break;
+
+      default:
+        throw new Error('Invalid custom order message type');
     }
+
+    ApiResponse.created(res, result, 'Custom order message sent successfully');
   }
 }

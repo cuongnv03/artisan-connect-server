@@ -12,6 +12,11 @@ import { GetMyCustomOrdersController } from '../controllers/GetMyCustomOrdersCon
 import { GetNegotiationHistoryController } from '../controllers/GetNegotiationHistoryController';
 import { AcceptCounterOfferController } from '../controllers/AcceptCounterOfferController';
 import { CancelCustomOrderController } from '../controllers/CancelCustomOrderController';
+
+import { CustomerCounterOfferController } from '../controllers/CustomerCounterOfferController';
+import { CustomerAcceptOfferController } from '../controllers/CustomerAcceptOfferController';
+import { CustomerRejectOfferController } from '../controllers/CustomerRejectOfferController';
+
 import { GetCustomOrderStatsController } from '../controllers/GetCustomOrderStatsController';
 
 // Validators
@@ -22,6 +27,9 @@ import {
   cancelCustomOrderSchema,
   getCustomOrdersQuerySchema,
   getStatsQuerySchema,
+  customerCounterOfferSchema,
+  customerAcceptOfferSchema,
+  customerRejectOfferSchema,
 } from '../validators/custom-order.validator';
 
 const router = Router();
@@ -35,6 +43,9 @@ const getMyCustomOrdersController = new GetMyCustomOrdersController();
 const getNegotiationHistoryController = new GetNegotiationHistoryController();
 const acceptCounterOfferController = new AcceptCounterOfferController();
 const cancelCustomOrderController = new CancelCustomOrderController();
+const customerCounterOfferController = new CustomerCounterOfferController();
+const customerAcceptOfferController = new CustomerAcceptOfferController();
+const customerRejectOfferController = new CustomerRejectOfferController();
 const getCustomOrderStatsController = new GetCustomOrderStatsController();
 
 // All routes require authentication
@@ -72,6 +83,31 @@ router.post(
   validateIdParam(),
   validate(artisanResponseSchema),
   respondToCustomOrderController.execute,
+);
+
+// === CUSTOMER RESPONSES (NEW) ===
+// Customer counter offer
+router.post(
+  '/:id/counter-offer',
+  validateIdParam(),
+  validate(customerCounterOfferSchema),
+  customerCounterOfferController.execute,
+);
+
+// Customer accept offer
+router.post(
+  '/:id/accept',
+  validateIdParam(),
+  validate(customerAcceptOfferSchema),
+  customerAcceptOfferController.execute,
+);
+
+// Customer reject offer
+router.post(
+  '/:id/reject',
+  validateIdParam(),
+  validate(customerRejectOfferSchema),
+  customerRejectOfferController.execute,
 );
 
 // Get negotiation history

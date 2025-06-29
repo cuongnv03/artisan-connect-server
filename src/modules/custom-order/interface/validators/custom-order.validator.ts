@@ -79,6 +79,32 @@ export const cancelCustomOrderSchema = Joi.object({
   }),
 });
 
+export const customerCounterOfferSchema = Joi.object({
+  action: Joi.string().valid('COUNTER_OFFER').required(),
+  finalPrice: Joi.number().positive().required().messages({
+    'number.positive': 'Final price must be greater than 0',
+    'any.required': 'Final price is required for counter offers',
+  }),
+  timeline: Joi.string().max(500).allow(''),
+  message: Joi.string().max(1000).allow(''),
+  response: Joi.object().allow(null),
+  expiresInDays: Joi.number().integer().min(1).max(30).messages({
+    'number.min': 'Expiration must be at least 1 day',
+    'number.max': 'Expiration cannot exceed 30 days',
+  }),
+});
+
+export const customerAcceptOfferSchema = Joi.object({
+  action: Joi.string().valid('ACCEPT').required(),
+  message: Joi.string().max(1000).allow(''),
+});
+
+export const customerRejectOfferSchema = Joi.object({
+  action: Joi.string().valid('REJECT').required(),
+  reason: Joi.string().max(500).allow(''),
+  message: Joi.string().max(1000).allow(''),
+});
+
 export const getCustomOrdersQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(10),

@@ -6,6 +6,9 @@ import {
   UpdateCustomOrderDto,
   CustomOrderQueryOptions,
   CustomOrderStats,
+  CounterOfferDto,
+  AcceptOfferDto,
+  RejectOfferDto,
 } from '../models/CustomOrder';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
@@ -31,6 +34,23 @@ export interface ICustomOrderService {
     id: string,
     artisanId: string,
     data: ArtisanResponseDto,
+  ): Promise<CustomOrderWithDetails>;
+
+  // Customer bidirectional operations (NEW)
+  customerCounterOffer(
+    id: string,
+    customerId: string,
+    data: CounterOfferDto,
+  ): Promise<CustomOrderWithDetails>;
+  customerAcceptOffer(
+    id: string,
+    customerId: string,
+    data: AcceptOfferDto,
+  ): Promise<CustomOrderWithDetails>;
+  customerRejectOffer(
+    id: string,
+    customerId: string,
+    data: RejectOfferDto,
   ): Promise<CustomOrderWithDetails>;
 
   // Common operations

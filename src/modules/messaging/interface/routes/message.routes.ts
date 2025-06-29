@@ -59,7 +59,8 @@ router.get(
 // Get unread message count
 router.get('/unread-count', getUnreadCountController.execute);
 
-// ===== CUSTOM ORDER IN CHAT =====
+// ===== CUSTOM ORDER IN CHAT (ENHANCED) =====
+// Complete custom order flow in chat
 router.post(
   '/custom-order',
   validate(sendCustomOrderMessageSchema),

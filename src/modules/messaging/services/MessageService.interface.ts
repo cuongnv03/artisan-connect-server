@@ -5,6 +5,13 @@ import {
   MessageQueryOptions,
   Conversation,
 } from '../models/Message';
+import {
+  CustomOrderChatDto,
+  ArtisanResponseDto,
+  CounterOfferDto,
+  AcceptOfferDto,
+  RejectOfferDto,
+} from '../../custom-order/models/CustomOrder';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 
 export interface IMessageService {
@@ -32,11 +39,11 @@ export interface IMessageService {
   // Delete
   deleteMessage(messageId: string, userId: string): Promise<boolean>;
 
-  // Special message types
+  // Custom order chat integration (ENHANCED)
   sendCustomOrderMessage(
     senderId: string,
     receiverId: string,
-    customOrderData: any,
+    customOrderData: CustomOrderChatDto,
     content: string,
   ): Promise<MessageWithUsers>;
 
@@ -44,12 +51,29 @@ export interface IMessageService {
     artisanId: string,
     customerId: string,
     quoteRequestId: string,
-    response: {
-      action: 'ACCEPT' | 'REJECT' | 'COUNTER_OFFER';
-      finalPrice?: number;
-      message: string;
-      response?: any;
-    },
+    response: ArtisanResponseDto & { message: string },
+  ): Promise<MessageWithUsers>;
+
+  // NEW: Customer bidirectional operations
+  customerCounterOfferInChat(
+    customerId: string,
+    artisanId: string,
+    quoteRequestId: string,
+    counterData: CounterOfferDto & { message: string },
+  ): Promise<MessageWithUsers>;
+
+  customerAcceptOfferInChat(
+    customerId: string,
+    artisanId: string,
+    quoteRequestId: string,
+    acceptData: AcceptOfferDto & { message: string },
+  ): Promise<MessageWithUsers>;
+
+  customerRejectOfferInChat(
+    customerId: string,
+    artisanId: string,
+    quoteRequestId: string,
+    rejectData: RejectOfferDto & { message: string },
   ): Promise<MessageWithUsers>;
 
   sendQuoteDiscussionMessage(

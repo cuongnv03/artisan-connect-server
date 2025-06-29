@@ -8,6 +8,13 @@ import {
   Conversation,
   MessageType,
 } from '../models/Message';
+import {
+  CustomOrderChatDto,
+  ArtisanResponseDto,
+  CounterOfferDto,
+  AcceptOfferDto,
+  RejectOfferDto,
+} from '../../custom-order/models/CustomOrder';
 import { IMessageRepository } from '../repositories/MessageRepository.interface';
 import { IUserRepository } from '../../auth/repositories/UserRepository.interface';
 import { INotificationService } from '../../notification/services/NotificationService.interface';
@@ -155,12 +162,12 @@ export class MessageService implements IMessageService {
   }
 
   /**
-   * TẠO CUSTOM ORDER THÔNG QUA CHAT
+   * TẠO CUSTOM ORDER QUA CHAT
    */
   async sendCustomOrderMessage(
     senderId: string,
     receiverId: string,
-    customOrderData: any,
+    customOrderData: CustomOrderChatDto,
     content: string,
   ): Promise<MessageWithUsers> {
     try {
@@ -190,14 +197,15 @@ export class MessageService implements IMessageService {
       // TẠO QUOTE REQUEST THÔNG QUA CUSTOM ORDER SERVICE
       const quoteRequest = await this.customOrderService.createCustomOrder(senderId, {
         artisanId: receiverId,
-        title: customOrderData.title || 'Custom Order Request',
-        description: customOrderData.description || content,
+        title: customOrderData.title,
+        description: customOrderData.description,
         estimatedPrice: customOrderData.estimatedPrice,
         customerBudget: customOrderData.customerBudget,
         timeline: customOrderData.timeline,
         specifications: customOrderData.specifications,
         attachmentUrls: customOrderData.attachments || [],
         referenceProductId: customOrderData.referenceProductId,
+        expiresInDays: customOrderData.expiresInDays,
       });
 
       // TẠO MESSAGE VỚI QUOTE REQUEST ID
@@ -214,7 +222,7 @@ export class MessageService implements IMessageService {
       });
 
       this.logger.info(
-        `Custom order created in chat: ${quoteRequest.id} from ${senderId} (${sender.role}) to ${receiverId} (ARTISAN)`,
+        `Custom order created in chat: ${quoteRequest.id} from ${senderId} to ${receiverId}`,
       );
 
       return message;
@@ -226,18 +234,13 @@ export class MessageService implements IMessageService {
   }
 
   /**
-   * TRẢ LỜI CUSTOM ORDER (NGHỆ NHÂN)
+   * ARTISAN PHẢN HỒI CUSTOM ORDER QUA CHAT
    */
   async respondToCustomOrderInChat(
     artisanId: string,
     customerId: string,
     quoteRequestId: string,
-    response: {
-      action: 'ACCEPT' | 'REJECT' | 'COUNTER_OFFER';
-      finalPrice?: number;
-      message: string;
-      response?: any;
-    },
+    response: ArtisanResponseDto & { message: string },
   ): Promise<MessageWithUsers> {
     try {
       // Validate artisan
@@ -278,6 +281,198 @@ export class MessageService implements IMessageService {
       this.logger.error(`Error responding to custom order in chat: ${error}`);
       if (error instanceof AppError) throw error;
       throw new AppError('Failed to respond to custom order in chat', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  /**
+   * CUSTOMER COUNTER OFFER QUA CHAT
+   */
+  async customerCounterOfferInChat(
+    customerId: string,
+    artisanId: string,
+    quoteRequestId: string,
+    counterData: CounterOfferDto & { message: string },
+  ): Promise<MessageWithUsers> {
+    try {
+      // Validate customer
+      const customer = await this.userRepository.findById(customerId);
+      if (!customer) {
+        throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
+      }
+
+      // Counter offer qua custom order service
+      const updatedOrder = await this.customOrderService.customerCounterOffer(
+        quoteRequestId,
+        customerId,
+        counterData,
+      );
+
+      // Tạo message thông báo counter offer
+      const message = await this.sendMessage(customerId, {
+        receiverId: artisanId,
+        content: counterData.message,
+        type: MessageType.QUOTE_DISCUSSION,
+        quoteRequestId: quoteRequestId,
+        productMentions: {
+          type: 'customer_counter_offer',
+          action: 'CUSTOMER_COUNTER_OFFER',
+          finalPrice: counterData.finalPrice,
+          quoteRequestId: quoteRequestId,
+        },
+      });
+
+      this.logger.info(
+        `Customer counter offer in chat: ${quoteRequestId} by customer ${customerId}`,
+      );
+
+      return message;
+    } catch (error) {
+      this.logger.error(`Error customer counter offer in chat: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to make counter offer in chat', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  /**
+   * CUSTOMER ACCEPT OFFER QUA CHAT
+   */
+  async customerAcceptOfferInChat(
+    customerId: string,
+    artisanId: string,
+    quoteRequestId: string,
+    acceptData: AcceptOfferDto & { message: string },
+  ): Promise<MessageWithUsers> {
+    try {
+      // Validate customer
+      const customer = await this.userRepository.findById(customerId);
+      if (!customer) {
+        throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
+      }
+
+      // Accept offer qua custom order service
+      const acceptedOrder = await this.customOrderService.customerAcceptOffer(
+        quoteRequestId,
+        customerId,
+        acceptData,
+      );
+
+      // Tạo message thông báo acceptance
+      const message = await this.sendMessage(customerId, {
+        receiverId: artisanId,
+        content: acceptData.message,
+        type: MessageType.QUOTE_DISCUSSION,
+        quoteRequestId: quoteRequestId,
+        productMentions: {
+          type: 'customer_accept_offer',
+          action: 'CUSTOMER_ACCEPT',
+          quoteRequestId: quoteRequestId,
+          finalPrice: acceptedOrder.finalPrice,
+        },
+      });
+
+      this.logger.info(
+        `Customer accepted offer in chat: ${quoteRequestId} by customer ${customerId}`,
+      );
+
+      return message;
+    } catch (error) {
+      this.logger.error(`Error customer accept offer in chat: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to accept offer in chat', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  /**
+   * CUSTOMER REJECT OFFER QUA CHAT
+   */
+  async customerRejectOfferInChat(
+    customerId: string,
+    artisanId: string,
+    quoteRequestId: string,
+    rejectData: RejectOfferDto & { message: string },
+  ): Promise<MessageWithUsers> {
+    try {
+      // Validate customer
+      const customer = await this.userRepository.findById(customerId);
+      if (!customer) {
+        throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
+      }
+
+      // Reject offer qua custom order service
+      const rejectedOrder = await this.customOrderService.customerRejectOffer(
+        quoteRequestId,
+        customerId,
+        rejectData,
+      );
+
+      // Tạo message thông báo rejection
+      const message = await this.sendMessage(customerId, {
+        receiverId: artisanId,
+        content: rejectData.message,
+        type: MessageType.QUOTE_DISCUSSION,
+        quoteRequestId: quoteRequestId,
+        productMentions: {
+          type: 'customer_reject_offer',
+          action: 'CUSTOMER_REJECT',
+          quoteRequestId: quoteRequestId,
+          reason: rejectData.reason,
+        },
+      });
+
+      this.logger.info(
+        `Customer rejected offer in chat: ${quoteRequestId} by customer ${customerId}`,
+      );
+
+      return message;
+    } catch (error) {
+      this.logger.error(`Error customer reject offer in chat: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to reject offer in chat', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  async acceptCounterOfferInChat(
+    customerId: string,
+    artisanId: string,
+    quoteRequestId: string,
+    message: string,
+  ): Promise<MessageWithUsers> {
+    try {
+      // Validate customer
+      const customer = await this.userRepository.findById(customerId);
+      if (!customer) {
+        throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
+      }
+
+      // Accept counter offer qua custom order service
+      const acceptedOrder = await this.customOrderService.acceptCounterOffer(
+        quoteRequestId,
+        customerId,
+      );
+
+      // Tạo message thông báo acceptance
+      const messageResponse = await this.sendMessage(customerId, {
+        receiverId: artisanId,
+        content: message,
+        type: MessageType.QUOTE_DISCUSSION,
+        quoteRequestId: quoteRequestId,
+        productMentions: {
+          type: 'counter_offer_accepted',
+          action: 'ACCEPT_COUNTER',
+          quoteRequestId: quoteRequestId,
+          finalPrice: acceptedOrder.finalPrice,
+        },
+      });
+
+      this.logger.info(
+        `Counter offer accepted in chat: ${quoteRequestId} by customer ${customerId}`,
+      );
+
+      return messageResponse;
+    } catch (error) {
+      this.logger.error(`Error accepting counter offer in chat: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to accept counter offer in chat', 500, 'SERVICE_ERROR');
     }
   }
 

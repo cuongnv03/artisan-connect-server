@@ -110,9 +110,62 @@ export class CustomOrderRepository
             negotiationHistory: initialHistory,
             expiresAt,
           },
+          // Trực tiếp include trong create để tránh race condition
+          include: {
+            customer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                username: true,
+                avatarUrl: true,
+              },
+            },
+            artisan: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                username: true,
+                avatarUrl: true,
+                artisanProfile: {
+                  select: {
+                    shopName: true,
+                    isVerified: true,
+                    rating: true,
+                  },
+                },
+              },
+            },
+            referenceProduct: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                images: true,
+                price: true,
+              },
+            },
+          },
         });
 
-        return (await this.findByIdWithDetails(order.id)) as CustomOrderWithDetails;
+        // Get messages (sẽ empty cho order mới)
+        const messages: any[] = [];
+
+        return {
+          ...order,
+          estimatedPrice: order.estimatedPrice ? Number(order.estimatedPrice) : null,
+          customerBudget: order.customerBudget ? Number(order.customerBudget) : null,
+          finalPrice: order.finalPrice ? Number(order.finalPrice) : null,
+          referenceProduct: order.referenceProduct
+            ? {
+                ...order.referenceProduct,
+                price: Number(order.referenceProduct.price),
+              }
+            : null,
+          messages,
+        } as CustomOrderWithDetails;
       });
     } catch (error) {
       this.logger.error(`Error creating custom order: ${error}`);
@@ -283,7 +336,7 @@ export class CustomOrderRepository
       } as CustomOrderWithDetails;
     } catch (error) {
       this.logger.error(`Error finding custom order by ID: ${error}`);
-      return null;
+      throw AppError.internal('Failed to find custom order', 'FIND_ORDER_FAILED');
     }
   }
 
