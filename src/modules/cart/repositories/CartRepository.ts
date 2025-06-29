@@ -186,7 +186,27 @@ export class CartRepository
   ): Promise<CartItem> {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // 1. Get negotiation with full details
+        // 1. Get basic negotiation info first to know variantId
+        const basicNegotiation = await tx.priceNegotiation.findUnique({
+          where: { id: negotiationId },
+          select: {
+            id: true,
+            productId: true,
+            variantId: true,
+            customerId: true,
+            artisanId: true,
+            status: true,
+            finalPrice: true,
+            quantity: true,
+            expiresAt: true,
+          },
+        });
+
+        if (!basicNegotiation) {
+          throw new AppError('Price negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
+        }
+
+        // 2. Now get full negotiation with proper includes based on variantId
         const negotiation = await tx.priceNegotiation.findUnique({
           where: { id: negotiationId },
           include: {
@@ -199,12 +219,12 @@ export class CartRepository
                     },
                   },
                 },
-                variants: negotiation.variantId
-                  ? { where: { id: negotiation.variantId, isActive: true } }
+                variants: basicNegotiation.variantId
+                  ? { where: { id: basicNegotiation.variantId, isActive: true } }
                   : undefined,
               },
             },
-            variant: negotiation.variantId
+            variant: basicNegotiation.variantId
               ? {
                   select: {
                     id: true,
@@ -226,7 +246,7 @@ export class CartRepository
           throw new AppError('Price negotiation not found', 404, 'NEGOTIATION_NOT_FOUND');
         }
 
-        // 2. Validate negotiation
+        // 3. Validate negotiation
         if (negotiation.customerId !== userId) {
           throw new AppError(
             'You can only use your own negotiations',
@@ -251,13 +271,13 @@ export class CartRepository
           throw new AppError('Negotiation does not have a final price', 400, 'NO_FINAL_PRICE');
         }
 
-        // 3. Validate product
+        // 4. Validate product
         const product = negotiation.product;
         if (product.status !== 'PUBLISHED') {
           throw new AppError('Product is not available', 400, 'PRODUCT_UNAVAILABLE');
         }
 
-        // 4. Determine quantity and validate stock
+        // 5. Determine quantity and validate stock
         const finalQuantity = quantity || negotiation.quantity;
         let availableQuantity = product.quantity;
 
@@ -284,7 +304,7 @@ export class CartRepository
           );
         }
 
-        // 5. Check existing cart item với same negotiation
+        // 6. Check existing cart item với same negotiation
         const existingCartItem = await this.findCartItem(
           userId,
           negotiation.productId,
@@ -319,7 +339,7 @@ export class CartRepository
           );
         }
 
-        // 6. Create new cart item with negotiated price
+        // 7. Create new cart item with negotiated price
         const cartItem = await tx.cartItem.create({
           data: {
             userId,
@@ -475,13 +495,29 @@ export class CartRepository
       let hasNegotiatedItems = false;
 
       cartItems.forEach((item) => {
-        const price = Number(item.price);
-        subtotal += price * item.quantity;
-        totalQuantity += item.quantity;
+        // ===== UPDATED: Use negotiated price if available =====
+        let itemPrice: number;
 
-        if (item.negotiationId) {
+        if (item.negotiationId && item.negotiation?.finalPrice) {
+          // Use negotiated final price
+          itemPrice = Number(item.negotiation.finalPrice);
           hasNegotiatedItems = true;
+        } else if (item.negotiationId) {
+          // Use stored price in cart item (should be negotiated price)
+          itemPrice = Number(item.price);
+          hasNegotiatedItems = true;
+        } else {
+          // Use current variant/product price
+          const currentPrice =
+            item.variant?.discountPrice ||
+            item.variant?.price ||
+            item.product!.discountPrice ||
+            item.product!.price;
+          itemPrice = Number(currentPrice);
         }
+
+        subtotal += itemPrice * item.quantity;
+        totalQuantity += item.quantity;
       });
 
       const groupedBySeller = this.groupItemsBySeller(cartItems);
@@ -773,13 +809,23 @@ export class CartRepository
       const group = groups[sellerId];
       group.items.push(item);
 
-      const currentPrice =
-        item.variant?.discountPrice ||
-        item.variant?.price ||
-        item.product!.discountPrice ||
-        item.product!.price;
-      const price = Number(currentPrice);
-      group.subtotal += price * item.quantity;
+      // ===== UPDATED: Use negotiated price for calculation =====
+      let itemPrice: number;
+
+      if (item.negotiationId && item.negotiation?.finalPrice) {
+        itemPrice = Number(item.negotiation.finalPrice);
+      } else if (item.negotiationId) {
+        itemPrice = Number(item.price);
+      } else {
+        const currentPrice =
+          item.variant?.discountPrice ||
+          item.variant?.price ||
+          item.product!.discountPrice ||
+          item.product!.price;
+        itemPrice = Number(currentPrice);
+      }
+
+      group.subtotal += itemPrice * item.quantity;
       group.total = group.subtotal;
     });
 
