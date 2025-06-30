@@ -32,22 +32,21 @@ export class GetMyCustomOrdersController extends BaseController {
       options.dateTo = new Date(req.query.dateTo as string);
     }
 
+    // NEW: Get mode from query parameter
+    const mode = (req.query.mode as 'sent' | 'received') || 'sent';
+
     const customOrders = await this.customOrderService.getMyCustomOrders(
       req.user!.id,
       req.user!.role,
+      mode,
       options,
     );
 
-    const roleMessage = {
-      CUSTOMER: 'My custom order requests retrieved successfully',
-      ARTISAN: 'My received custom order requests retrieved successfully',
-      ADMIN: 'All custom order requests retrieved successfully',
+    const modeMessages = {
+      sent: 'Custom orders sent retrieved successfully',
+      received: 'Custom orders received retrieved successfully',
     };
 
-    ApiResponse.success(
-      res,
-      customOrders,
-      roleMessage[req.user!.role] || 'Custom orders retrieved successfully',
-    );
+    ApiResponse.success(res, customOrders, modeMessages[mode]);
   }
 }

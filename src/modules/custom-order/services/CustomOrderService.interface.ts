@@ -26,6 +26,7 @@ export interface ICustomOrderService {
   getMyCustomOrders(
     userId: string,
     role: string,
+    mode: 'sent' | 'received',
     options?: Partial<CustomOrderQueryOptions>,
   ): Promise<PaginatedResult<CustomOrderWithDetails>>;
 

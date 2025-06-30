@@ -409,17 +409,22 @@ export class CustomOrderService implements ICustomOrderService {
   async getMyCustomOrders(
     userId: string,
     role: string,
+    mode: 'sent' | 'received',
     options: Partial<CustomOrderQueryOptions> = {},
   ): Promise<PaginatedResult<CustomOrderWithDetails>> {
     try {
-      if (role === 'CUSTOMER') {
+      if (mode === 'sent') {
+        // Get orders where user is the customer (regardless of role)
         return await this.customOrderRepository.getCustomerOrders(userId, options);
-      } else if (role === 'ARTISAN') {
+      } else if (mode === 'received') {
+        // Only artisans can access received orders
+        if (role !== 'ARTISAN') {
+          throw AppError.forbidden('Only artisans can access received orders', 'FORBIDDEN');
+        }
+        // Get orders where user is the artisan
         return await this.customOrderRepository.getArtisanOrders(userId, options);
-      } else if (role === 'ADMIN') {
-        return await this.customOrderRepository.getCustomOrders(options);
       } else {
-        throw AppError.forbidden('Invalid role for custom orders', 'FORBIDDEN');
+        throw AppError.badRequest('Invalid mode. Must be "sent" or "received"', 'INVALID_MODE');
       }
     } catch (error) {
       this.logger.error(`Error getting my custom orders: ${error}`);

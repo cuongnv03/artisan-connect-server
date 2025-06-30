@@ -108,6 +108,7 @@ export const customerRejectOfferSchema = Joi.object({
 export const getCustomOrdersQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(10),
+  mode: Joi.string().valid('sent', 'received').default('sent'), // NEW
   status: Joi.alternatives().try(
     Joi.string().valid(...Object.values(QuoteStatus)),
     Joi.array().items(Joi.string().valid(...Object.values(QuoteStatus))),
