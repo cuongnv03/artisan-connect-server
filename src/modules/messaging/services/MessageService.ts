@@ -264,7 +264,7 @@ export class MessageService implements IMessageService {
       const message = await this.sendMessage(artisanId, {
         receiverId: customerId,
         content: response.message,
-        type: MessageType.QUOTE_DISCUSSION,
+        type: MessageType.CUSTOM_ORDER,
         quoteRequestId: quoteRequestId,
         productMentions: {
           type: 'custom_order_response',
@@ -311,7 +311,7 @@ export class MessageService implements IMessageService {
       const message = await this.sendMessage(customerId, {
         receiverId: artisanId,
         content: counterData.message,
-        type: MessageType.QUOTE_DISCUSSION,
+        type: MessageType.CUSTOM_ORDER,
         quoteRequestId: quoteRequestId,
         productMentions: {
           type: 'customer_counter_offer',
@@ -360,7 +360,7 @@ export class MessageService implements IMessageService {
       const message = await this.sendMessage(customerId, {
         receiverId: artisanId,
         content: acceptData.message,
-        type: MessageType.QUOTE_DISCUSSION,
+        type: MessageType.CUSTOM_ORDER,
         quoteRequestId: quoteRequestId,
         productMentions: {
           type: 'customer_accept_offer',
@@ -409,7 +409,7 @@ export class MessageService implements IMessageService {
       const message = await this.sendMessage(customerId, {
         receiverId: artisanId,
         content: rejectData.message,
-        type: MessageType.QUOTE_DISCUSSION,
+        type: MessageType.CUSTOM_ORDER,
         quoteRequestId: quoteRequestId,
         productMentions: {
           type: 'customer_reject_offer',
@@ -454,7 +454,7 @@ export class MessageService implements IMessageService {
       const messageResponse = await this.sendMessage(customerId, {
         receiverId: artisanId,
         content: message,
-        type: MessageType.QUOTE_DISCUSSION,
+        type: MessageType.CUSTOM_ORDER,
         quoteRequestId: quoteRequestId,
         productMentions: {
           type: 'counter_offer_accepted',
