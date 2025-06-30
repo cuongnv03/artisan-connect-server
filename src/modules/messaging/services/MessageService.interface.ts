@@ -39,14 +39,26 @@ export interface IMessageService {
   // Delete
   deleteMessage(messageId: string, userId: string): Promise<boolean>;
 
-  // Custom order chat integration (ENHANCED)
-  sendCustomOrderMessage(
+  // FIXED: Custom order chat integration (IMPROVED APPROACH)
+
+  // Create custom order and return order data (doesn't send message)
+  createCustomOrderInChat(
     senderId: string,
     receiverId: string,
     customOrderData: CustomOrderChatDto,
+  ): Promise<any>; // Returns created custom order
+
+  // Send custom order card message (separated from creation)
+  sendCustomOrderCardMessage(
+    senderId: string,
+    receiverId: string,
+    customOrderId: string,
     content: string,
+    messageType?: 'create' | 'response' | 'update',
+    additionalData?: any,
   ): Promise<MessageWithUsers>;
 
+  // Artisan response methods
   respondToCustomOrderInChat(
     artisanId: string,
     customerId: string,
@@ -54,7 +66,7 @@ export interface IMessageService {
     response: ArtisanResponseDto & { message: string },
   ): Promise<MessageWithUsers>;
 
-  // NEW: Customer bidirectional operations
+  // Customer bidirectional operations
   customerCounterOfferInChat(
     customerId: string,
     artisanId: string,

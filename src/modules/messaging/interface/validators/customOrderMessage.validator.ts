@@ -9,6 +9,7 @@ export const sendCustomOrderMessageSchema = Joi.object({
       'customer_accept_offer',
       'customer_reject_offer',
       'quote_discussion',
+      'send_existing_custom_order', // ADDED
     )
     .required(),
 
@@ -42,6 +43,7 @@ export const sendCustomOrderMessageSchema = Joi.object({
         'customer_accept_offer',
         'customer_reject_offer',
         'quote_discussion',
+        'send_existing_custom_order', // ADDED
       ),
       then: Joi.required(),
       otherwise: Joi.forbidden(),

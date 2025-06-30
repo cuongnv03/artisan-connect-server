@@ -62,7 +62,7 @@ export class MessageService implements IMessageService {
         throw new AppError('Receiver not found', 404, 'RECEIVER_NOT_FOUND');
       }
 
-      // BUSINESS RULE: Check messaging permissions
+      // Check messaging permissions
       const canSend = await this.canSendMessageTo(senderId, data.receiverId);
       if (!canSend) {
         throw new AppError('You cannot send messages to this user', 403, 'MESSAGE_FORBIDDEN');
@@ -119,7 +119,7 @@ export class MessageService implements IMessageService {
     }
   }
 
-  // BUSINESS LOGIC: Who can message whom
+  // Business logic: Who can message whom
   async canSendMessageTo(senderId: string, receiverId: string): Promise<boolean> {
     try {
       // Can't send to self
@@ -137,23 +137,23 @@ export class MessageService implements IMessageService {
         return false;
       }
 
-      // 🆕 BUSINESS RULES CẬP NHẬT:
-      // 1. Ai cũng có thể nhắn cho ARTISAN (vì artisan có thể bán hàng)
+      // Business rules:
+      // 1. Anyone can message ARTISAN (since artisans can sell)
       if (receiver.role === 'ARTISAN') {
         return true;
       }
 
-      // 2. ARTISAN có thể nhắn cho ai (vì artisan cũng là customer)
+      // 2. ARTISAN can message anyone (since artisans are also customers)
       if (sender.role === 'ARTISAN') {
         return true;
       }
 
-      // 3. CUSTOMER thuần túy không thể nhắn cho CUSTOMER thuần túy
+      // 3. Pure CUSTOMER cannot message pure CUSTOMER
       if (sender.role === 'CUSTOMER' && receiver.role === 'CUSTOMER') {
         return false;
       }
 
-      // Mặc định cho phép các trường hợp khác
+      // Default allow for other cases
       return true;
     } catch (error) {
       this.logger.error(`Error checking message permission: ${error}`);
@@ -162,14 +162,14 @@ export class MessageService implements IMessageService {
   }
 
   /**
-   * TẠO CUSTOM ORDER QUA CHAT
+   * FIXED: Create custom order via chat (NEW APPROACH)
+   * Only creates custom order, returns the order data for message creation
    */
-  async sendCustomOrderMessage(
+  async createCustomOrderInChat(
     senderId: string,
     receiverId: string,
     customOrderData: CustomOrderChatDto,
-    content: string,
-  ): Promise<MessageWithUsers> {
+  ) {
     try {
       // Validate both users exist
       const [sender, receiver] = await Promise.all([
@@ -185,7 +185,7 @@ export class MessageService implements IMessageService {
         throw new AppError('Receiver not found', 404, 'RECEIVER_NOT_FOUND');
       }
 
-      // VALIDATE: Chỉ có thể gửi custom order đến ARTISAN
+      // Validate: can only send custom order to ARTISAN
       if (receiver.role !== 'ARTISAN') {
         throw new AppError(
           'Custom orders can only be sent to artisans',
@@ -194,7 +194,7 @@ export class MessageService implements IMessageService {
         );
       }
 
-      // TẠO QUOTE REQUEST THÔNG QUA CUSTOM ORDER SERVICE
+      // Create quote request through custom order service
       const quoteRequest = await this.customOrderService.createCustomOrder(senderId, {
         artisanId: receiverId,
         title: customOrderData.title,
@@ -208,33 +208,86 @@ export class MessageService implements IMessageService {
         expiresInDays: customOrderData.expiresInDays,
       });
 
-      // TẠO MESSAGE VỚI QUOTE REQUEST ID
-      const message = await this.sendMessage(senderId, {
-        receiverId,
-        content,
-        type: MessageType.CUSTOM_ORDER,
-        quoteRequestId: quoteRequest.id,
-        productMentions: {
-          type: 'custom_order_creation',
-          quoteRequestId: quoteRequest.id,
-          customOrderData,
-        },
-      });
-
       this.logger.info(
-        `Custom order created in chat: ${quoteRequest.id} from ${senderId} to ${receiverId}`,
+        `Custom order created for chat: ${quoteRequest.id} from ${senderId} to ${receiverId}`,
       );
 
-      return message;
+      return quoteRequest;
     } catch (error) {
-      this.logger.error(`Error sending custom order message: ${error}`);
+      this.logger.error(`Error creating custom order for chat: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to send custom order message', 500, 'SERVICE_ERROR');
+      throw new AppError('Failed to create custom order for chat', 500, 'SERVICE_ERROR');
     }
   }
 
   /**
-   * ARTISAN PHẢN HỒI CUSTOM ORDER QUA CHAT
+   * FIXED: Send custom order card message (SEPARATED FROM CREATION)
+   * This method only sends the message card, doesn't create custom order
+   */
+  async sendCustomOrderCardMessage(
+    senderId: string,
+    receiverId: string,
+    customOrderId: string,
+    content: string,
+    messageType: 'create' | 'response' | 'update' = 'create',
+    additionalData?: any,
+  ): Promise<MessageWithUsers> {
+    try {
+      // Get custom order details
+      const customOrder = await this.customOrderService.getCustomOrderById(customOrderId);
+      if (!customOrder) {
+        throw new AppError('Custom order not found', 404, 'CUSTOM_ORDER_NOT_FOUND');
+      }
+
+      // Validate access
+      const hasAccess = await this.customOrderService.validateOrderAccess(customOrderId, senderId);
+      if (!hasAccess) {
+        throw new AppError('Access denied to custom order', 403, 'ACCESS_DENIED');
+      }
+
+      // Prepare product mentions data
+      const productMentions = {
+        type: messageType === 'create' ? 'custom_order_creation' : 'custom_order_response',
+        negotiationId: customOrderId,
+        customerId: customOrder.customer.id,
+        artisanId: customOrder.artisan.id,
+        status: customOrder.status,
+        lastActor: senderId === customOrder.customer.id ? 'customer' : 'artisan',
+        timestamp: new Date().toISOString(),
+        proposal: {
+          title: customOrder.title,
+          description: customOrder.description,
+          estimatedPrice: customOrder.estimatedPrice,
+          timeline: customOrder.timeline,
+          specifications: customOrder.specifications,
+        },
+        finalPrice: customOrder.finalPrice,
+        ...additionalData,
+      };
+
+      // Create and send message
+      const message = await this.sendMessage(senderId, {
+        receiverId,
+        content,
+        type: MessageType.CUSTOM_ORDER,
+        quoteRequestId: customOrderId,
+        productMentions,
+      });
+
+      this.logger.info(
+        `Custom order card message sent: ${customOrderId} from ${senderId} to ${receiverId}`,
+      );
+
+      return message;
+    } catch (error) {
+      this.logger.error(`Error sending custom order card message: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to send custom order card message', 500, 'SERVICE_ERROR');
+    }
+  }
+
+  /**
+   * ARTISAN respond to custom order via chat
    */
   async respondToCustomOrderInChat(
     artisanId: string,
@@ -253,26 +306,25 @@ export class MessageService implements IMessageService {
         );
       }
 
-      // CẬP NHẬT QUOTE REQUEST THÔNG QUA CUSTOM ORDER SERVICE
+      // Update quote request through custom order service
       const updatedQuoteRequest = await this.customOrderService.respondToCustomOrder(
         quoteRequestId,
         artisanId,
         response,
       );
 
-      // TẠO MESSAGE PHẢN HỒI
-      const message = await this.sendMessage(artisanId, {
-        receiverId: customerId,
-        content: response.message,
-        type: MessageType.CUSTOM_ORDER,
-        quoteRequestId: quoteRequestId,
-        productMentions: {
-          type: 'custom_order_response',
+      // Send custom order card message
+      const message = await this.sendCustomOrderCardMessage(
+        artisanId,
+        customerId,
+        quoteRequestId,
+        response.message,
+        'response',
+        {
           action: response.action,
           finalPrice: response.finalPrice,
-          quoteRequestId: quoteRequestId,
         },
-      });
+      );
 
       this.logger.info(`Custom order responded in chat: ${quoteRequestId} - ${response.action}`);
 
@@ -285,7 +337,7 @@ export class MessageService implements IMessageService {
   }
 
   /**
-   * CUSTOMER COUNTER OFFER QUA CHAT
+   * Customer counter offer via chat
    */
   async customerCounterOfferInChat(
     customerId: string,
@@ -300,26 +352,25 @@ export class MessageService implements IMessageService {
         throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
       }
 
-      // Counter offer qua custom order service
+      // Counter offer through custom order service
       const updatedOrder = await this.customOrderService.customerCounterOffer(
         quoteRequestId,
         customerId,
         counterData,
       );
 
-      // Tạo message thông báo counter offer
-      const message = await this.sendMessage(customerId, {
-        receiverId: artisanId,
-        content: counterData.message,
-        type: MessageType.CUSTOM_ORDER,
-        quoteRequestId: quoteRequestId,
-        productMentions: {
-          type: 'customer_counter_offer',
+      // Send custom order card message
+      const message = await this.sendCustomOrderCardMessage(
+        customerId,
+        artisanId,
+        quoteRequestId,
+        counterData.message,
+        'response',
+        {
           action: 'CUSTOMER_COUNTER_OFFER',
           finalPrice: counterData.finalPrice,
-          quoteRequestId: quoteRequestId,
         },
-      });
+      );
 
       this.logger.info(
         `Customer counter offer in chat: ${quoteRequestId} by customer ${customerId}`,
@@ -334,7 +385,7 @@ export class MessageService implements IMessageService {
   }
 
   /**
-   * CUSTOMER ACCEPT OFFER QUA CHAT
+   * Customer accept offer via chat
    */
   async customerAcceptOfferInChat(
     customerId: string,
@@ -349,26 +400,25 @@ export class MessageService implements IMessageService {
         throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
       }
 
-      // Accept offer qua custom order service
+      // Accept offer through custom order service
       const acceptedOrder = await this.customOrderService.customerAcceptOffer(
         quoteRequestId,
         customerId,
         acceptData,
       );
 
-      // Tạo message thông báo acceptance
-      const message = await this.sendMessage(customerId, {
-        receiverId: artisanId,
-        content: acceptData.message,
-        type: MessageType.CUSTOM_ORDER,
-        quoteRequestId: quoteRequestId,
-        productMentions: {
-          type: 'customer_accept_offer',
+      // Send custom order card message
+      const message = await this.sendCustomOrderCardMessage(
+        customerId,
+        artisanId,
+        quoteRequestId,
+        acceptData.message,
+        'response',
+        {
           action: 'CUSTOMER_ACCEPT',
-          quoteRequestId: quoteRequestId,
           finalPrice: acceptedOrder.finalPrice,
         },
-      });
+      );
 
       this.logger.info(
         `Customer accepted offer in chat: ${quoteRequestId} by customer ${customerId}`,
@@ -383,7 +433,7 @@ export class MessageService implements IMessageService {
   }
 
   /**
-   * CUSTOMER REJECT OFFER QUA CHAT
+   * Customer reject offer via chat
    */
   async customerRejectOfferInChat(
     customerId: string,
@@ -398,26 +448,25 @@ export class MessageService implements IMessageService {
         throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
       }
 
-      // Reject offer qua custom order service
+      // Reject offer through custom order service
       const rejectedOrder = await this.customOrderService.customerRejectOffer(
         quoteRequestId,
         customerId,
         rejectData,
       );
 
-      // Tạo message thông báo rejection
-      const message = await this.sendMessage(customerId, {
-        receiverId: artisanId,
-        content: rejectData.message,
-        type: MessageType.CUSTOM_ORDER,
-        quoteRequestId: quoteRequestId,
-        productMentions: {
-          type: 'customer_reject_offer',
+      // Send custom order card message
+      const message = await this.sendCustomOrderCardMessage(
+        customerId,
+        artisanId,
+        quoteRequestId,
+        rejectData.message,
+        'response',
+        {
           action: 'CUSTOMER_REJECT',
-          quoteRequestId: quoteRequestId,
           reason: rejectData.reason,
         },
-      });
+      );
 
       this.logger.info(
         `Customer rejected offer in chat: ${quoteRequestId} by customer ${customerId}`,
@@ -431,53 +480,8 @@ export class MessageService implements IMessageService {
     }
   }
 
-  async acceptCounterOfferInChat(
-    customerId: string,
-    artisanId: string,
-    quoteRequestId: string,
-    message: string,
-  ): Promise<MessageWithUsers> {
-    try {
-      // Validate customer
-      const customer = await this.userRepository.findById(customerId);
-      if (!customer) {
-        throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
-      }
-
-      // Accept counter offer qua custom order service
-      const acceptedOrder = await this.customOrderService.acceptCounterOffer(
-        quoteRequestId,
-        customerId,
-      );
-
-      // Tạo message thông báo acceptance
-      const messageResponse = await this.sendMessage(customerId, {
-        receiverId: artisanId,
-        content: message,
-        type: MessageType.CUSTOM_ORDER,
-        quoteRequestId: quoteRequestId,
-        productMentions: {
-          type: 'counter_offer_accepted',
-          action: 'ACCEPT_COUNTER',
-          quoteRequestId: quoteRequestId,
-          finalPrice: acceptedOrder.finalPrice,
-        },
-      });
-
-      this.logger.info(
-        `Counter offer accepted in chat: ${quoteRequestId} by customer ${customerId}`,
-      );
-
-      return messageResponse;
-    } catch (error) {
-      this.logger.error(`Error accepting counter offer in chat: ${error}`);
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to accept counter offer in chat', 500, 'SERVICE_ERROR');
-    }
-  }
-
   /**
-   * TIẾP TỤC THẢO LUẬN VỀ QUOTE REQUEST
+   * Continue quote discussion
    */
   async sendQuoteDiscussionMessage(
     senderId: string,
@@ -486,7 +490,7 @@ export class MessageService implements IMessageService {
     content: string,
   ): Promise<MessageWithUsers> {
     try {
-      // Validate quote access thông qua custom order service
+      // Validate quote access through custom order service
       const hasAccess = await this.customOrderService.validateOrderAccess(quoteId, senderId);
       if (!hasAccess) {
         throw new AppError(
@@ -499,7 +503,7 @@ export class MessageService implements IMessageService {
       return await this.sendMessage(senderId, {
         receiverId,
         content,
-        type: MessageType.QUOTE_DISCUSSION,
+        type: MessageType.CUSTOM_ORDER,
         quoteRequestId: quoteId,
       });
     } catch (error) {
@@ -532,7 +536,7 @@ export class MessageService implements IMessageService {
     }
   }
 
-  // ... rest of the methods remain the same
+  // ... Rest of existing methods remain the same
   async getMessages(
     userId: string,
     options?: MessageQueryOptions,
