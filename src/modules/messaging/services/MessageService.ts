@@ -162,8 +162,7 @@ export class MessageService implements IMessageService {
   }
 
   /**
-   * FIXED: Create custom order via chat (NEW APPROACH)
-   * Only creates custom order, returns the order data for message creation
+   * FIXED: Create custom order via chat with proper card structure
    */
   async createCustomOrderInChat(
     senderId: string,
@@ -221,8 +220,7 @@ export class MessageService implements IMessageService {
   }
 
   /**
-   * FIXED: Send custom order card message (SEPARATED FROM CREATION)
-   * This method only sends the message card, doesn't create custom order
+   * FIXED: Send custom order card message with consistent data structure
    */
   async sendCustomOrderCardMessage(
     senderId: string,
@@ -245,27 +243,58 @@ export class MessageService implements IMessageService {
         throw new AppError('Access denied to custom order', 403, 'ACCESS_DENIED');
       }
 
-      // Prepare product mentions data
+      // FIXED: Prepare product mentions data with consistent structure
       const productMentions = {
-        type: messageType === 'create' ? 'custom_order_creation' : 'custom_order_response',
+        // IMPORTANT: Use consistent type names with frontend
+        type:
+          messageType === 'create'
+            ? 'create_custom_order'
+            : messageType === 'response'
+              ? 'respond_custom_order'
+              : 'custom_order_update',
         negotiationId: customOrderId,
         customerId: customOrder.customer.id,
         artisanId: customOrder.artisan.id,
         status: customOrder.status,
         lastActor: senderId === customOrder.customer.id ? 'customer' : 'artisan',
         timestamp: new Date().toISOString(),
+
+        // IMPORTANT: Include complete proposal data for CustomOrderCard
         proposal: {
           title: customOrder.title,
           description: customOrder.description,
           estimatedPrice: customOrder.estimatedPrice,
+          customerBudget: customOrder.customerBudget,
           timeline: customOrder.timeline,
           specifications: customOrder.specifications,
+          attachmentUrls: customOrder.attachmentUrls || [],
+          referenceProductId: customOrder.referenceProductId,
         },
+
+        // Include pricing information
         finalPrice: customOrder.finalPrice,
+
+        // Include reference product info if available
+        referenceProduct: customOrder.referenceProduct
+          ? {
+              id: customOrder.referenceProduct.id,
+              name: customOrder.referenceProduct.name,
+              price: customOrder.referenceProduct.price,
+              images: customOrder.referenceProduct.images,
+            }
+          : null,
+
+        // Include negotiation history summary
+        negotiationSummary: {
+          totalOffers: customOrder.negotiationHistory?.length || 0,
+          lastUpdate: customOrder.updatedAt,
+          expiresAt: customOrder.expiresAt,
+        },
+
         ...additionalData,
       };
 
-      // Create and send message
+      // Create and send message with CUSTOM_ORDER type
       const message = await this.sendMessage(senderId, {
         receiverId,
         content,

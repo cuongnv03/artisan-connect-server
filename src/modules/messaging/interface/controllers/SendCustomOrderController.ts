@@ -32,20 +32,37 @@ export class SendCustomOrderController extends BaseController {
     try {
       switch (type) {
         case 'create_custom_order':
-          // FIXED: Create custom order and then send message card
+          // FIXED: Improved flow - create order and auto-send card message
+          this.logger?.info('Creating custom order and sending card message');
+
+          // Step 1: Create the custom order
           const customOrder = await this.messageService.createCustomOrderInChat(
             req.user!.id,
             receiverId,
             customOrderData,
           );
 
-          // Send custom order card message
+          // Step 2: Send the custom order card message with complete data
           result = await this.messageService.sendCustomOrderCardMessage(
             req.user!.id,
             receiverId,
             customOrder.id,
             content || `🛠️ Tôi có một đề xuất custom order: "${customOrder.title}"`,
             'create',
+            {
+              // Include additional context for the card
+              isNewOrder: true,
+              orderCreatedAt: customOrder.createdAt,
+              customerInfo: {
+                id: customOrder.customer.id,
+                name: `${customOrder.customer.firstName} ${customOrder.customer.lastName}`,
+              },
+              artisanInfo: {
+                id: customOrder.artisan.id,
+                name: `${customOrder.artisan.firstName} ${customOrder.artisan.lastName}`,
+                shopName: customOrder.artisan.artisanProfile?.shopName,
+              },
+            },
           );
           break;
 
@@ -131,7 +148,7 @@ export class SendCustomOrderController extends BaseController {
           break;
 
         default:
-          throw new Error('Invalid custom order message type');
+          throw new Error(`Invalid custom order message type: ${type}`);
       }
 
       ApiResponse.created(res, result, 'Custom order message sent successfully');
