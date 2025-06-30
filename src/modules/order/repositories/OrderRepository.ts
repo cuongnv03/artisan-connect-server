@@ -254,7 +254,7 @@ export class OrderRepository
   ): Promise<OrderWithDetails> {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Get quote request
+        // Validate quote request
         const quote = await tx.quoteRequest.findUnique({
           where: { id: data.quoteRequestId },
           include: {
@@ -304,14 +304,17 @@ export class OrderRepository
           throw new AppError('Invalid shipping address', 400, 'INVALID_ADDRESS');
         }
 
+        // Calculate pricing
         const subtotal = Number(quote.finalPrice);
         const shippingCost = 0; // Custom orders usually include shipping
-        const taxAmount = subtotal * 0.08;
+        const taxAmount = subtotal * 0.08; // 8% tax
         const discountAmount = 0;
         const totalAmount = subtotal + shippingCost + taxAmount - discountAmount;
 
+        // Generate order number
         const orderNumber = await this.generateOrderNumber();
 
+        // Create status history
         const initialStatusHistory = [
           {
             status: OrderStatus.CONFIRMED,
@@ -321,11 +324,12 @@ export class OrderRepository
           },
         ];
 
+        // Calculate return deadline
         const returnDeadline = new Date();
         returnDeadline.setDate(returnDeadline.getDate() + 30);
 
-        // ✅ Fix: Handle custom orders properly
-        const orderItemData = {
+        // Prepare order item data - handle both custom and reference product cases
+        const orderItemData: any = {
           sellerId: quote.artisanId,
           quantity: 1,
           price: quote.finalPrice,
@@ -335,13 +339,13 @@ export class OrderRepository
           customDescription: quote.description,
         };
 
-        // Add productId only if reference product exists
+        // Only set productId if reference product exists
         if (quote.referenceProductId) {
           orderItemData.productId = quote.referenceProductId;
         }
 
-        // Create order
-        const order = await tx.order.create({
+        // Create order with complete data in single transaction
+        const createdOrder = await tx.order.create({
           data: {
             orderNumber,
             userId,
@@ -360,11 +364,16 @@ export class OrderRepository
             hasDispute: false,
             isRated: false,
             isDeliveryLate: false,
-            notes: data.notes || `Custom order from quote: ${quote.title}`,
+            notes: data.notes || `Custom order: ${quote.title}`,
             statusHistory: initialStatusHistory,
-            items: {
-              create: orderItemData,
-            },
+          },
+        });
+
+        // Create order item
+        await tx.orderItem.create({
+          data: {
+            ...orderItemData,
+            orderId: createdOrder.id,
           },
         });
 
@@ -374,7 +383,134 @@ export class OrderRepository
           data: { status: 'COMPLETED' },
         });
 
-        return (await this.findByIdWithDetails(order.id)) as OrderWithDetails;
+        // ✅ CRITICAL: Fetch complete order details within same transaction
+        const orderWithDetails = await tx.order.findUnique({
+          where: { id: createdOrder.id },
+          include: {
+            customer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+              },
+            },
+            shippingAddress: true,
+            items: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                    images: true,
+                  },
+                },
+                variant: {
+                  select: {
+                    id: true,
+                    sku: true,
+                    name: true,
+                    attributes: true,
+                  },
+                },
+                seller: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    username: true,
+                    artisanProfile: {
+                      select: {
+                        shopName: true,
+                        isVerified: true,
+                      },
+                    },
+                  },
+                },
+                customOrder: {
+                  select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                  },
+                },
+              },
+            },
+            paymentTransactions: {
+              orderBy: { createdAt: 'desc' },
+            },
+            disputes: {
+              include: {
+                complainant: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            returns: {
+              include: {
+                requester: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // ✅ CRITICAL: Ensure we have complete order data
+        if (!orderWithDetails) {
+          throw new AppError(
+            'Failed to retrieve created order details',
+            500,
+            'ORDER_DETAILS_RETRIEVAL_FAILED',
+          );
+        }
+
+        // Transform decimal fields to numbers
+        return {
+          ...orderWithDetails,
+          totalAmount: Number(orderWithDetails.totalAmount),
+          subtotal: Number(orderWithDetails.subtotal),
+          shippingCost: Number(orderWithDetails.shippingCost),
+          taxAmount: orderWithDetails.taxAmount ? Number(orderWithDetails.taxAmount) : null,
+          discountAmount: orderWithDetails.discountAmount
+            ? Number(orderWithDetails.discountAmount)
+            : null,
+          items: orderWithDetails.items.map((item) => ({
+            ...item,
+            price: Number(item.price),
+          })),
+          paymentTransactions: orderWithDetails.paymentTransactions.map((tx) => ({
+            ...tx,
+            amount: Number(tx.amount),
+          })),
+          disputes: orderWithDetails.disputes.map((dispute) => ({
+            ...dispute,
+            order: {
+              id: orderWithDetails.id,
+              orderNumber: orderWithDetails.orderNumber,
+            },
+          })),
+          returns: orderWithDetails.returns.map((returnReq) => ({
+            ...returnReq,
+            refundAmount: returnReq.refundAmount ? Number(returnReq.refundAmount) : null,
+            order: {
+              id: orderWithDetails.id,
+              orderNumber: orderWithDetails.orderNumber,
+            },
+          })),
+        } as OrderWithDetails;
       });
     } catch (error) {
       this.logger.error(`Error creating order from quote: ${error}`);

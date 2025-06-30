@@ -118,15 +118,47 @@ export class OrderService implements IOrderService {
         );
       }
 
-      // Create order
+      // Create order through repository
       const order = await this.orderRepository.createOrderFromQuote(userId, data);
 
-      // Send notifications
-      try {
-        await this.notifyOrderCreated(order);
-      } catch (notifError) {
-        this.logger.error(`Error sending order notifications: ${notifError}`);
+      // ✅ CRITICAL: Validate order creation success
+      if (!order) {
+        throw AppError.internal('Order creation returned null', 'ORDER_CREATION_NULL');
       }
+
+      if (!order.id) {
+        throw AppError.internal('Order creation returned invalid data', 'ORDER_INVALID_DATA');
+      }
+
+      // ✅ DEFENSIVE: Validate order has required data for notifications
+      if (!order.customer) {
+        this.logger.error(`Created order ${order.id} missing customer data`);
+        throw AppError.internal('Order missing customer data', 'ORDER_MISSING_CUSTOMER');
+      }
+
+      // Send notifications asynchronously with error handling
+      setImmediate(async () => {
+        try {
+          await this.notifyOrderCreated(order);
+          this.logger.info(`Order notifications sent successfully for order ${order.id}`);
+        } catch (notifError) {
+          // ✅ CRITICAL: Log but don't fail the order creation
+          this.logger.error(`Error sending order notifications for ${order.id}: ${notifError}`);
+
+          // Optional: Create a system notification about the failure
+          try {
+            await this.notificationService.sendNotification({
+              recipientId: userId,
+              type: 'SYSTEM',
+              title: 'Order Created Successfully',
+              message: `Your order ${order.orderNumber} has been created successfully.`,
+              actionUrl: `/orders/${order.id}`,
+            });
+          } catch (systemNotifError) {
+            this.logger.error(`Failed to send system notification: ${systemNotifError}`);
+          }
+        }
+      });
 
       this.logger.info(
         `Order created from quote: ${order.id} (${order.orderNumber}) for user ${userId}`,
@@ -766,13 +798,44 @@ export class OrderService implements IOrderService {
 
   // NOTIFICATION METHODS
   private async notifyOrderCreated(order: OrderWithDetails): Promise<void> {
-    // Notify customer
-    await this.notificationService.notifyOrderCreated(order.customer.id, order.id);
+    // Validate order data before sending notifications
+    if (!order?.customer?.id) {
+      throw new Error('Order missing customer information');
+    }
 
-    // Notify all sellers
-    const sellerIds = [...new Set(order.items.map((item) => item.seller.id))];
-    for (const sellerId of sellerIds) {
-      await this.notificationService.notifyNewOrderForSeller(sellerId, order.id);
+    if (!order.items || order.items.length === 0) {
+      throw new Error('Order missing items information');
+    }
+
+    try {
+      // Notify customer
+      await this.notificationService.notifyOrderCreated(order.customer.id, order.id);
+
+      // Notify all unique sellers
+      const sellerIds = [...new Set(order.items.map((item) => item.seller?.id).filter(Boolean))];
+
+      if (sellerIds.length === 0) {
+        this.logger.warn(`Order ${order.id} has no valid seller IDs`);
+        return;
+      }
+
+      // Send notifications to each seller
+      const notificationPromises = sellerIds.map(async (sellerId) => {
+        try {
+          await this.notificationService.notifyNewOrderForSeller(sellerId, order.id);
+          this.logger.debug(`Notification sent to seller ${sellerId} for order ${order.id}`);
+        } catch (sellerNotifError) {
+          this.logger.error(
+            `Failed to notify seller ${sellerId} for order ${order.id}: ${sellerNotifError}`,
+          );
+          // Continue with other notifications
+        }
+      });
+
+      await Promise.allSettled(notificationPromises);
+    } catch (error) {
+      this.logger.error(`Error in notifyOrderCreated for order ${order.id}: ${error}`);
+      throw error;
     }
   }
 

@@ -43,10 +43,19 @@ export class NotificationService implements INotificationService {
   }
 
   async sendNotification(data: CreateNotificationDto): Promise<void> {
+    // Validate notification data
+    if (!data.recipientId || !data.type || !data.title || !data.message) {
+      this.logger.error(`sendNotification: Invalid notification data - ${JSON.stringify(data)}`);
+      throw new Error('Invalid notification data provided');
+    }
+
     try {
+      // Create notification in database first
       const notification = await this.createNotification(data);
 
-      // Gửi real-time notification nếu socketService available
+      this.logger.debug(`Notification created in database: ${notification.id}`);
+
+      // Send real-time notification if socketService is available
       const socketService = this.socketService;
       if (socketService) {
         try {
@@ -54,7 +63,7 @@ export class NotificationService implements INotificationService {
           this.logger.info(`Real-time notification sent to user ${data.recipientId}: ${data.type}`);
         } catch (socketError) {
           this.logger.error(`Failed to send real-time notification: ${socketError}`);
-          // Không throw error - notification đã được lưu trong DB
+          // Don't throw - notification is already saved in DB
         }
       } else {
         this.logger.info(
@@ -64,7 +73,7 @@ export class NotificationService implements INotificationService {
     } catch (error) {
       this.logger.error(`Error sending notification: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to send notification', 500, 'SERVICE_ERROR');
+      throw new AppError('Failed to send notification', 500, 'NOTIFICATION_SEND_FAILED');
     }
   }
 
@@ -106,20 +115,33 @@ export class NotificationService implements INotificationService {
   }
 
   async markAsRead(id: string, userId: string): Promise<boolean> {
+    if (!id || !userId) {
+      this.logger.error(`markAsRead: Missing required parameters - id: ${id}, userId: ${userId}`);
+      return false;
+    }
+
     try {
       const result = await this.notificationRepository.markAsRead(id, userId);
 
       if (result) {
         // Update unread count in real-time
-        const unreadCount = await this.getUnreadCount(userId);
-        await this.socketService.updateUnreadCount(userId, unreadCount);
+        try {
+          const unreadCount = await this.getUnreadCount(userId);
+          const socketService = this.socketService;
+          if (socketService) {
+            await socketService.updateUnreadCount(userId, unreadCount);
+          }
+        } catch (socketError) {
+          this.logger.error(`Failed to update unread count via socket: ${socketError}`);
+          // Don't fail the mark as read operation
+        }
       }
 
       return result;
     } catch (error) {
       this.logger.error(`Error marking notification as read: ${error}`);
       if (error instanceof AppError) throw error;
-      throw new AppError('Failed to mark notification as read', 500, 'SERVICE_ERROR');
+      throw new AppError('Failed to mark notification as read', 500, 'MARK_READ_FAILED');
     }
   }
 
@@ -296,25 +318,63 @@ export class NotificationService implements INotificationService {
 
   // ORDER NOTIFICATIONS
   async notifyOrderCreated(customerId: string, orderId: string): Promise<void> {
-    await this.sendNotification({
-      recipientId: customerId,
-      type: NotificationType.ORDER_UPDATE,
-      title: 'Order Confirmed',
-      message: 'Your order has been successfully created',
-      data: { orderId },
-      actionUrl: `/orders/${orderId}`,
-    });
+    // Validate required parameters
+    if (!customerId || !orderId) {
+      this.logger.error(
+        `notifyOrderCreated: Missing required parameters - customerId: ${customerId}, orderId: ${orderId}`,
+      );
+      throw new Error('Missing required parameters for order notification');
+    }
+
+    try {
+      await this.sendNotification({
+        recipientId: customerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'Order Confirmed',
+        message: 'Your order has been successfully created and confirmed',
+        data: {
+          orderId,
+          action: 'CREATED',
+          timestamp: new Date().toISOString(),
+        },
+        actionUrl: `/orders/${orderId}`,
+      });
+
+      this.logger.info(`Order creation notification sent to customer ${customerId}`);
+    } catch (error) {
+      this.logger.error(`Failed to notify order creation: ${error}`);
+      throw error;
+    }
   }
 
   async notifyNewOrderForSeller(sellerId: string, orderId: string): Promise<void> {
-    await this.sendNotification({
-      recipientId: sellerId,
-      type: NotificationType.ORDER_UPDATE,
-      title: 'New Order Received',
-      message: 'You have received a new order',
-      data: { orderId },
-      actionUrl: `/orders/${orderId}`,
-    });
+    // Validate required parameters
+    if (!sellerId || !orderId) {
+      this.logger.error(
+        `notifyNewOrderForSeller: Missing required parameters - sellerId: ${sellerId}, orderId: ${orderId}`,
+      );
+      throw new Error('Missing required parameters for seller notification');
+    }
+
+    try {
+      await this.sendNotification({
+        recipientId: sellerId,
+        type: NotificationType.ORDER_UPDATE,
+        title: 'New Order Received',
+        message: 'You have received a new order that needs your attention',
+        data: {
+          orderId,
+          action: 'NEW_ORDER',
+          timestamp: new Date().toISOString(),
+        },
+        actionUrl: `/orders/${orderId}`,
+      });
+
+      this.logger.info(`New order notification sent to seller ${sellerId}`);
+    } catch (error) {
+      this.logger.error(`Failed to notify seller of new order: ${error}`);
+      throw error;
+    }
   }
 
   async notifyOrderStatusChanged(
