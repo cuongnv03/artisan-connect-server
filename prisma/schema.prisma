@@ -105,6 +105,7 @@ enum QuoteStatus {
   REJECTED
   COUNTER_OFFERED
   EXPIRED
+  COMPLETED
 }
 
 // Thương lượng giá cho sản phẩm có sẵn

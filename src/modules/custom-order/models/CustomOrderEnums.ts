@@ -4,6 +4,7 @@ export enum QuoteStatus {
   REJECTED = 'REJECTED',
   COUNTER_OFFERED = 'COUNTER_OFFERED',
   EXPIRED = 'EXPIRED',
+  COMPLETED = 'COMPLETED',
 }
 
 export enum CustomOrderAction {
