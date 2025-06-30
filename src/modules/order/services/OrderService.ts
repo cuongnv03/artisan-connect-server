@@ -865,30 +865,119 @@ export class OrderService implements IOrderService {
     await this.notificationService.notifyPaymentRefunded(order.customer.id, order.id);
   }
 
-  private async notifyDisputeCreated(dispute: OrderDisputeWithDetails): Promise<void> {
-    // Notify admin
-    await this.notificationService.notifyDisputeCreated(dispute.complainant.id, dispute.id);
-  }
+  // private async notifyDisputeCreated(dispute: OrderDisputeWithDetails): Promise<void> {
+  //   // Notify admin
+  //   await this.notificationService.notifyDisputeCreated(dispute.complainant.id, dispute.id);
+  // }
 
-  private async notifyDisputeUpdated(dispute: OrderDisputeWithDetails): Promise<void> {
-    await this.notificationService.notifyDisputeUpdated(dispute.complainant.id, dispute.id);
-  }
+  // private async notifyDisputeUpdated(dispute: OrderDisputeWithDetails): Promise<void> {
+  //   await this.notificationService.notifyDisputeUpdated(dispute.complainant.id, dispute.id);
+  // }
 
-  private async notifyReturnCreated(returnRequest: OrderReturnWithDetails): Promise<void> {
-    // Get order to notify seller
-    const order = await this.orderRepository.findByIdWithDetails(returnRequest.orderId);
-    if (order) {
-      const sellerIds = [...new Set(order.items.map((item) => item.seller.id))];
-      for (const sellerId of sellerIds) {
-        await this.notificationService.notifyReturnCreated(sellerId, returnRequest.id);
-      }
+  // private async notifyReturnCreated(returnRequest: OrderReturnWithDetails): Promise<void> {
+  //   // Get order to notify seller
+  //   const order = await this.orderRepository.findByIdWithDetails(returnRequest.orderId);
+  //   if (order) {
+  //     const sellerIds = [...new Set(order.items.map((item) => item.seller.id))];
+  //     for (const sellerId of sellerIds) {
+  //       await this.notificationService.notifyReturnCreated(sellerId, returnRequest.id);
+  //     }
+  //   }
+  // }
+
+  // private async notifyReturnUpdated(returnRequest: OrderReturnWithDetails): Promise<void> {
+  //   await this.notificationService.notifyReturnUpdated(
+  //     returnRequest.requester.id,
+  //     returnRequest.id,
+  //   );
+  // }
+
+  async getAllOrdersForAdmin(
+    options: OrderQueryOptions = {},
+  ): Promise<PaginatedResult<OrderSummary>> {
+    try {
+      return await this.orderRepository.getAllOrdersForAdmin(options);
+    } catch (error) {
+      this.logger.error(`Error getting all orders for admin: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get orders for admin', 'SERVICE_ERROR');
     }
   }
 
-  private async notifyReturnUpdated(returnRequest: OrderReturnWithDetails): Promise<void> {
-    await this.notificationService.notifyReturnUpdated(
-      returnRequest.requester.id,
-      returnRequest.id,
-    );
+  async deleteOrder(id: string, adminId: string): Promise<boolean> {
+    try {
+      // Validate admin permission
+      const admin = await this.userRepository.findById(adminId);
+      if (!admin || admin.role !== 'ADMIN') {
+        throw AppError.forbidden('Only administrators can delete orders', 'ADMIN_ONLY');
+      }
+
+      // Get order before deletion for logging
+      const order = await this.orderRepository.findByIdWithDetails(id);
+      if (!order) {
+        throw AppError.notFound('Order not found', 'ORDER_NOT_FOUND');
+      }
+
+      // Check if order can be deleted (business rules)
+      const canDelete = order.status === 'CANCELLED' || order.status === 'REFUNDED';
+      if (!canDelete) {
+        throw AppError.badRequest(
+          'Only cancelled or refunded orders can be deleted',
+          'CANNOT_DELETE_ORDER',
+        );
+      }
+
+      const result = await this.orderRepository.deleteOrderById(id);
+
+      this.logger.info(`Order deleted by admin: ${id} (${order.orderNumber}) by ${adminId}`);
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error deleting order: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to delete order', 'SERVICE_ERROR');
+    }
+  }
+
+  async getAdminOrderStats(): Promise<OrderStats & { totalUsers: number; totalRevenue: number }> {
+    try {
+      return await this.orderRepository.getOrderStatsForAdmin();
+    } catch (error) {
+      this.logger.error(`Error getting admin order stats: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get admin order stats', 'SERVICE_ERROR');
+    }
+  }
+
+  async adminUpdateOrderStatus(
+    id: string,
+    data: UpdateOrderStatusDto,
+    adminId: string,
+  ): Promise<OrderWithDetails> {
+    try {
+      // Validate admin permission
+      const admin = await this.userRepository.findById(adminId);
+      if (!admin || admin.role !== 'ADMIN') {
+        throw AppError.forbidden('Only administrators can update order status', 'ADMIN_ONLY');
+      }
+
+      // Admins can update to any status
+      const order = await this.orderRepository.updateOrderStatus(id, data, adminId);
+
+      // Send notifications
+      try {
+        await this.notifyOrderStatusChanged(order, data.status);
+      } catch (notifError) {
+        this.logger.error(`Error sending status change notifications: ${notifError}`);
+      }
+
+      this.logger.info(`Order status updated by admin: ${id} to ${data.status} by ${adminId}`);
+
+      return order;
+    } catch (error) {
+      this.logger.error(`Error updating order status as admin: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to update order status', 'SERVICE_ERROR');
+    }
   }
 }

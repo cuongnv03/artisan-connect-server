@@ -103,4 +103,8 @@ export interface IOrderRepository extends BaseRepository<Order, string> {
   canUserAccessReturn(returnId: string, userId: string): Promise<boolean>;
   canUserCreateDispute(orderId: string, userId: string): Promise<boolean>;
   canUserCreateReturn(orderId: string, userId: string): Promise<boolean>;
+
+  getAllOrdersForAdmin(options?: OrderQueryOptions): Promise<PaginatedResult<OrderSummary>>;
+  deleteOrderById(id: string): Promise<boolean>;
+  getOrderStatsForAdmin(): Promise<OrderStats & { totalUsers: number; totalRevenue: number }>;
 }

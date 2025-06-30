@@ -1867,4 +1867,195 @@ export class OrderRepository
       return false;
     }
   }
+
+  async getAllOrdersForAdmin(
+    options: OrderQueryOptions = {},
+  ): Promise<PaginatedResult<OrderSummary>> {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        userId,
+        sellerId,
+        status,
+        paymentStatus,
+        deliveryStatus,
+        dateFrom,
+        dateTo,
+        sortBy = 'createdAt',
+        sortOrder = 'desc',
+      } = options;
+
+      const where: Prisma.OrderWhereInput = {};
+
+      if (userId) where.userId = userId;
+      if (status) {
+        where.status = Array.isArray(status) ? { in: status } : status;
+      }
+      if (paymentStatus) {
+        where.paymentStatus = Array.isArray(paymentStatus) ? { in: paymentStatus } : paymentStatus;
+      }
+      if (deliveryStatus) {
+        where.deliveryStatus = Array.isArray(deliveryStatus)
+          ? { in: deliveryStatus }
+          : deliveryStatus;
+      }
+      if (dateFrom || dateTo) {
+        where.createdAt = {};
+        if (dateFrom) where.createdAt.gte = dateFrom;
+        if (dateTo) where.createdAt.lte = dateTo;
+      }
+      if (sellerId) {
+        where.items = {
+          some: { sellerId },
+        };
+      }
+
+      const total = await this.prisma.order.count({ where });
+
+      const orders = await this.prisma.order.findMany({
+        where,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          items: {
+            include: {
+              seller: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  artisanProfile: {
+                    select: { shopName: true },
+                  },
+                },
+              },
+            },
+          },
+          _count: {
+            select: { items: true },
+          },
+        },
+        orderBy: { [sortBy]: sortOrder },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+      const orderSummaries: OrderSummary[] = orders.map((order) => {
+        const primarySeller = order.items[0]?.seller;
+
+        return {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status as OrderStatus,
+          paymentStatus: order.paymentStatus as PaymentStatus,
+          deliveryStatus: order.deliveryStatus as DeliveryStatus,
+          totalAmount: Number(order.totalAmount),
+          itemCount: order._count.items,
+          createdAt: order.createdAt,
+          customer: order.customer
+            ? {
+                id: order.customer.id,
+                name: `${order.customer.firstName} ${order.customer.lastName}`,
+                email: order.customer.email,
+              }
+            : undefined,
+          primarySeller: primarySeller
+            ? {
+                id: primarySeller.id,
+                name: `${primarySeller.firstName} ${primarySeller.lastName}`,
+                shopName: primarySeller.artisanProfile?.shopName,
+              }
+            : undefined,
+        };
+      });
+
+      return {
+        data: orderSummaries,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error getting all orders for admin: ${error}`);
+      throw new AppError('Failed to get orders for admin', 500, 'ADMIN_ORDER_QUERY_FAILED');
+    }
+  }
+
+  async deleteOrderById(id: string): Promise<boolean> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Delete related data first
+        await tx.paymentTransaction.deleteMany({
+          where: { orderId: id },
+        });
+
+        await tx.orderItem.deleteMany({
+          where: { orderId: id },
+        });
+
+        await tx.orderDispute.deleteMany({
+          where: { orderId: id },
+        });
+
+        await tx.orderReturn.deleteMany({
+          where: { orderId: id },
+        });
+
+        // Delete the order
+        await tx.order.delete({
+          where: { id },
+        });
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting order ${id}: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to delete order', 500, 'ORDER_DELETE_FAILED');
+    }
+  }
+
+  async getOrderStatsForAdmin(): Promise<
+    OrderStats & { totalUsers: number; totalRevenue: number }
+  > {
+    try {
+      const [totalStats, statusCounts, userCount] = await Promise.all([
+        this.prisma.order.aggregate({
+          _count: { id: true },
+          _sum: { totalAmount: true },
+        }),
+        this.prisma.order.groupBy({
+          by: ['status'],
+          _count: { id: true },
+        }),
+        this.prisma.user.count(),
+      ]);
+
+      const statusMap = new Map(statusCounts.map((s) => [s.status, s._count.id]));
+
+      return {
+        totalOrders: totalStats._count.id || 0,
+        pendingOrders: statusMap.get('PENDING') || 0,
+        completedOrders: statusMap.get('DELIVERED') || 0,
+        cancelledOrders: statusMap.get('CANCELLED') || 0,
+        totalRevenue: Number(totalStats._sum.totalAmount) || 0,
+        averageOrderValue:
+          totalStats._count.id > 0 ? Number(totalStats._sum.totalAmount) / totalStats._count.id : 0,
+        totalUsers: userCount,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting admin order stats: ${error}`);
+      throw new AppError('Failed to get admin order stats', 500, 'ADMIN_ORDER_STATS_FAILED');
+    }
+  }
 }

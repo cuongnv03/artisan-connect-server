@@ -32,6 +32,12 @@ import { GetOrderStatusHistoryController } from '../controllers/GetOrderStatusHi
 import { GetAllDisputesController } from '../controllers/dispute/GetAllDisputesController';
 import { GetAllReturnsController } from '../controllers/return/GetAllReturnsController';
 
+// Admin Controllers
+import { GetAllOrdersController } from '../controllers/admin/GetAllOrdersController';
+import { DeleteOrderController } from '../controllers/admin/DeleteOrderController';
+import { AdminUpdateOrderStatusController } from '../controllers/admin/AdminUpdateOrderStatusController';
+import { GetAdminOrderStatsController } from '../controllers/admin/GetAdminOrderStatsController';
+
 // Validators
 import {
   createOrderFromCartSchema,
@@ -76,6 +82,11 @@ const getOrderStatusHistoryController = new GetOrderStatusHistoryController();
 
 const getAllDisputesController = new GetAllDisputesController();
 const getAllReturnsController = new GetAllReturnsController();
+
+const getAllOrdersController = new GetAllOrdersController();
+const deleteOrderController = new DeleteOrderController();
+const adminUpdateOrderStatusController = new AdminUpdateOrderStatusController();
+const getAdminOrderStatsController = new GetAdminOrderStatsController();
 
 // All routes require authentication
 router.use(authenticate);
@@ -172,5 +183,25 @@ router.post(
 //   validate(getReturnsQuerySchema, 'query'),
 //   getAllReturnsController.execute,
 // );
+
+// === ADMIN ROUTES ===
+router.get(
+  '/admin/all',
+  authorize(['ADMIN']),
+  validate(getOrdersQuerySchema, 'query'),
+  getAllOrdersController.execute,
+);
+
+router.get('/admin/stats', authorize(['ADMIN']), getAdminOrderStatsController.execute);
+
+router.patch(
+  '/admin/:id/status',
+  authorize(['ADMIN']),
+  validateIdParam(),
+  validate(updateOrderStatusSchema),
+  adminUpdateOrderStatusController.execute,
+);
+
+router.delete('/admin/:id', authorize(['ADMIN']), validateIdParam(), deleteOrderController.execute);
 
 export default router;

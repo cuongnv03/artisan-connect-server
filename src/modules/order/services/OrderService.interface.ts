@@ -87,4 +87,13 @@ export interface IOrderService {
   ): Promise<PaginatedResult<OrderReturnWithDetails>>;
   getReturnById(id: string): Promise<OrderReturnWithDetails | null>;
   validateReturnAccess(returnId: string, userId: string): Promise<boolean>;
+
+  getAllOrdersForAdmin(options?: OrderQueryOptions): Promise<PaginatedResult<OrderSummary>>;
+  deleteOrder(id: string, adminId: string): Promise<boolean>;
+  getAdminOrderStats(): Promise<OrderStats & { totalUsers: number; totalRevenue: number }>;
+  adminUpdateOrderStatus(
+    id: string,
+    data: UpdateOrderStatusDto,
+    adminId: string,
+  ): Promise<OrderWithDetails>;
 }
