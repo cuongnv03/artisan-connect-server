@@ -19,6 +19,7 @@ import reviewRoutes from './modules/review/interface/routes/review.routes';
 import notificationRoutes from './modules/notification/interface/routes/notification.routes';
 import messageRoutes from './modules/messaging/interface/routes/message.routes';
 import uploadRoutes from './modules/upload/interface/routes/upload.routes';
+import adminPostRoutes from './modules/post/interface/routes/admin-post.routes';
 
 const logger = Logger.getInstance();
 const apiPrefix = Config.API_PREFIX;
@@ -47,6 +48,7 @@ export const registerRoutes = (app: Express) => {
 
     app.use(`${apiPrefix}/upload`, uploadRoutes);
     // Thêm routes khác
+    app.use(`${apiPrefix}/admin/posts`, adminPostRoutes);
 
     // API documentation route
     app.get(`${apiPrefix}`, (req, res) => {

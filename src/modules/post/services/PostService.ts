@@ -90,10 +90,32 @@ export class PostService implements IPostService {
 
   async deletePost(id: string, userId: string): Promise<boolean> {
     try {
+      // Kiểm tra post tồn tại
+      const post = await this.postRepository.findById(id);
+      if (!post) {
+        throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
+      }
+
+      // Kiểm tra quyền: admin hoặc owner
+      const user = await this.userRepository.findById(userId);
+      const isAdmin = user?.role === 'ADMIN';
+      const isOwner = post.userId === userId;
+
+      if (!isAdmin && !isOwner) {
+        throw new AppError('You can only delete your own posts', 403, 'FORBIDDEN');
+      }
+
+      // Xóa post
       const result = await this.postRepository.deletePost(id, userId);
 
       if (result) {
-        this.logger.info(`Post deleted: ${id} by user ${userId}`);
+        if (isAdmin && !isOwner) {
+          this.logger.info(
+            `Post ${id} deleted by admin ${userId} (original author: ${post.userId})`,
+          );
+        } else {
+          this.logger.info(`Post deleted: ${id} by user ${userId}`);
+        }
       }
 
       return result;
@@ -106,11 +128,27 @@ export class PostService implements IPostService {
 
   async publishPost(id: string, userId: string): Promise<PostWithUser> {
     try {
-      const post = await this.postRepository.publishPost(id, userId);
+      const post = await this.postRepository.findById(id);
+      if (!post) {
+        throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
+      }
 
-      this.logger.info(`Post published: ${id} "${post.title}" by user ${userId}`);
+      // Admin có thể publish bất kỳ post nào
+      const user = await this.userRepository.findById(userId);
+      const isAdmin = user?.role === 'ADMIN';
+      const isOwner = post.userId === userId;
 
-      return post;
+      if (!isAdmin && !isOwner) {
+        throw new AppError('You can only publish your own posts', 403, 'FORBIDDEN');
+      }
+
+      const result = await this.postRepository.publishPost(id, post.userId); // Sử dụng original author ID
+
+      this.logger.info(
+        `Post published: ${id} "${result.title}" by ${isAdmin ? 'admin' : 'user'} ${userId}`,
+      );
+
+      return result;
     } catch (error) {
       this.logger.error(`Error publishing post: ${error}`);
       if (error instanceof AppError) throw error;
@@ -120,11 +158,26 @@ export class PostService implements IPostService {
 
   async archivePost(id: string, userId: string): Promise<PostWithUser> {
     try {
-      const post = await this.postRepository.archivePost(id, userId);
+      const post = await this.postRepository.findById(id);
+      if (!post) {
+        throw new AppError('Post not found', 404, 'POST_NOT_FOUND');
+      }
 
-      this.logger.info(`Post archived: ${id} "${post.title}" by user ${userId}`);
+      const user = await this.userRepository.findById(userId);
+      const isAdmin = user?.role === 'ADMIN';
+      const isOwner = post.userId === userId;
 
-      return post;
+      if (!isAdmin && !isOwner) {
+        throw new AppError('You can only archive your own posts', 403, 'FORBIDDEN');
+      }
+
+      const result = await this.postRepository.archivePost(id, post.userId);
+
+      this.logger.info(
+        `Post archived: ${id} "${result.title}" by ${isAdmin ? 'admin' : 'user'} ${userId}`,
+      );
+
+      return result;
     } catch (error) {
       this.logger.error(`Error archiving post: ${error}`);
       if (error instanceof AppError) throw error;
