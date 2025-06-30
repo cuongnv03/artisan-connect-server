@@ -1,6 +1,6 @@
 import { BaseRepository } from '../../../shared/interfaces/BaseRepository';
 import { User, UserCreationAttributes, UserUpdateAttributes } from '../models/User';
-import { UserRole } from '../models/UserEnums';
+import { UserRole, UserStatus } from '../models/UserEnums';
 
 export interface IUserRepository extends BaseRepository<User, string> {
   findByEmail(email: string): Promise<User | null>;
@@ -13,4 +13,34 @@ export interface IUserRepository extends BaseRepository<User, string> {
   search(query: string, limit: number, offset: number): Promise<{ users: User[]; total: number }>;
   emailExists(email: string): Promise<boolean>;
   usernameExists(username: string): Promise<boolean>;
+
+  // === ADMIN METHODS ===
+  adminSearchUsers(
+    query: string,
+    filters: {
+      role?: UserRole;
+      status?: UserStatus;
+      verified?: boolean;
+    },
+    limit: number,
+    offset: number,
+  ): Promise<{ users: User[]; total: number }>;
+
+  getUserWithDetails(id: string): Promise<
+    | (User & {
+        profile?: any;
+        artisanProfile?: any;
+      })
+    | null
+  >;
+
+  adminSoftDelete(id: string, adminId: string): Promise<boolean>;
+
+  getUserStats(): Promise<{
+    total: number;
+    byRole: Record<UserRole, number>;
+    byStatus: Record<UserStatus, number>;
+    verified: number;
+    unverified: number;
+  }>;
 }

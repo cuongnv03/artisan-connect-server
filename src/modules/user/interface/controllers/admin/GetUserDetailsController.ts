@@ -1,0 +1,33 @@
+import { Request, Response, NextFunction } from 'express';
+import { BaseController } from '../../../../../shared/baseClasses/BaseController';
+import { ApiResponse } from '../../../../../shared/utils/ApiResponse';
+import { IUserService } from '../../../services/UserService.interface';
+import { AppError } from '../../../../../core/errors/AppError';
+import container from '../../../../../core/di/container';
+
+export class GetUserDetailsController extends BaseController {
+  private userService: IUserService;
+
+  constructor() {
+    super();
+    this.userService = container.resolve<IUserService>('userService');
+  }
+
+  protected async executeImpl(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      this.validateAuth(req);
+      this.validateRole(req, ['ADMIN']);
+
+      const { id } = req.params;
+      const user = await this.userService.adminGetUserDetails(id);
+
+      if (!user) {
+        throw AppError.notFound('User not found');
+      }
+
+      ApiResponse.success(res, user, 'User details retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+}

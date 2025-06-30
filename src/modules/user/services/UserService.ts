@@ -5,6 +5,13 @@ import { UserProfileDto, UserListDto, UserSearchDto } from '../models/UserDto';
 import { ProfileWithUser, UpdateProfileDto } from '../models/Profile';
 import { Address, CreateAddressDto, UpdateAddressDto } from '../models/Address';
 import { Follow, FollowStatsDto } from '../models/Follow';
+import {
+  AdminUserSearchDto,
+  AdminUserListDto,
+  AdminUserDetailDto,
+  AdminUserSummaryDto,
+  UserStatsDto,
+} from '../models/AdminUserDto';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
 import { IUserRepository } from '../../auth';
 import { IProfileRepository } from '../repositories/ProfileRepository.interface';
@@ -456,6 +463,178 @@ export class UserService implements IUserService {
       this.logger.error(`Error getting follow stats: ${error}`);
       if (error instanceof AppError) throw error;
       throw AppError.internal('Failed to get follow stats', 'SERVICE_ERROR');
+    }
+  }
+
+  // === ADMIN METHODS ===
+  async adminSearchUsers(searchDto: AdminUserSearchDto): Promise<AdminUserListDto> {
+    try {
+      const { query = '', page = 1, limit = 20, role, status, verified } = searchDto;
+      const offset = (page - 1) * limit;
+
+      const filters = {
+        role,
+        status,
+        verified,
+      };
+
+      const { users, total } = await this.userRepository.adminSearchUsers(
+        query,
+        filters,
+        limit,
+        offset,
+      );
+
+      const userSummaries: AdminUserSummaryDto[] = users.map((user: any) => ({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        status: user.status,
+        isVerified: user.isVerified,
+        emailVerified: user.emailVerified,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
+        followerCount: user.followerCount,
+        followingCount: user.followingCount,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        lastSeenAt: user.lastSeenAt,
+        profile: user.profile
+          ? {
+              location: user.profile.location,
+              website: user.profile.website,
+              dateOfBirth: user.profile.dateOfBirth,
+            }
+          : null,
+        artisanProfile: user.artisanProfile
+          ? {
+              shopName: user.artisanProfile.shopName,
+              isVerified: user.artisanProfile.isVerified,
+              rating: user.artisanProfile.rating,
+              reviewCount: user.artisanProfile.reviewCount,
+              totalSales: parseFloat(user.artisanProfile.totalSales.toString()),
+            }
+          : null,
+      }));
+
+      return {
+        users: userSummaries,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(`Error in admin search users: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to search users', 'SERVICE_ERROR');
+    }
+  }
+
+  async adminGetUserDetails(id: string): Promise<AdminUserDetailDto | null> {
+    try {
+      const userWithDetails = await this.userRepository.getUserWithDetails(id);
+
+      if (!userWithDetails) {
+        return null;
+      }
+
+      const user = userWithDetails as any;
+
+      return {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        status: user.status,
+        bio: user.bio,
+        isVerified: user.isVerified,
+        emailVerified: user.emailVerified,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
+        followerCount: user.followerCount,
+        followingCount: user.followingCount,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        lastSeenAt: user.lastSeenAt,
+
+        profile: user.profile
+          ? {
+              id: user.profile.id,
+              coverUrl: user.profile.coverUrl,
+              location: user.profile.location,
+              website: user.profile.website,
+              dateOfBirth: user.profile.dateOfBirth,
+              gender: user.profile.gender,
+              socialLinks: user.profile.socialLinks,
+              preferences: user.profile.preferences,
+              addresses: user.profile.addresses || [],
+            }
+          : null,
+
+        artisanProfile: user.artisanProfile
+          ? {
+              id: user.artisanProfile.id,
+              shopName: user.artisanProfile.shopName,
+              shopDescription: user.artisanProfile.shopDescription,
+              shopLogoUrl: user.artisanProfile.shopLogoUrl,
+              shopBannerUrl: user.artisanProfile.shopBannerUrl,
+              specialties: user.artisanProfile.specialties,
+              experience: user.artisanProfile.experience,
+              website: user.artisanProfile.website,
+              contactEmail: user.artisanProfile.contactEmail,
+              contactPhone: user.artisanProfile.contactPhone,
+              isVerified: user.artisanProfile.isVerified,
+              rating: user.artisanProfile.rating,
+              reviewCount: user.artisanProfile.reviewCount,
+              totalSales: parseFloat(user.artisanProfile.totalSales?.toString() || '0'),
+            }
+          : null,
+
+        stats: user._count
+          ? {
+              postsCount: user._count.posts || 0,
+              productsCount: user._count.products || 0,
+              ordersCount: user._count.orders || 0,
+              salesCount: user._count.sellerOrders || 0,
+            }
+          : undefined,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting admin user details: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get user details', 'SERVICE_ERROR');
+    }
+  }
+
+  async adminDeleteUser(id: string, adminId: string): Promise<boolean> {
+    try {
+      const result = await this.userRepository.adminSoftDelete(id, adminId);
+
+      if (result) {
+        this.logger.info(`Admin ${adminId} deleted user ${id}`);
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error in admin delete user: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to delete user', 'SERVICE_ERROR');
+    }
+  }
+
+  async adminGetUserStats(): Promise<UserStatsDto> {
+    try {
+      return await this.userRepository.getUserStats();
+    } catch (error) {
+      this.logger.error(`Error getting user stats: ${error}`);
+      if (error instanceof AppError) throw error;
+      throw AppError.internal('Failed to get user statistics', 'SERVICE_ERROR');
     }
   }
 }

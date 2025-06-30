@@ -4,6 +4,12 @@ import { ProfileWithUser, UpdateProfileDto } from '../models/Profile';
 import { Address, CreateAddressDto, UpdateAddressDto } from '../models/Address';
 import { Follow, FollowStatsDto } from '../models/Follow';
 import { PaginatedResult } from '../../../shared/interfaces/PaginatedResult';
+import {
+  AdminUserDetailDto,
+  AdminUserListDto,
+  AdminUserSearchDto,
+  UserStatsDto,
+} from '../models/AdminUserDto';
 
 export interface IUserService {
   // User management
@@ -32,4 +38,10 @@ export interface IUserService {
   getFollowers(userId: string, page: number, limit: number): Promise<PaginatedResult<any>>;
   getFollowing(userId: string, page: number, limit: number): Promise<PaginatedResult<any>>;
   getFollowStats(userId: string, currentUserId?: string): Promise<FollowStatsDto>;
+
+  // === ADMIN METHODS ===
+  adminSearchUsers(searchDto: AdminUserSearchDto): Promise<AdminUserListDto>;
+  adminGetUserDetails(id: string): Promise<AdminUserDetailDto | null>;
+  adminDeleteUser(id: string, adminId: string): Promise<boolean>;
+  adminGetUserStats(): Promise<UserStatsDto>;
 }

@@ -35,6 +35,13 @@ import { GetFollowersController } from '../controllers/follow/GetFollowersContro
 import { GetFollowingController } from '../controllers/follow/GetFollowingController';
 import { GetFollowStatsController } from '../controllers/follow/GetFollowStatsController';
 
+// Admin Controllers
+import { GetUsersController } from '../controllers/admin/GetUsersController';
+import { GetUserDetailsController } from '../controllers/admin/GetUserDetailsController';
+import { DeleteUserController } from '../controllers/admin/DeleteUserController';
+import { GetUserStatsController } from '../controllers/admin/GetUserStatsController';
+import { get } from 'lodash';
+
 const router = Router();
 
 // Initialize controllers
@@ -58,6 +65,11 @@ const unfollowUserController = new UnfollowUserController();
 const getFollowersController = new GetFollowersController();
 const getFollowingController = new GetFollowingController();
 const getFollowStatsController = new GetFollowStatsController();
+
+const getUsersController = new GetUsersController();
+const getUserDetailsController = new GetUserDetailsController();
+const deleteUserController = new DeleteUserController();
+const getUserStatsController = new GetUserStatsController();
 
 // === PUBLIC ROUTES ===
 // Search users (public) - chỉ return ARTISAN
@@ -130,5 +142,24 @@ router.delete(
 
 // Get user profile (public) - CHỈ CHO ARTISAN - MUST BE LAST
 router.get('/:id', validateIdParam(), getUserProfileController.execute);
+
+// === ADMIN ROUTES ===
+// Admin user management routes
+router.get('/admin/users', authenticate, authorize(['ADMIN']), getUsersController.execute);
+router.get(
+  '/admin/users/:id',
+  authenticate,
+  authorize(['ADMIN']),
+  validateIdParam(),
+  getUserDetailsController.execute,
+);
+router.delete(
+  '/admin/users/:id',
+  authenticate,
+  authorize(['ADMIN']),
+  validateIdParam(),
+  deleteUserController.execute,
+);
+router.get('/admin/stats', authenticate, authorize(['ADMIN']), getUserStatsController.execute);
 
 export default router;
