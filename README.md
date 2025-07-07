@@ -185,20 +185,39 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant C as Customer
-    participant S as System
+    participant M as Chat/Messaging
+    participant Q as Quote System
     participant A as Artisan
-    participant M as Messaging
-    participant O as Order
+    participant O as Order System
 
-    C->>S: Create custom order request
-    S->>A: Send quote request
-    A->>S: Review and respond
-    alt Accept/Counter
-        A->>M: Discuss via chat
-        C->>S: Accept final quote
-        S->>O: Create order from quote
-    else Reject
-        S->>C: Notify rejection
+    C->>M: Send custom order request in chat
+    M->>Q: Create quote request
+    Q->>A: Notify new quote request
+    
+    alt Accept Quote
+        A->>M: Accept via chat
+        M->>Q: Update status to ACCEPTED
+        Q->>O: Create order
+        O->>C: Order confirmation
+        
+    else Counter Offer
+        A->>M: Send counter-offer
+        M->>Q: Update with counter-offer
+        Q->>C: Notify counter-offer
+        
+        alt Customer Accepts
+            C->>M: Accept counter-offer
+            M->>Q: Update to ACCEPTED
+            Q->>O: Create order
+        else Customer Rejects
+            C->>M: Reject offer
+            M->>Q: Update to REJECTED
+        end
+        
+    else Reject Quote
+        A->>M: Reject via chat
+        M->>Q: Update to REJECTED
+        Q->>C: Notify rejection
     end
 ```
 
@@ -220,24 +239,6 @@ sequenceDiagram
     O->>P: Process payment
     P->>O: Confirm payment
     O->>O: Notify all sellers
-```
-
-### 4. Real-time Messaging with Quotes
-
-```mermaid
-sequenceDiagram
-    participant C as Customer
-    participant M as Messaging
-    participant Q as Quote System
-    participant A as Artisan
-    participant S as Socket.io
-
-    C->>M: Send custom order in chat
-    M->>Q: Create quote request
-    Q->>S: Real-time notification to artisan
-    A->>M: Respond via chat
-    M->>Q: Update quote status
-    Q->>S: Real-time update to customer
 ```
 
 ## Module Structure
