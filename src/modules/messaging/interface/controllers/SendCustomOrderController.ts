@@ -2,10 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from '../../../../shared/baseClasses/BaseController';
 import { ApiResponse } from '../../../../shared/utils/ApiResponse';
 import { IMessageService } from '../../services/MessageService.interface';
+import { Logger } from '../../../../core/logging/Logger';
 import container from '../../../../core/di/container';
 
 export class SendCustomOrderController extends BaseController {
   private messageService: IMessageService;
+  private logger = Logger.getInstance();
 
   constructor() {
     super();
@@ -31,7 +33,7 @@ export class SendCustomOrderController extends BaseController {
 
     try {
       switch (type) {
-        case 'create_custom_order':
+        case 'create_custom_order': {
           // FIXED: Improved flow - create order and auto-send card message
           this.logger?.info('Creating custom order and sending card message');
 
@@ -65,6 +67,7 @@ export class SendCustomOrderController extends BaseController {
             },
           );
           break;
+        }
 
         case 'respond_custom_order':
           // Artisan responds to custom order via chat

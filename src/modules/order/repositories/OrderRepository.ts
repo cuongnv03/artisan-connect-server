@@ -212,7 +212,7 @@ export class OrderRepository
         // Mark negotiations as completed
         const negotiationIds = cartItems
           .filter((item) => item.negotiationId)
-          .map((item) => item.negotiationId);
+          .map((item) => item.negotiationId as string);
 
         if (negotiationIds.length > 0) {
           await tx.priceNegotiation.updateMany({
@@ -783,7 +783,7 @@ export class OrderRepository
             });
           } else {
             await tx.product.update({
-              where: { id: item.productId },
+              where: { id: item.productId as string },
               data: { quantity: { increment: item.quantity } },
             });
           }

@@ -26,7 +26,7 @@ export class AdminProductController extends BaseController {
         page: parseInt(req.query.page as string) || 1,
         limit: parseInt(req.query.limit as string) || 20,
         search: req.query.search as string,
-        status: req.query.status as string,
+        status: req.query.status as any,
         sortBy: (req.query.sortBy as string) || 'createdAt',
         sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
       };

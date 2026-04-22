@@ -21,7 +21,8 @@ export class GetSuggestedArtisansController extends BaseController {
 
       // Validate limit
       if (limit > 20) {
-        return ApiResponse.badRequest(res, 'Limit cannot exceed 20');
+        ApiResponse.badRequest(res, 'Limit cannot exceed 20');
+        return;
       }
 
       const suggestions = await this.artisanProfileService.getSuggestedArtisans(userId, limit);

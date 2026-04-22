@@ -17,13 +17,14 @@ export class SearchProductsController extends BaseController {
     const query = req.query.q as string;
 
     if (!query || query.trim().length === 0) {
-      return ApiResponse.badRequest(res, 'Search query is required');
+      ApiResponse.badRequest(res, 'Search query is required');
+      return;
     }
 
     const options: ProductQueryOptions = {
       page: parseInt(req.query.page as string) || 1,
       limit: parseInt(req.query.limit as string) || 10,
-      categoryId: req.query.categoryId as string,
+      categoryIds: req.query.categoryId ? [req.query.categoryId as string] : undefined,
       sortBy: (req.query.sortBy as string) || 'createdAt',
       sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
     };

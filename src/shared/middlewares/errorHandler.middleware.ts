@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { AppError } from '../../core/errors/AppError';
 import { Logger } from '../../core/logging/Logger';
@@ -6,7 +6,7 @@ import { Logger } from '../../core/logging/Logger';
 /**
  * Global error handler middleware
  */
-export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction) => {
+export const errorHandler: ErrorRequestHandler = (err: Error, req: Request, res: Response, _next: NextFunction): any => {
   const logger = Logger.getInstance();
   const isDev = process.env.NODE_ENV !== 'production';
 

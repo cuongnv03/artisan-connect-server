@@ -348,7 +348,7 @@ export class CartService implements ICartService {
             discountPrice: item.variant.discountPrice ? Number(item.variant.discountPrice) : null,
           }
         : undefined,
-    };
+    } as unknown as CartItem;
   }
 
   private async validateNegotiationForCart(

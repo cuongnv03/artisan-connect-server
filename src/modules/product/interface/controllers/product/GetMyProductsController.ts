@@ -26,7 +26,7 @@ export class GetMyProductsController extends BaseController {
       limit: parseInt(req.query.limit as string) || 10,
       status: req.query.status ? [req.query.status as any] : undefined,
       search: req.query.search as string,
-      categoryId: req.query.categoryId as string,
+      categoryIds: req.query.categoryId ? [req.query.categoryId as string] : undefined,
       sortBy: (req.query.sortBy as string) || 'createdAt',
       sortOrder: (req.query.sortOrder as 'asc' | 'desc') || 'desc',
     };

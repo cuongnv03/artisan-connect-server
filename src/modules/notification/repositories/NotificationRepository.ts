@@ -15,9 +15,9 @@ export class NotificationRepository implements INotificationRepository {
 
   async createNotification(data: CreateNotificationDto): Promise<Notification> {
     try {
-      return await this.prisma.notification.create({
+      return (await this.prisma.notification.create({
         data,
-      });
+      })) as unknown as Notification;
     } catch (error) {
       throw new AppError('Failed to create notification', 500, 'NOTIFICATION_CREATE_FAILED');
     }
@@ -25,7 +25,7 @@ export class NotificationRepository implements INotificationRepository {
 
   async findById(id: string): Promise<NotificationWithSender | null> {
     try {
-      return await this.prisma.notification.findUnique({
+      return (await this.prisma.notification.findUnique({
         where: { id },
         include: {
           sender: {
@@ -38,7 +38,7 @@ export class NotificationRepository implements INotificationRepository {
             },
           },
         },
-      });
+      })) as unknown as NotificationWithSender | null;
     } catch (error) {
       throw new AppError('Failed to find notification', 500, 'NOTIFICATION_FIND_FAILED');
     }
@@ -91,7 +91,7 @@ export class NotificationRepository implements INotificationRepository {
         this.prisma.notification.count({ where }),
       ]);
 
-      return PaginationUtils.createPaginatedResult(notifications, total, page, limit);
+      return PaginationUtils.createPaginatedResult(notifications as any, total, page, limit);
     } catch (error) {
       throw new AppError('Failed to get user notifications', 500, 'NOTIFICATION_GET_FAILED');
     }

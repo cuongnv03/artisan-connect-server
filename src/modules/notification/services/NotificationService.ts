@@ -151,7 +151,7 @@ export class NotificationService implements INotificationService {
 
       if (count > 0) {
         // Update unread count in real-time
-        await this.socketService.updateUnreadCount(userId, 0);
+        await this.socketService?.updateUnreadCount(userId, 0);
       }
 
       return count;

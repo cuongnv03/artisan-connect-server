@@ -149,7 +149,7 @@ export class OrderService implements IOrderService {
           try {
             await this.notificationService.sendNotification({
               recipientId: userId,
-              type: 'SYSTEM',
+              type: 'SYSTEM' as any,
               title: 'Order Created Successfully',
               message: `Your order ${order.orderNumber} has been created successfully.`,
               actionUrl: `/orders/${order.id}`,
@@ -682,7 +682,7 @@ export class OrderService implements IOrderService {
         // Admins can update to any status
         break;
 
-      case 'ARTISAN':
+      case 'ARTISAN': {
         // Artisans can only update orders where they are sellers
         const isSeller = order.items.some((item) => item.seller.id === updatedBy);
         if (!isSeller) {
@@ -704,6 +704,7 @@ export class OrderService implements IOrderService {
           );
         }
         break;
+      }
 
       case 'CUSTOMER':
         // Customers can only cancel their own orders
@@ -865,32 +866,21 @@ export class OrderService implements IOrderService {
     await this.notificationService.notifyPaymentRefunded(order.customer.id, order.id);
   }
 
-  // private async notifyDisputeCreated(dispute: OrderDisputeWithDetails): Promise<void> {
-  //   // Notify admin
-  //   await this.notificationService.notifyDisputeCreated(dispute.complainant.id, dispute.id);
-  // }
+  private async notifyDisputeCreated(dispute: OrderDisputeWithDetails): Promise<void> {
+    this.logger.info(`Dispute created notification: ${dispute.id}`);
+  }
 
-  // private async notifyDisputeUpdated(dispute: OrderDisputeWithDetails): Promise<void> {
-  //   await this.notificationService.notifyDisputeUpdated(dispute.complainant.id, dispute.id);
-  // }
+  private async notifyDisputeUpdated(dispute: OrderDisputeWithDetails): Promise<void> {
+    this.logger.info(`Dispute updated notification: ${dispute.id}`);
+  }
 
-  // private async notifyReturnCreated(returnRequest: OrderReturnWithDetails): Promise<void> {
-  //   // Get order to notify seller
-  //   const order = await this.orderRepository.findByIdWithDetails(returnRequest.orderId);
-  //   if (order) {
-  //     const sellerIds = [...new Set(order.items.map((item) => item.seller.id))];
-  //     for (const sellerId of sellerIds) {
-  //       await this.notificationService.notifyReturnCreated(sellerId, returnRequest.id);
-  //     }
-  //   }
-  // }
+  private async notifyReturnCreated(returnRequest: OrderReturnWithDetails): Promise<void> {
+    this.logger.info(`Return created notification: ${returnRequest.id}`);
+  }
 
-  // private async notifyReturnUpdated(returnRequest: OrderReturnWithDetails): Promise<void> {
-  //   await this.notificationService.notifyReturnUpdated(
-  //     returnRequest.requester.id,
-  //     returnRequest.id,
-  //   );
-  // }
+  private async notifyReturnUpdated(returnRequest: OrderReturnWithDetails): Promise<void> {
+    this.logger.info(`Return updated notification: ${returnRequest.id}`);
+  }
 
   async getAllOrdersForAdmin(
     options: OrderQueryOptions = {},

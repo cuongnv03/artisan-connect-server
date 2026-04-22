@@ -29,7 +29,7 @@ export class JwtService {
   generateAccessToken(payload: TokenPayload): string {
     try {
       return jwt.sign(payload, this.config.accessTokenSecret, {
-        expiresIn: this.config.accessTokenExpiration,
+        expiresIn: this.config.accessTokenExpiration as jwt.SignOptions['expiresIn'],
       });
     } catch (error) {
       throw AppError.internal('Failed to generate access token');
@@ -42,7 +42,7 @@ export class JwtService {
   generateRefreshToken(payload: TokenPayload): string {
     try {
       return jwt.sign(payload, this.config.refreshTokenSecret, {
-        expiresIn: this.config.refreshTokenExpiration,
+        expiresIn: this.config.refreshTokenExpiration as jwt.SignOptions['expiresIn'],
       });
     } catch (error) {
       throw AppError.internal('Failed to generate refresh token');

@@ -1,5 +1,4 @@
-import { User, UserRole, UserStatus } from '../../auth';
-import { PaginatedResponse } from '../../../shared/interfaces/PaginatedResult';
+import { UserRole, UserStatus } from '../../auth';
 
 export interface AdminUserSearchDto {
   query?: string;

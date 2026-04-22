@@ -16,7 +16,7 @@ export class MessageRepository implements IMessageRepository {
 
   async createMessage(senderId: string, data: CreateMessageDto): Promise<MessageWithUsers> {
     try {
-      return await this.prisma.message.create({
+      return (await this.prisma.message.create({
         data: {
           senderId,
           receiverId: data.receiverId,
@@ -57,7 +57,7 @@ export class MessageRepository implements IMessageRepository {
             },
           },
         },
-      });
+      })) as unknown as MessageWithUsers;
     } catch (error) {
       throw new AppError('Failed to create message', 500, 'MESSAGE_CREATE_FAILED');
     }
@@ -65,7 +65,7 @@ export class MessageRepository implements IMessageRepository {
 
   async findById(id: string): Promise<MessageWithUsers | null> {
     try {
-      return await this.prisma.message.findUnique({
+      return (await this.prisma.message.findUnique({
         where: { id },
         include: {
           sender: {
@@ -98,7 +98,7 @@ export class MessageRepository implements IMessageRepository {
             },
           },
         },
-      });
+      })) as unknown as MessageWithUsers | null;
     } catch (error) {
       throw new AppError('Failed to find message', 500, 'MESSAGE_FIND_FAILED');
     }
@@ -179,7 +179,7 @@ export class MessageRepository implements IMessageRepository {
         this.prisma.message.count({ where }),
       ]);
 
-      return PaginationUtils.createPaginatedResult(messages, total, page, limit);
+      return PaginationUtils.createPaginatedResult(messages as any, total, page, limit);
     } catch (error) {
       throw new AppError('Failed to get messages', 500, 'MESSAGE_GET_FAILED');
     }
@@ -242,7 +242,7 @@ export class MessageRepository implements IMessageRepository {
         this.prisma.message.count({ where }),
       ]);
 
-      return PaginationUtils.createPaginatedResult(messages, total, page, limit);
+      return PaginationUtils.createPaginatedResult(messages as any, total, page, limit);
     } catch (error) {
       throw new AppError('Failed to get conversation messages', 500, 'CONVERSATION_GET_FAILED');
     }

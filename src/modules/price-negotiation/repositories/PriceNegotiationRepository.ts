@@ -658,7 +658,7 @@ export class PriceNegotiationRepository
               action: 'ACCEPT',
               actor: respondingAs,
               acceptedPrice: finalPrice,
-              response: data.artisanResponse || data.customerResponse,
+              response: data.artisanResponse || (data as any).customerResponse,
               timestamp: new Date().toISOString(),
             });
             break;
@@ -674,7 +674,7 @@ export class PriceNegotiationRepository
             currentHistory.push({
               action: 'REJECT',
               actor: respondingAs,
-              response: data.artisanResponse || data.customerResponse,
+              response: data.artisanResponse || (data as any).customerResponse,
               timestamp: new Date().toISOString(),
             });
             break;
@@ -701,7 +701,7 @@ export class PriceNegotiationRepository
               actor: respondingAs,
               previousPrice: Number(negotiation.proposedPrice),
               newPrice: data.counterPrice,
-              response: data.artisanResponse || data.customerResponse,
+              response: data.artisanResponse || (data as any).customerResponse,
               timestamp: new Date().toISOString(),
             });
             break;
@@ -902,7 +902,7 @@ export class PriceNegotiationRepository
         productImages: negotiation.product.images,
         variantId: negotiation.variantId,
         variantName: negotiation.variant?.name || null,
-        variantAttributes: negotiation.variant?.attributes || null,
+        variantAttributes: (negotiation.variant?.attributes as any) || null,
         originalPrice: Number(negotiation.originalPrice),
         proposedPrice: Number(negotiation.proposedPrice),
         finalPrice: negotiation.finalPrice ? Number(negotiation.finalPrice) : null,
@@ -1019,7 +1019,7 @@ export class PriceNegotiationRepository
         productImages: negotiation.product.images,
         variantId: negotiation.variantId,
         variantName: negotiation.variant?.name || null,
-        variantAttributes: negotiation.variant?.attributes || null,
+        variantAttributes: (negotiation.variant?.attributes as any) || null,
         originalPrice: Number(negotiation.originalPrice),
         proposedPrice: Number(negotiation.proposedPrice),
         finalPrice: negotiation.finalPrice ? Number(negotiation.finalPrice) : null,

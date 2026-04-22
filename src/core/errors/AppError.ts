@@ -2,8 +2,8 @@ export class AppError extends Error {
   public readonly statusCode: number;
   public readonly errorCode: string;
   public readonly isOperational: boolean;
-  public readonly cause?: Error;
-  public readonly metadata?: Record<string, any>;
+  public override readonly cause?: Error;
+  public metadata?: Record<string, any>;
 
   constructor(
     message: string,

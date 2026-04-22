@@ -334,7 +334,7 @@ export class CartRepository
           return this.enrichCartItemWithProduct(
             updatedItem,
             product,
-            negotiation.variantId,
+            negotiation.variantId ?? undefined,
             negotiation,
           );
         }
@@ -358,7 +358,7 @@ export class CartRepository
         return this.enrichCartItemWithProduct(
           cartItem,
           product,
-          negotiation.variantId,
+          negotiation.variantId ?? undefined,
           negotiation,
         );
       });
@@ -585,7 +585,7 @@ export class CartRepository
         let currentPrice = product.discountPrice || product.price;
 
         if (item.variantId && item.variant) {
-          availableQuantity = item.variant.quantity;
+          availableQuantity = (item.variant as any).quantity ?? availableQuantity;
           currentPrice = item.variant.discountPrice || item.variant.price || currentPrice;
         }
 

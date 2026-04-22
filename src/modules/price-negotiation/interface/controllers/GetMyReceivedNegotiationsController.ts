@@ -23,7 +23,7 @@ export class GetMyReceivedNegotiationsController extends BaseController {
     }
 
     const userId = req.user!.id;
-    const options = {
+    const options: any = {
       page: parseInt(req.query.page as string) || 1,
       limit: parseInt(req.query.limit as string) || 10,
       status: req.query.status as any,

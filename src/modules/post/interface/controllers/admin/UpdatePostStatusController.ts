@@ -39,6 +39,7 @@ export class UpdatePostStatusController extends BaseController {
         case PostStatus.DELETED:
           await this.postService.deletePost(id, req.user!.id);
           ApiResponse.success(res, null, 'Post deleted successfully');
+          break;
         default:
           throw AppError.badRequest('Invalid status transition');
       }

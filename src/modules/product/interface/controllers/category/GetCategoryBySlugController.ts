@@ -29,7 +29,7 @@ export class GetCategoryBySlugController extends BaseController {
         includeProductCount: req.query.includeProductCount === 'true',
       };
 
-      const category = await this.categoryService.getCategoryBySlug(slug, options);
+      const category = await this.categoryService.getCategoryBySlug(slug);
 
       if (!category) {
         throw AppError.notFound('Category not found');

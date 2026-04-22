@@ -404,7 +404,7 @@ export class CustomOrderRepository
         where: { id },
         data: {
           ...data,
-          negotiationHistory: [...currentHistory, historyEntry],
+          negotiationHistory: [...currentHistory, historyEntry] as any,
           updatedAt: new Date(),
         },
       });

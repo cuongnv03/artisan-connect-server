@@ -88,7 +88,7 @@ export class ProfileRepository
       // Update profile
       const profile = await this.prisma.profile.update({
         where: { userId },
-        data: updateData,
+        data: updateData as any,
         include: {
           user: {
             select: {

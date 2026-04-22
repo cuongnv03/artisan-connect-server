@@ -446,7 +446,7 @@ export class ProductRepository
       }
 
       // Separate categoryIds and variants from update data
-      const { categoryIds, variants, ...updateData } = data; // ✅ Extract these fields
+      const { categoryIds, variants, ...updateData } = data as any; // ✅ Extract these fields
 
       // Generate new slug if name changed
       if (updateData.name && updateData.name !== existingProduct.name) {
@@ -460,7 +460,7 @@ export class ProductRepository
           await tx.categoryProduct.deleteMany({ where: { productId: id } });
           if (categoryIds.length > 0) {
             await Promise.all(
-              categoryIds.map((categoryId) =>
+              categoryIds.map((categoryId: string) =>
                 tx.categoryProduct.create({
                   data: { productId: id, categoryId },
                 }),

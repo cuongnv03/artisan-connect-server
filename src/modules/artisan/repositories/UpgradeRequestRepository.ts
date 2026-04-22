@@ -100,7 +100,7 @@ export class UpgradeRequestRepository
     try {
       const request = await this.prisma.artisanUpgradeRequest.update({
         where: { id },
-        data,
+        data: data as any,
       });
 
       return request as ArtisanUpgradeRequest;

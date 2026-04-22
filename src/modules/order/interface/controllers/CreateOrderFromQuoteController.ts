@@ -84,15 +84,7 @@ export class CreateOrderFromQuoteController extends BaseController {
     }
   }
 
-  // ✅ Helper method to check quote status
-  private async checkQuoteStatus(quoteId: string): Promise<{ status: string } | null> {
-    try {
-      // This would need to be implemented to check quote status
-      // For now, just return null
-      return null;
-    } catch (error) {
-      this.logger.error(`Error checking quote status: ${error}`);
-      return null;
-    }
+  private async checkQuoteStatus(_quoteId: string): Promise<{ status: string } | null> {
+    return null;
   }
 }

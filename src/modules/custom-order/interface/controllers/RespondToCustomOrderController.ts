@@ -33,7 +33,7 @@ export class RespondToCustomOrderController extends BaseController {
       COUNTER_OFFER: 'Counter offer sent successfully',
     };
 
-    const message = actionMessages[req.body.action] || 'Custom order response sent successfully';
+    const message = actionMessages[req.body.action as keyof typeof actionMessages] || 'Custom order response sent successfully';
 
     ApiResponse.success(res, customOrder, message);
   }

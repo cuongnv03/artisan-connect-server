@@ -23,7 +23,7 @@ export class GetPostsController extends BaseController {
         status: req.query.status as any,
         tags: req.query.tags
           ? Array.isArray(req.query.tags)
-            ? req.query.tags
+            ? (req.query.tags as string[])
             : [req.query.tags as string]
           : undefined,
         search: req.query.search as string,

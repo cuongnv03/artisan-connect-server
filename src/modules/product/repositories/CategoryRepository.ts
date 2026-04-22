@@ -232,6 +232,9 @@ export class CategoryRepository
       allCategories.forEach((category) => {
         const treeNode: CategoryWithRelations = {
           ...category,
+          parentId: category.parentId ?? undefined,
+          description: category.description ?? undefined,
+          imageUrl: category.imageUrl ?? undefined,
           children: [],
           productCount: category._count.products,
         };
@@ -347,7 +350,7 @@ export class CategoryRepository
           type: data.type!,
           isRequired: data.isRequired || false,
           isVariant: data.isVariant || false,
-          options: data.options,
+          options: data.options as any,
           unit: data.unit,
           sortOrder: data.sortOrder || 0,
           description: data.description,
