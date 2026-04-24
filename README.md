@@ -1,23 +1,23 @@
-# Artisan Connect — Server
+# Artisan Connect - Server
 
 Express API + Socket.io backend for **Artisan Connect**, a social commerce platform for Vietnamese artisans.
 
 > This repository is one half of a two-repo project. The frontend lives in **artisan-connect-client**.
-> Both repos are meant to be cloned side-by-side under a shared parent directory that holds the Docker Compose file and shared `.env` — see [Deployment](#deployment) below.
+> Both repos are meant to be cloned side-by-side under a shared parent directory that holds the Docker Compose file and shared `.env` - see [Deployment](#deployment) below.
 
 ---
 
 ## Features
 
 - JWT authentication (access + refresh tokens, httpOnly cookies)
-- Role-based access control — ADMIN, ARTISAN, CUSTOMER
-- Social layer — posts, comments, likes, follows
-- E-commerce engine — products, categories, multi-seller cart, orders
+- Role-based access control - ADMIN, ARTISAN, CUSTOMER
+- Social layer - posts, comments, likes, follows
+- E-commerce engine - products, categories, multi-seller cart, orders
 - Price negotiation and custom order (quote request) workflows
 - Real-time messaging and notifications via Socket.io
 - Cloudinary integration for image/video uploads
 - Artisan profile and shop management
-- Admin controls — user management, artisan upgrade approvals
+- Admin controls - user management, artisan upgrade approvals
 
 ---
 
@@ -145,12 +145,12 @@ Prisma-managed PostgreSQL. Schema: `prisma/schema.prisma`.
 
 Key model groups:
 
-- **Users & Auth** — User, Profile, ArtisanProfile, Session, RefreshToken
-- **Social** — Post, Comment, Like, Follow, Notification
-- **E-commerce** — Product, Category, CartItem, Order, OrderItem, Review
-- **Pricing** — PriceNegotiation, QuoteRequest
-- **Communication** — Message
-- **Disputes** — OrderDispute, OrderReturn
+- **Users & Auth** - User, Profile, ArtisanProfile, Session, RefreshToken
+- **Social** - Post, Comment, Like, Follow, Notification
+- **E-commerce** - Product, Category, CartItem, Order, OrderItem, Review
+- **Pricing** - PriceNegotiation, QuoteRequest
+- **Communication** - Message
+- **Disputes** - OrderDispute, OrderReturn
 
 Order lifecycle: `PENDING → CONFIRMED → PAID → PROCESSING → SHIPPED → DELIVERED`
 
@@ -163,7 +163,7 @@ Price negotiation lifecycle: `PENDING → COUNTER_OFFERED → ACCEPTED | REJECTE
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL running locally (or use Docker — see [Deployment](#deployment))
+- PostgreSQL running locally (or use Docker - see [Deployment](#deployment))
 
 ### Setup
 
@@ -229,7 +229,7 @@ Both repos and the Docker Compose setup are designed to live under a shared pare
 artisan-connect/              ← parent directory (not a repo itself)
 ├── docker-compose.yml         ← orchestrates all three services
 ├── .env                       ← single env file for the whole stack
-├── .env.example               ← template — copy and fill in
+├── .env.example               ← template - copy and fill in
 ├── artisan-connect-client/    ← frontend repo (this repo's sibling)
 └── artisan-connect-server/    ← this repo
 ```
@@ -249,7 +249,7 @@ git clone https://github.com/cuongnv03/artisan-connect-client.git
 
 # 3. Create your .env from the template
 cp .env.example .env
-# Edit .env — set JWT secrets, COOKIE_SECRET, Cloudinary keys, etc.
+# Edit .env - set JWT secrets, COOKIE_SECRET, Cloudinary keys, etc.
 
 # 4. Start everything
 docker compose up --build
@@ -265,7 +265,7 @@ Services after startup:
 
 ### Seeding demo data on first boot
 
-Set `SEED_DB=true` in `.env` before the first `docker compose up`. The server will run migrations and then seed the database before starting. Set it back to `false` afterwards — re-seeding is safe (uses upsert) but unnecessary.
+Set `SEED_DB=true` in `.env` before the first `docker compose up`. The server will run migrations and then seed the database before starting. Set it back to `false` afterwards - re-seeding is safe (uses upsert) but unnecessary.
 
 ### `docker-compose.yml`
 
@@ -352,7 +352,7 @@ POSTGRES_DB=artisan_connect
 # Set to true to seed the database with demo data on first boot
 SEED_DB=false
 
-# JWT — change these in production!
+# JWT - change these in production!
 JWT_ACCESS_SECRET=change-me-access-secret
 JWT_REFRESH_SECRET=change-me-refresh-secret
 JWT_ACCESS_EXPIRATION=24h
@@ -365,12 +365,12 @@ COOKIE_SECRET=change-me-cookie-secret
 CORS_ORIGIN=http://localhost
 CLIENT_URL=http://localhost
 
-# Cloudinary (optional — file uploads disabled without these)
+# Cloudinary (optional - file uploads disabled without these)
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 
-# Email (optional — email features disabled without these)
+# Email (optional - email features disabled without these)
 EMAIL_HOST=
 EMAIL_PORT=465
 EMAIL_SECURE=true
@@ -380,9 +380,9 @@ EMAIL_FROM_NAME=Artisan Connect
 EMAIL_FROM_ADDRESS=
 ```
 
-Required secrets with no safe default — generate random strings for each:
+Required secrets with no safe default - generate random strings for each:
 
-- `JWT_ACCESS_SECRET` — 32+ characters
-- `JWT_REFRESH_SECRET` — 32+ characters, different from the above
-- `COOKIE_SECRET` — 32+ characters
-- `CLOUDINARY_*` — from your [Cloudinary dashboard](https://cloudinary.com) (app runs without these but image uploads will fail)
+- `JWT_ACCESS_SECRET` - 32+ characters
+- `JWT_REFRESH_SECRET` - 32+ characters, different from the above
+- `COOKIE_SECRET` - 32+ characters
+- `CLOUDINARY_*` - from your [Cloudinary dashboard](https://cloudinary.com) (app runs without these but image uploads will fail)
